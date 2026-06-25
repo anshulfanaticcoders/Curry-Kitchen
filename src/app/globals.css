@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #070707;
+  --panel: #ffffff;
+  --line: rgba(7, 7, 7, 0.12);
+  --grain-size: 18px 18px;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ink: #070707;
+  --color-leaf: #151515;
+  --color-mint: #f3f3f1;
+  --color-saffron: #ff7a1a;
+  --color-masala: #e45312;
+  --color-rose: #fff0e6;
+  --color-ivory: #ffffff;
+  --color-cream: #f5f4f0;
+  --color-charcoal: #1b1b1b;
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+  --shadow-soft: 0 24px 80px rgba(7, 7, 7, 0.12);
+  --shadow-lift: 0 22px 44px rgba(255, 122, 26, 0.24);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  --radius-button: 0.5rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body), sans-serif;
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p,
+li,
+blockquote {
+  text-wrap: pretty;
+}
+
+::selection {
+  background: #ff7a1a;
+  color: #070707;
+}
+
+.texture {
+  background-image: radial-gradient(circle at 1px 1px, rgba(7, 7, 7, 0.045) 1px, transparent 0);
+  background-size: var(--grain-size);
+}
+
+.section-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin-inline: auto;
+}
+
+/* Vertical rhythm: compact bands so each section reads in ~one glance. */
+.section {
+  padding-block: 4rem;
+}
+
+@media (min-width: 1024px) {
+  .section {
+    padding-block: 5rem;
+  }
+}
+
+/* One-glance band: fills roughly a single viewport, content centered. */
+.section--screen {
+  display: flex;
+  align-items: center;
+  min-height: 88vh;
+}
+
+/* Gradient-black band: warm near-black with depth + a soft saffron glow.
+   Replaces flat #070707 so dark sections read premium, not dead-flat. */
+.dark-band {
+  background-color: #070707;
+  background-image:
+    radial-gradient(120% 95% at 50% -12%, #211711 0%, rgba(13, 11, 10, 0) 55%),
+    radial-gradient(85% 70% at 86% 6%, rgba(255, 122, 26, 0.14) 0%, rgba(255, 122, 26, 0) 55%),
+    linear-gradient(177deg, #110d0a 0%, #070707 52%, #0c0b0b 100%);
+}
+
+/* Variant: glow anchored bottom-left, for rhythm between consecutive dark bands. */
+.dark-band--alt {
+  background-image:
+    radial-gradient(110% 90% at 18% 110%, #1d150f 0%, rgba(13, 11, 10, 0) 52%),
+    radial-gradient(80% 70% at 12% 92%, rgba(255, 122, 26, 0.12) 0%, rgba(255, 122, 26, 0) 55%),
+    linear-gradient(183deg, #0c0b0b 0%, #070707 50%, #110d0a 100%);
+}
+
+/* Capped media panel height so image columns stop inflating section height. */
+.media-panel {
+  min-height: 420px;
+}
+
+@media (min-width: 1024px) {
+  .media-panel {
+    max-height: 480px;
+  }
+}
+
+.image-vignette::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(7, 7, 7, 0.08), rgba(7, 7, 7, 0.54)),
+    linear-gradient(90deg, rgba(7, 7, 7, 0.45), rgba(7, 7, 7, 0));
+  pointer-events: none;
+}
+
+.glass-line {
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 246, 0.78);
+  backdrop-filter: blur(18px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

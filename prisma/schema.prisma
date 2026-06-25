@@ -1,0 +1,631 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+enum PackageCadence {
+  WEEKLY
+  MONTHLY
+  STUDENT
+}
+
+enum RecordStatus {
+  ACTIVE
+  DRAFT
+  ARCHIVED
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  PREPARING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  PAUSED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  STRIPE
+  MANUAL
+  INTERAC
+  CASH
+}
+
+enum CustomerPackageStatus {
+  PENDING_PAYMENT
+  PENDING_STUDENT_VERIFICATION
+  ACTIVE
+  PAUSED
+  EXPIRED
+  CANCELLED
+}
+
+enum StudentVerificationStatus {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PauseRequestStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  ACTIVE
+  ENDED
+}
+
+enum NotificationType {
+  ORDER
+  PAYMENT
+  SYSTEM
+  OFFER
+  VERIFICATION
+}
+
+enum CouponType {
+  PERCENT
+  FLAT
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  role          UserRole  @default(CUSTOMER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  customer      Customer?
+  adminProfile  AdminProfile?
+  notifications Notification[]
+  auditLogs      AuditLog[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  userId    String?  @unique
+  name      String
+  email     String
+  phone     String?
+  status    RecordStatus @default(ACTIVE)
+  joinedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  addresses        Address[]
+  orders           Order[]
+  packages         CustomerPackage[]
+  studentVerifications StudentVerification[]
+
+  @@index([email])
+  @@map("customers")
+}
+
+model AdminProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  title     String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("admin_profiles")
+}
+
+model Address {
+  id          String   @id @default(cuid())
+  customerId  String?
+  name        String?
+  line1       String
+  line2       String?
+  city        String
+  state       String   @default("CA")
+  postalCode  String
+  country     String   @default("US")
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  orders   Order[]
+
+  @@index([customerId])
+  @@index([postalCode])
+  @@map("addresses")
+}
+
+model PackageCategory {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  description String?      @db.Text
+  sortOrder   Int          @default(0)
+  status      RecordStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  packages Package[]
+
+  @@map("package_categories")
+}
+
+model Package {
+  id                String         @id @default(cuid())
+  categoryId        String
+  name              String
+  slug              String         @unique
+  badge             String?
+  description       String         @db.Text
+  price             Decimal        @db.Decimal(10, 2)
+  taxRate           Decimal        @default(0.0875) @db.Decimal(6, 4)
+  cadence           PackageCadence
+  deliveryDayCount  Int
+  servings          String
+  imageUrl          String         @db.VarChar(600)
+  bestFor           String?
+  studentOnly       Boolean        @default(false)
+  accent            String         @default("saffron")
+  status            RecordStatus   @default(ACTIVE)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  category         PackageCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  items            PackageItem[]
+  addons           PackageAddon[]
+  orderItems       OrderItem[]
+  customerPackages CustomerPackage[]
+
+  @@index([categoryId])
+  @@index([cadence])
+  @@index([status])
+  @@map("packages")
+}
+
+model PackageItem {
+  id        String   @id @default(cuid())
+  packageId String
+  name      String
+  quantity  String?
+  sortOrder Int      @default(0)
+
+  package Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@index([packageId])
+  @@map("package_items")
+}
+
+model Addon {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  description String?      @db.Text
+  price       Decimal      @db.Decimal(10, 2)
+  imageUrl    String?      @db.VarChar(600)
+  status      RecordStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  packages    PackageAddon[]
+  orderAddons OrderAddon[]
+
+  @@map("addons")
+}
+
+model PackageAddon {
+  packageId String
+  addonId   String
+
+  package Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  addon   Addon   @relation(fields: [addonId], references: [id], onDelete: Cascade)
+
+  @@id([packageId, addonId])
+  @@index([addonId])
+  @@map("package_addons")
+}
+
+model MenuItem {
+  id          String       @id @default(cuid())
+  name        String
+  type        String
+  spice       String       @default("Mild")
+  vegetarian  Boolean      @default(true)
+  description String?      @db.Text
+  status      RecordStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([type])
+  @@map("menu_items")
+}
+
+model WeeklyMenu {
+  id        String       @id @default(cuid())
+  title     String
+  weekStart DateTime
+  status    RecordStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  days WeeklyMenuDay[]
+
+  @@index([weekStart])
+  @@map("weekly_menus")
+}
+
+model WeeklyMenuDay {
+  id           String   @id @default(cuid())
+  weeklyMenuId String
+  dayOfWeek    Int
+  date         DateTime
+  headline     String
+  daal         String
+  sabzi        String
+  rice         String
+  side         String
+  dessert      String?
+  spice        String
+  imageUrl     String   @db.VarChar(600)
+
+  weeklyMenu WeeklyMenu @relation(fields: [weeklyMenuId], references: [id], onDelete: Cascade)
+
+  @@index([weeklyMenuId])
+  @@map("weekly_menu_days")
+}
+
+model DeliveryZone {
+  id              String       @id @default(cuid())
+  name            String
+  cities          Json
+  postalCodes     Json
+  fee             Decimal      @db.Decimal(10, 2)
+  isFreeDelivery  Boolean      @default(false)
+  outsideZone     Boolean      @default(false)
+  status          RecordStatus @default(ACTIVE)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  orders Order[]
+
+  @@map("delivery_zones")
+}
+
+model Coupon {
+  id          String       @id @default(cuid())
+  code        String       @unique
+  type        CouponType
+  value       Decimal      @db.Decimal(10, 2)
+  status      RecordStatus @default(ACTIVE)
+  usageCount  Int          @default(0)
+  usageLimit  Int?
+  expiresAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  orders Order[]
+
+  @@map("coupons")
+}
+
+model Cart {
+  id        String   @id @default(cuid())
+  userId    String?
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items CartItem[]
+
+  @@index([userId])
+  @@map("carts")
+}
+
+model CartItem {
+  id        String @id @default(cuid())
+  cartId    String
+  packageId String
+  quantity  Int    @default(1)
+
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  @@index([cartId])
+  @@map("cart_items")
+}
+
+model Order {
+  id                  String      @id @default(cuid())
+  orderNumber         String      @unique
+  customerId          String?
+  addressId           String?
+  deliveryZoneId      String?
+  couponId            String?
+  guestName           String?
+  guestEmail          String?
+  guestPhone          String?
+  status              OrderStatus @default(PENDING_PAYMENT)
+  subtotal            Decimal     @db.Decimal(10, 2)
+  deliveryFee         Decimal     @default(0) @db.Decimal(10, 2)
+  taxAmount           Decimal     @default(0) @db.Decimal(10, 2)
+  discountAmount      Decimal     @default(0) @db.Decimal(10, 2)
+  total               Decimal     @db.Decimal(10, 2)
+  foodPreferences     String?     @db.Text
+  stripeCheckoutId    String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  customer          Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  address           Address?           @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  deliveryZone      DeliveryZone?      @relation(fields: [deliveryZoneId], references: [id], onDelete: SetNull)
+  coupon            Coupon?            @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  items             OrderItem[]
+  addons            OrderAddon[]
+  payments          Payment[]
+  customerPackages  CustomerPackage[]
+  studentVerifications StudentVerification[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  packageId String
+  quantity  Int     @default(1)
+  unitPrice Decimal @db.Decimal(10, 2)
+  total     Decimal @db.Decimal(10, 2)
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  package Package @relation(fields: [packageId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([packageId])
+  @@map("order_items")
+}
+
+model OrderAddon {
+  id        String  @id @default(cuid())
+  orderId   String
+  addonId   String
+  quantity  Int     @default(1)
+  unitPrice Decimal @db.Decimal(10, 2)
+  total     Decimal @db.Decimal(10, 2)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  addon Addon @relation(fields: [addonId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([addonId])
+  @@map("order_addons")
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  orderId          String
+  method           PaymentMethod @default(STRIPE)
+  status           PaymentStatus @default(PENDING)
+  amount           Decimal       @db.Decimal(10, 2)
+  currency         String        @default("USD")
+  stripePaymentId  String?
+  stripeSessionId  String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
+  @@map("payments")
+}
+
+model StripeEvent {
+  id         String   @id
+  type       String
+  payload    Json
+  processed  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@map("stripe_events")
+}
+
+model CustomerPackage {
+  id                  String                @id @default(cuid())
+  customerId           String?
+  orderId              String
+  packageId            String
+  status               CustomerPackageStatus @default(PENDING_PAYMENT)
+  totalDeliveryDays    Int
+  usedDeliveryDays     Int                   @default(0)
+  startDate            DateTime?
+  endDate              DateTime?
+  customerPauseUsed    Boolean               @default(false)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  package  Package  @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  deliveryDays PackageDeliveryDay[]
+  pauseRequests PauseRequest[]
+
+  @@index([customerId])
+  @@index([status])
+  @@map("customer_packages")
+}
+
+model PackageDeliveryDay {
+  id                String      @id @default(cuid())
+  customerPackageId  String
+  deliveryDate       DateTime
+  status             OrderStatus @default(PREPARING)
+  menuSummary        String?
+  deliveryWindow     String      @default("6:00 PM - 8:00 PM")
+
+  customerPackage CustomerPackage @relation(fields: [customerPackageId], references: [id], onDelete: Cascade)
+
+  @@index([customerPackageId])
+  @@index([deliveryDate])
+  @@map("package_delivery_days")
+}
+
+model PauseRequest {
+  id                 String             @id @default(cuid())
+  customerPackageId   String
+  requestedByUserId   String?
+  status             PauseRequestStatus @default(REQUESTED)
+  startDate           DateTime
+  endDate             DateTime
+  reason              String?            @db.Text
+  adminNote           String?            @db.Text
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  customerPackage CustomerPackage @relation(fields: [customerPackageId], references: [id], onDelete: Cascade)
+
+  @@index([customerPackageId])
+  @@index([status])
+  @@map("pause_requests")
+}
+
+model StudentVerification {
+  id              String                    @id @default(cuid())
+  customerId       String?
+  orderId          String?
+  universityName   String
+  studentNumber    String
+  idCardUrl        String?                   @db.VarChar(600)
+  status           StudentVerificationStatus @default(PENDING)
+  adminNote        String?                   @db.Text
+  reviewedAt       DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  order    Order?    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([status])
+  @@map("student_verifications")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String?
+  title     String
+  body      String           @db.Text
+  type      NotificationType @default(SYSTEM)
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
+  @@map("notifications")
+}
+
+model Review {
+  id        String       @id @default(cuid())
+  name      String
+  planName  String?
+  rating    Int
+  text      String       @db.Text
+  status    RecordStatus @default(DRAFT)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([status])
+  @@map("reviews")
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}
