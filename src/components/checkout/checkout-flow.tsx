@@ -77,7 +77,8 @@ export function CheckoutFlow({
         (zone.cities.some((city) => city.toLowerCase() === normalizedCity) ||
           zone.postalCodes.some((postalCode) => postalCode.toLowerCase() === normalizedPostalCode)),
     ) ?? deliveryZones.find((zone) => zone.outsideZone);
-  const deliveryFee = matchedZone ? (matchedZone.isFreeDelivery ? 0 : matchedZone.fee) : 0;
+  const deliveryFeePerPackage = matchedZone ? (matchedZone.isFreeDelivery ? 0 : matchedZone.fee) : 0;
+  const deliveryFee = deliveryFeePerPackage * quantity;
   const taxAmount = subtotal * selectedPlan.taxRate;
   const total = subtotal + taxAmount + deliveryFee;
   const deliveryReady = address.city.trim().length > 1 && address.postalCode.trim().length >= 5;
@@ -361,7 +362,11 @@ export function CheckoutFlow({
                         : "bg-rose text-masala",
                     )}
                   >
-                    {deliveryReady ? (deliveryFee === 0 ? "Free delivery" : `${formatCurrency(deliveryFee)} delivery`) : "Check ZIP"}
+                    {deliveryReady
+                      ? deliveryFee === 0
+                        ? "Free delivery"
+                        : `${formatCurrency(deliveryFee)} delivery`
+                      : "Check ZIP"}
                   </span>
                 </div>
               </div>
@@ -469,7 +474,7 @@ export function CheckoutFlow({
             <span>{formatCurrency(addOnTotal * quantity)}</span>
           </div>
           <div className="flex justify-between border-b border-white/10 pb-4">
-            <span className="text-ivory/62">Delivery</span>
+            <span className="text-ivory/62">Delivery x{quantity}</span>
             <span>{deliveryFee === 0 ? deliveryLabel : formatCurrency(deliveryFee)}</span>
           </div>
           <div className="flex justify-between border-b border-white/10 pb-4">

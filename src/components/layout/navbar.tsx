@@ -23,8 +23,9 @@ const links = [
   { href: "/", label: "Home" },
   { href: "/menu", label: "Menu" },
   { href: "/packages", label: "Packages" },
-  { href: "/#story", label: "Our story" },
+  { href: "/about", label: "Our story" },
   { href: "/#reviews", label: "Reviews" },
+  { href: "/contact", label: "Contact" },
 ];
 
 function initialsFromSession(name?: string | null, email?: string | null) {

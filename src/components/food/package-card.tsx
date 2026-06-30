@@ -67,7 +67,7 @@ export function PackageCard({
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className="text-3xl font-black">{formatCurrency(plan.price)}</p>
-            <p className="text-sm font-bold text-ink/55">+ 5% tax - {plan.cadence}</p>
+            <p className="text-sm font-bold text-ink/55">{plan.cadence}</p>
           </div>
           <span className={cn("rounded-full border px-3 py-1 text-xs font-extrabold", accentStyles[plan.accent])}>
             {plan.bestFor}

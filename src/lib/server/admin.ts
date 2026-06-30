@@ -9,6 +9,7 @@ import type {
   MenuItem,
 } from "@/lib/types";
 import { db } from "@/lib/db";
+import { shouldUseMockData } from "@/lib/server/data-source";
 
 type DecimalLike = { toNumber: () => number } | number | string | null | undefined;
 
@@ -53,6 +54,49 @@ function formatDate(value?: Date | null) {
     year: "numeric",
   }).format(value);
 }
+
+const fallbackDeliveryZones: DeliveryZoneRecord[] = [
+  {
+    id: "fallback-fremont-free",
+    name: "Fremont Free Zone",
+    cities: ["Fremont"],
+    postalCodes: ["94536", "94538", "94539"],
+    fee: 0,
+    isFreeDelivery: true,
+    outsideZone: false,
+    status: "Active",
+  },
+  {
+    id: "fallback-san-jose",
+    name: "San Jose Zone",
+    cities: ["San Jose"],
+    postalCodes: ["95112", "95123", "95129"],
+    fee: 6,
+    isFreeDelivery: false,
+    outsideZone: false,
+    status: "Active",
+  },
+  {
+    id: "fallback-milpitas",
+    name: "Milpitas Zone",
+    cities: ["Milpitas"],
+    postalCodes: ["95035"],
+    fee: 4,
+    isFreeDelivery: false,
+    outsideZone: false,
+    status: "Active",
+  },
+  {
+    id: "fallback-outside-zone",
+    name: "Outside Service Zone",
+    cities: [],
+    postalCodes: [],
+    fee: 12,
+    isFreeDelivery: false,
+    outsideZone: true,
+    status: "Active",
+  },
+];
 
 export async function getAdminPackageManagerData() {
   const [categories, addons, packages] = await Promise.all([
@@ -129,21 +173,33 @@ export async function getAdminPackageManagerData() {
 }
 
 export async function getDeliveryZoneManagerData(): Promise<DeliveryZoneRecord[]> {
-  const zones = await db.deliveryZone.findMany({
-    where: { status: { not: "ARCHIVED" } },
-    orderBy: [{ outsideZone: "asc" }, { createdAt: "asc" }],
-  });
+  if (shouldUseMockData()) {
+    return fallbackDeliveryZones;
+  }
 
-  return zones.map((zone) => ({
-    id: zone.id,
-    name: zone.name,
-    cities: asStringArray(zone.cities),
-    postalCodes: asStringArray(zone.postalCodes),
-    fee: toNumber(zone.fee),
-    isFreeDelivery: zone.isFreeDelivery,
-    outsideZone: zone.outsideZone,
-    status: mapStatus(zone.status),
-  }));
+  try {
+    const zones = await db.deliveryZone.findMany({
+      where: { status: { not: "ARCHIVED" } },
+      orderBy: [{ outsideZone: "asc" }, { createdAt: "asc" }],
+    });
+
+    if (!zones.length) {
+      return fallbackDeliveryZones;
+    }
+
+    return zones.map((zone) => ({
+      id: zone.id,
+      name: zone.name,
+      cities: asStringArray(zone.cities),
+      postalCodes: asStringArray(zone.postalCodes),
+      fee: toNumber(zone.fee),
+      isFreeDelivery: zone.isFreeDelivery,
+      outsideZone: zone.outsideZone,
+      status: mapStatus(zone.status),
+    }));
+  } catch {
+    return fallbackDeliveryZones;
+  }
 }
 
 export async function getAdminCategoryManagerData() {

@@ -7,7 +7,7 @@ import { PackageCard } from "@/components/food/package-card";
 import { ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import type { PackageCategory, PackagePlan } from "@/lib/types";
-import { calculateTaxedTotal, cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 export function PackageExperience({
   plans,
@@ -40,7 +40,6 @@ export function PackageExperience({
     .filter((addOn) => selectedAddOns.includes(addOn.id))
     .reduce((total, addOn) => total + addOn.price, 0);
   const subtotal = selectedPlan.price + addOnTotal;
-  const total = calculateTaxedTotal(subtotal, selectedPlan.taxRate);
   const packageQuery = encodeURIComponent(selectedPlan.id);
   const addOnsQuery = selectedAddOns.map((id) => encodeURIComponent(id)).join(",");
   const checkoutHref = selectedAddOns.length
@@ -187,15 +186,11 @@ export function PackageExperience({
                 <span>Subtotal</span>
                 <span>{formatCurrency(subtotal)}</span>
               </div>
-              <div className="mt-2 flex justify-between text-sm font-bold text-ink/58">
-                <span>Tax estimate</span>
-                <span>5%</span>
-              </div>
               <div className="mt-3 flex items-end justify-between border-t border-ink/10 pt-3">
                 <span className="text-xs font-extrabold uppercase tracking-[0.18em] text-masala">
-                  Total
+                  Package total
                 </span>
-                <span className="font-display text-3xl font-black">{formatCurrency(total)}</span>
+                <span className="font-display text-3xl font-black">{formatCurrency(subtotal)}</span>
               </div>
             </div>
 

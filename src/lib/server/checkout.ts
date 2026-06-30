@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentSession } from "@/lib/auth";
+import { shouldUseMockData } from "@/lib/server/data-source";
 import { getStripe } from "@/lib/stripe";
 
 const checkoutSchema = z.object({
@@ -156,6 +157,14 @@ export async function markOrderPaidAndActivate(orderId: string, stripePaymentId?
 
 export async function createCheckoutOrder(rawInput: unknown) {
   const input = checkoutSchema.parse(rawInput);
+
+  if (shouldUseMockData()) {
+    return {
+      checkoutUrl: `/dashboard/orders?checkout=mock&order=CK-MOCK-${Date.now().toString().slice(-5)}`,
+      orderNumber: makeOrderNumber(),
+    };
+  }
+
   const session = await getCurrentSession().catch(() => null);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -191,11 +200,12 @@ export async function createCheckoutOrder(rawInput: unknown) {
       zones.find(
         (zone) => !zone.outsideZone && matchesZone(zone, input.address.city, input.address.postalCode),
       ) ?? zones.find((zone) => zone.outsideZone);
-    const deliveryFee = matchedZone
+    const deliveryFeePerPackage = matchedZone
       ? matchedZone.isFreeDelivery
         ? 0
         : toNumber(matchedZone.fee)
       : await getOutsideZoneFee();
+    const deliveryFee = deliveryFeePerPackage * input.quantity;
 
     const coupon = input.couponCode
       ? await tx.coupon.findUnique({ where: { code: input.couponCode.toUpperCase() } })

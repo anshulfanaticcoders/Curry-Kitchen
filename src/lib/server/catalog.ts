@@ -23,6 +23,7 @@ import type {
 } from "@/lib/types";
 import { getCurrentSession } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { hasDatabaseUrl } from "@/lib/server/data-source";
 
 type DecimalLike = { toNumber: () => number } | number | string | null | undefined;
 
@@ -40,10 +41,6 @@ function toNumber(value: DecimalLike) {
   }
 
   return Number(value ?? 0);
-}
-
-function hasDatabaseUrl() {
-  return Boolean(process.env.DATABASE_URL);
 }
 
 async function getCurrentCustomer() {
