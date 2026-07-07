@@ -1,4 +1,4 @@
-import type { ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { ReactNode, SelectHTMLAttributes, TdHTMLAttributes, TextareaHTMLAttributes } from "react";
 import type { InputHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
@@ -141,8 +141,12 @@ export function Th({ children, className }: { children?: ReactNode; className?: 
   );
 }
 
-export function Td({ children, className }: { children?: ReactNode; className?: string }) {
-  return <td className={cn("border-b border-ink/8 px-4 py-3.5 align-middle", className)}>{children}</td>;
+export function Td({ children, className, ...props }: TdHTMLAttributes<HTMLTableCellElement>) {
+  return (
+    <td className={cn("border-b border-ink/8 px-4 py-3.5 align-middle", className)} {...props}>
+      {children}
+    </td>
+  );
 }
 
 export function IconButton({

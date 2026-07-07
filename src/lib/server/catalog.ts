@@ -11,6 +11,7 @@ import {
 import type {
   AdminOrder,
   Customer,
+  CustomerPackageSummary,
   CustomerProfileDetails,
   Delivery,
   NotificationItem,
@@ -99,6 +100,14 @@ function mapPaymentStatus(status: string): Transaction["status"] {
   if (status === "PAID") return "Paid";
   if (status === "REFUNDED" || status === "FAILED") return "Refunded";
   return "Pending";
+}
+
+function mapCustomerPackageStatus(status: string): CustomerPackageSummary["status"] {
+  if (status === "ACTIVE") return "Active";
+  if (status === "PAUSED") return "Paused";
+  if (status === "PENDING_PAYMENT") return "Pending payment";
+  if (status === "PENDING_STUDENT_VERIFICATION") return "Needs student approval";
+  return "Expired";
 }
 
 function mapReviewStatus(status: string): ReviewItem["status"] {
@@ -256,8 +265,7 @@ export async function getAdminReviews(): Promise<ReviewItem[]> {
       date: formatDate(review.createdAt),
     }));
   } catch {
-    const { reviewItems } = await import("@/lib/mock-data");
-    return reviewItems;
+    return [];
   }
 }
 
@@ -277,10 +285,6 @@ export async function getAdminOrders(): Promise<AdminOrder[]> {
       take: 50,
     });
 
-    if (!orders.length) {
-      return mockAdminOrders;
-    }
-
     return orders.map((order) => ({
       id: order.orderNumber,
       customer: order.customer?.name ?? order.guestName ?? "Guest customer",
@@ -293,7 +297,7 @@ export async function getAdminOrders(): Promise<AdminOrder[]> {
       window: "6:00 PM - 8:00 PM",
     }));
   } catch {
-    return mockAdminOrders;
+    return [];
   }
 }
 
@@ -312,10 +316,6 @@ export async function getAdminCustomers(): Promise<Customer[]> {
       orderBy: { joinedAt: "desc" },
       take: 80,
     });
-
-    if (!customers.length) {
-      return mockCustomers;
-    }
 
     return customers.map((customer) => {
       const activePackage = customer.packages[0];
@@ -341,7 +341,7 @@ export async function getAdminCustomers(): Promise<Customer[]> {
       };
     });
   } catch {
-    return mockCustomers;
+    return [];
   }
 }
 
@@ -357,10 +357,6 @@ export async function getPayments(): Promise<Transaction[]> {
       take: 80,
     });
 
-    if (!payments.length) {
-      return mockTransactions;
-    }
-
     return payments.map((payment) => ({
       id: payment.id,
       orderId: payment.order.orderNumber,
@@ -371,7 +367,7 @@ export async function getPayments(): Promise<Transaction[]> {
       date: formatDate(payment.createdAt),
     }));
   } catch {
-    return mockTransactions;
+    return [];
   }
 }
 
@@ -406,7 +402,7 @@ export async function getCustomerOrders(): Promise<Order[]> {
       deliveryWindow: "6:00 PM - 8:00 PM",
     }));
   } catch {
-    return mockRecentOrders;
+    return [];
   }
 }
 
@@ -440,7 +436,94 @@ export async function getUpcomingDeliveries(): Promise<Delivery[]> {
       eta: delivery.deliveryWindow,
     }));
   } catch {
-    return mockUpcomingDeliveries;
+    return [];
+  }
+}
+
+export async function getCustomerPackageSummary(): Promise<CustomerPackageSummary> {
+  const empty: CustomerPackageSummary = {
+    plan: "No active plan",
+    status: "No active plan",
+    totalDeliveryDays: 0,
+    usedDeliveryDays: 0,
+    remainingDeliveryDays: 0,
+    customerPauseUsed: false,
+    canSelfPause: false,
+    startDate: "Not started",
+    endDate: "Not scheduled",
+  };
+
+  if (!hasDatabaseUrl()) {
+    const latestOrder = mockRecentOrders[0];
+
+    return {
+      id: latestOrder?.id,
+      plan: latestOrder?.plan ?? empty.plan,
+      status: latestOrder ? "Active" : empty.status,
+      totalDeliveryDays: 20,
+      usedDeliveryDays: 4,
+      remainingDeliveryDays: 16,
+      customerPauseUsed: false,
+      canSelfPause: Boolean(latestOrder),
+      startDate: "Jul 1",
+      endDate: "Jul 28",
+    };
+  }
+
+  try {
+    const customer = await getCurrentCustomer();
+
+    if (!customer) {
+      return empty;
+    }
+
+    const packages = await db.customerPackage.findMany({
+      where: { customerId: customer.id },
+      include: {
+        package: true,
+        deliveryDays: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    });
+
+    const preferredStatuses = [
+      "ACTIVE",
+      "PAUSED",
+      "PENDING_STUDENT_VERIFICATION",
+      "PENDING_PAYMENT",
+    ];
+    const currentPackage =
+      packages.find((item) => preferredStatuses.includes(item.status)) ?? packages[0];
+
+    if (!currentPackage) {
+      return empty;
+    }
+
+    const deliveredDays = currentPackage.deliveryDays.filter(
+      (day) => day.status === "DELIVERED",
+    ).length;
+    const usedDeliveryDays = Math.max(currentPackage.usedDeliveryDays, deliveredDays);
+    const remainingDeliveryDays = Math.max(
+      currentPackage.totalDeliveryDays - usedDeliveryDays,
+      0,
+    );
+    const status = mapCustomerPackageStatus(currentPackage.status);
+
+    return {
+      id: currentPackage.id,
+      plan: currentPackage.package.name,
+      status,
+      totalDeliveryDays: currentPackage.totalDeliveryDays,
+      usedDeliveryDays,
+      remainingDeliveryDays,
+      customerPauseUsed: currentPackage.customerPauseUsed,
+      canSelfPause: status === "Active" && !currentPackage.customerPauseUsed,
+      startDate: currentPackage.startDate ? formatDate(currentPackage.startDate) : "Not started",
+      endDate: currentPackage.endDate ? formatDate(currentPackage.endDate) : "Not scheduled",
+    };
+  } catch {
+    return empty;
   }
 }
 
@@ -475,8 +558,7 @@ export async function getCustomerNotifications(): Promise<NotificationItem[]> {
       read: item.read,
     }));
   } catch {
-    const { notifications } = await import("@/lib/mock-data");
-    return notifications;
+    return [];
   }
 }
 
@@ -546,13 +628,20 @@ export async function getCustomerProfileDetails(): Promise<CustomerProfileDetail
       postalCode: address?.postalCode ?? "",
     };
   } catch {
-    const { customerProfile } = await import("@/lib/mock-data");
+    const session = await getCurrentSession().catch(() => null);
+
     return {
-      ...customerProfile,
-      line1: customerProfile.address,
-      city: "Fremont",
+      name: session?.user?.name ?? "Customer",
+      email: session?.user?.email ?? "",
+      phone: "",
+      plan: "No active plan",
+      renewalDate: "Not scheduled",
+      address: "No default address",
+      preferences: [],
+      line1: "",
+      city: "",
       state: "CA",
-      postalCode: "94538",
+      postalCode: "",
     };
   }
 }
@@ -586,6 +675,6 @@ export async function getCustomerPayments(): Promise<Transaction[]> {
       date: formatDate(payment.createdAt),
     }));
   } catch {
-    return mockTransactions;
+    return [];
   }
 }

@@ -52,25 +52,33 @@ export default async function CustomerOrdersPage() {
             </tr>
           </thead>
           <tbody>
-            {recentOrders.map((order) => (
-              <tr key={order.id} className="transition hover:bg-ivory/60">
-                <Td className="font-extrabold">{order.id}</Td>
-                <Td className="text-ink/70">{order.plan}</Td>
-                <Td className="text-ink/55">{order.date}</Td>
-                <Td className="text-ink/55">{order.deliveryWindow}</Td>
-                <Td>
-                  <StatusPill tone={statusTone(order.status)}>{order.status}</StatusPill>
-                </Td>
-                <Td className="font-black">{formatCurrency(order.total)}</Td>
-                <Td>
-                  <div className="flex justify-end gap-2">
-                    <ButtonLink href="/dashboard/payments" variant="secondary" className="h-9 px-4">
-                      Receipt
-                    </ButtonLink>
-                  </div>
+            {recentOrders.length ? (
+              recentOrders.map((order) => (
+                <tr key={order.id} className="transition hover:bg-ivory/60">
+                  <Td className="font-extrabold">{order.id}</Td>
+                  <Td className="text-ink/70">{order.plan}</Td>
+                  <Td className="text-ink/55">{order.date}</Td>
+                  <Td className="text-ink/55">{order.deliveryWindow}</Td>
+                  <Td>
+                    <StatusPill tone={statusTone(order.status)}>{order.status}</StatusPill>
+                  </Td>
+                  <Td className="font-black">{formatCurrency(order.total)}</Td>
+                  <Td>
+                    <div className="flex justify-end gap-2">
+                      <ButtonLink href="/dashboard/payments" variant="secondary" className="h-9 px-4">
+                        Receipt
+                      </ButtonLink>
+                    </div>
+                  </Td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <Td colSpan={7} className="py-8 text-center text-sm font-bold text-ink/45">
+                  No orders yet. Start with a package and your history will appear here.
                 </Td>
               </tr>
-            ))}
+            )}
           </tbody>
         </Table>
       </Card>

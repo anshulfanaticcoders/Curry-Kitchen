@@ -98,6 +98,19 @@ export type CustomerProfileDetails = CustomerProfile & {
   postalCode: string;
 };
 
+export type CustomerPackageSummary = {
+  id?: string;
+  plan: string;
+  status: "Active" | "Paused" | "Pending payment" | "Needs student approval" | "Expired" | "No active plan";
+  totalDeliveryDays: number;
+  usedDeliveryDays: number;
+  remainingDeliveryDays: number;
+  customerPauseUsed: boolean;
+  canSelfPause: boolean;
+  startDate: string;
+  endDate: string;
+};
+
 export type AdminMetric = {
   label: string;
   value: string;

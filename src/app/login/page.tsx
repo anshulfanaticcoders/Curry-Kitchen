@@ -7,7 +7,7 @@ export default function LoginPage() {
   return (
     <AuthCard
       title="Sign in"
-      description="Use a seeded account or your registered customer account."
+      description="Use your Curry Kitchen account to continue."
       footer={
         <>
           New customer?{" "}

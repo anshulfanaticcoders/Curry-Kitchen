@@ -429,13 +429,13 @@ export function CheckoutFlow({
               Payment method
             </p>
             <div className="mt-5 rounded-lg border border-ink/10 bg-ivory p-5">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-extrabold">Visa ending 4242</p>
-                  <p className="mt-1 text-xs font-bold text-ink/55">Billing address same as delivery</p>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                  <p className="text-sm font-extrabold">Stripe Checkout</p>
+                  <p className="mt-1 text-xs font-bold text-ink/55">Card details are entered securely after order confirmation.</p>
+                  </div>
+                  <CreditCard className="text-leaf" size={34} />
                 </div>
-                <CreditCard className="text-leaf" size={34} />
-              </div>
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
               <Button variant="secondary" onClick={() => setStep(1)}>
@@ -464,7 +464,7 @@ export function CheckoutFlow({
 
         <div className="relative mt-8 grid gap-4 text-sm font-bold">
           <div className="flex justify-between border-b border-white/10 pb-4">
-            <span className="text-ivory/62">Base plan ×{quantity}</span>
+            <span className="text-ivory/62">Base plan x{quantity}</span>
             <span>{formatCurrency(selectedPlan.price * quantity)}</span>
           </div>
           <div className="flex justify-between border-b border-white/10 pb-4">

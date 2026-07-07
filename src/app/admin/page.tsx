@@ -32,14 +32,19 @@ export default async function AdminOverviewPage() {
     getAdminCustomers(),
   ]);
   const firstName = session?.user?.name?.split(" ")[0] ?? "Admin";
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const revenue = adminOrders.reduce((total, order) => total + order.total, 0);
   const active = customers.filter((customer) => customer.status === "Active").length;
   const deliveries = adminOrders.filter((order) => order.status !== "Delivered").length;
+  const repeatRate = customers.length
+    ? Math.round((customers.filter((customer) => customer.orders > 1).length / customers.length) * 100)
+    : 0;
   const stats = [
-    { label: "Monthly revenue", value: formatCurrency(revenue), delta: "seeded orders", tone: "good" as const },
+    { label: "Revenue", value: formatCurrency(revenue), delta: `${adminOrders.length} tracked orders`, tone: "good" as const },
     { label: "Active plans", value: String(active), delta: `${customers.length} customers`, tone: "neutral" as const },
     { label: "Open deliveries", value: String(deliveries), delta: "need status updates", tone: "watch" as const },
-    { label: "Repeat customers", value: "71%", delta: "seed baseline", tone: "good" as const },
+    { label: "Repeat customers", value: `${repeatRate}%`, delta: "2+ orders", tone: "good" as const },
   ];
   const revenueData = Array.from(
     adminOrders.reduce((map, order) => {
@@ -64,7 +69,7 @@ export default async function AdminOverviewPage() {
   return (
     <div>
       <PageHeader
-        title={`Good evening, ${firstName}`}
+        title={`${greeting}, ${firstName}`}
         description="Orders, delivery pressure, and revenue at a glance for Curry Kitchen."
         action={
           <ButtonLink href="/admin/orders">

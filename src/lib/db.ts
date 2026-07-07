@@ -6,7 +6,7 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 const databaseUrl =
-  process.env.DATABASE_URL ?? "mysql://root:@localhost:3306/currykitchen_next";
+  process.env.DATABASE_URL ?? "mysql://root:@127.0.0.1:3306/currykitchen_next";
 
 function numberFromEnv(name: string, fallback: number) {
   const value = Number(process.env[name]);
@@ -16,9 +16,10 @@ function numberFromEnv(name: string, fallback: number) {
 
 function mariaDbConfigFromUrl(url: string) {
   const parsed = new URL(url);
+  const host = parsed.hostname === "localhost" ? "127.0.0.1" : parsed.hostname;
 
   return {
-    host: parsed.hostname,
+    host,
     port: parsed.port ? Number(parsed.port) : 3306,
     user: decodeURIComponent(parsed.username),
     password: decodeURIComponent(parsed.password),

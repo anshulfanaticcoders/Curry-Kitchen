@@ -2,13 +2,34 @@
 
 import { Loader2, LogIn } from "lucide-react";
 import { getSession, signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
+function safeCallbackUrl(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  if (value.startsWith("/") && !value.startsWith("//")) {
+    return value;
+  }
+
+  try {
+    const parsed = new URL(value);
+
+    if (parsed.origin === window.location.origin) {
+      return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
 
@@ -37,11 +58,10 @@ export function LoginForm() {
 
     const session = await getSession();
     const fallbackUrl = session?.user.role === "ADMIN" ? "/admin" : "/dashboard";
-    const callbackUrl = searchParams.get("callbackUrl");
+    const callbackUrl = safeCallbackUrl(searchParams.get("callbackUrl"));
 
     toast.success("Signed in");
-    router.push(callbackUrl ?? fallbackUrl);
-    router.refresh();
+    window.location.assign(callbackUrl ?? fallbackUrl);
   }
 
   return (

@@ -2,10 +2,34 @@ import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { PrismaClient, RecordStatus, PackageCadence, UserRole, CustomerPackageStatus, OrderStatus, PaymentStatus, PaymentMethod, StudentVerificationStatus, NotificationType, CouponType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
+const databaseUrl =
+  process.env.DATABASE_URL ?? "mysql://root:@127.0.0.1:3306/currykitchen_next";
+
+function numberFromEnv(name, fallback) {
+  const value = Number(process.env[name]);
+
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function mariaDbConfigFromUrl(url) {
+  const parsed = new URL(url);
+  const host = parsed.hostname === "localhost" ? "127.0.0.1" : parsed.hostname;
+
+  return {
+    host,
+    port: parsed.port ? Number(parsed.port) : 3306,
+    user: decodeURIComponent(parsed.username),
+    password: decodeURIComponent(parsed.password),
+    database: parsed.pathname.replace(/^\//, ""),
+    connectionLimit: numberFromEnv("DB_CONNECTION_LIMIT", 1),
+    connectTimeout: numberFromEnv("DB_CONNECT_TIMEOUT_MS", 1_500),
+    acquireTimeout: numberFromEnv("DB_ACQUIRE_TIMEOUT_MS", 1_500),
+    idleTimeout: numberFromEnv("DB_IDLE_TIMEOUT_SECONDS", 60),
+  };
+}
+
 const prisma = new PrismaClient({
-  adapter: new PrismaMariaDb(
-    process.env.DATABASE_URL ?? "mysql://root:@localhost:3306/currykitchen_next",
-  ),
+  adapter: new PrismaMariaDb(mariaDbConfigFromUrl(databaseUrl)),
 });
 
 const image = (id, width = 1200) =>

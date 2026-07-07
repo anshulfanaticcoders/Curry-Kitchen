@@ -2,13 +2,11 @@
 
 import { Loader2, UserPlus } from "lucide-react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
 export function RegisterForm() {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -45,8 +43,7 @@ export function RegisterForm() {
     });
 
     toast.success("Account created");
-    router.push("/dashboard");
-    router.refresh();
+    window.location.assign("/dashboard");
   }
 
   return (

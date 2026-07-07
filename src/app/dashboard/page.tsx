@@ -1,10 +1,15 @@
 import Link from "next/link";
-import { CalendarDays, Clock, PauseCircle, Settings2, Truck, Utensils } from "lucide-react";
+import { CalendarDays, Clock, Settings2, Truck, Utensils } from "lucide-react";
+import { CustomerPauseButton } from "@/components/dashboard/customer-pause-button";
 import { Card, CardHeader, PageHeader, StatCard, Table, Td, Th } from "@/components/dashboard/primitives";
 import { ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getCurrentSession } from "@/lib/auth";
-import { getCustomerOrders, getUpcomingDeliveries } from "@/lib/server/catalog";
+import {
+  getCustomerOrders,
+  getCustomerPackageSummary,
+  getUpcomingDeliveries,
+} from "@/lib/server/catalog";
 import { formatCurrency } from "@/lib/utils";
 
 function statusTone(status: string) {
@@ -16,13 +21,17 @@ function statusTone(status: string) {
 export const dynamic = "force-dynamic";
 
 export default async function CustomerOverviewPage() {
-  const [session, recentOrders, upcomingDeliveries] = await Promise.all([
+  const [session, packageSummary, recentOrders, upcomingDeliveries] = await Promise.all([
     getCurrentSession(),
+    getCustomerPackageSummary(),
     getCustomerOrders(),
     getUpcomingDeliveries(),
   ]);
-  const activePlan = recentOrders[0]?.plan ?? "Choose a plan";
   const firstName = session?.user?.name?.split(" ")[0] ?? "there";
+  const deliveriesThisWeek = upcomingDeliveries.filter((delivery) => {
+    const day = delivery.day.toLowerCase();
+    return ["monday", "tuesday", "wednesday", "thursday", "friday"].includes(day);
+  }).length;
 
   return (
     <div>
@@ -38,10 +47,10 @@ export default async function CustomerOverviewPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Active plan" value={activePlan} delta="Current package" icon={<Utensils size={20} />} />
-        <StatCard label="Next delivery" value={upcomingDeliveries[0]?.eta ?? "Not scheduled"} delta={upcomingDeliveries[0]?.day ?? "Buy a plan"} tone="good" icon={<Truck size={20} />} />
-        <StatCard label="Meals this week" value="5" delta="Mon – Fri" icon={<CalendarDays size={20} />} />
-        <StatCard label="Orders" value={String(recentOrders.length)} delta="Order history" icon={<Clock size={20} />} />
+        <StatCard label="Current plan" value={packageSummary.plan} delta={packageSummary.status} icon={<Utensils size={20} />} />
+        <StatCard label="Days left" value={`${packageSummary.remainingDeliveryDays}/${packageSummary.totalDeliveryDays}`} delta={`Ends ${packageSummary.endDate}`} tone="good" icon={<CalendarDays size={20} />} />
+        <StatCard label="Next delivery" value={upcomingDeliveries[0]?.eta ?? "Not scheduled"} delta={upcomingDeliveries[0]?.day ?? "Buy a plan"} icon={<Truck size={20} />} />
+        <StatCard label="Orders" value={String(recentOrders.length)} delta={`${deliveriesThisWeek} deliveries this week`} icon={<Clock size={20} />} />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">
@@ -56,18 +65,24 @@ export default async function CustomerOverviewPage() {
             }
           />
           <div className="grid gap-3 p-4">
-            {upcomingDeliveries.map((delivery) => (
-              <div key={delivery.id} className="flex items-center gap-4 rounded-lg border border-ink/8 bg-ivory p-4">
-                <span className="grid size-11 place-items-center rounded-button bg-saffron/15 text-masala">
-                  <Truck size={20} />
-                </span>
-                <div className="min-w-0">
-                  <p className="font-extrabold">{delivery.day}</p>
-                  <p className="truncate text-sm text-ink/60">{delivery.meal}</p>
+            {upcomingDeliveries.length ? (
+              upcomingDeliveries.map((delivery) => (
+                <div key={delivery.id} className="flex items-center gap-4 rounded-lg border border-ink/8 bg-ivory p-4">
+                  <span className="grid size-11 place-items-center rounded-button bg-saffron/15 text-masala">
+                    <Truck size={20} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-extrabold">{delivery.day}</p>
+                    <p className="truncate text-sm text-ink/60">{delivery.meal}</p>
+                  </div>
+                  <span className="ml-auto text-sm font-black text-masala">{delivery.eta}</span>
                 </div>
-                <span className="ml-auto text-sm font-black text-masala">{delivery.eta}</span>
+              ))
+            ) : (
+              <div className="rounded-lg border border-dashed border-ink/15 bg-ivory p-6 text-sm font-bold text-ink/55">
+                No upcoming deliveries are scheduled. Buy a plan or contact admin if this looks wrong.
               </div>
-            ))}
+            )}
           </div>
         </Card>
 
@@ -82,10 +97,12 @@ export default async function CustomerOverviewPage() {
               <CalendarDays size={18} />
               View menu
             </ButtonLink>
-            <ButtonLink href="/dashboard/profile" variant="secondary">
-              <PauseCircle size={18} />
-              Pause delivery
-            </ButtonLink>
+            <CustomerPauseButton
+              packageId={packageSummary.id}
+              canSelfPause={packageSummary.canSelfPause}
+              customerPauseUsed={packageSummary.customerPauseUsed}
+              status={packageSummary.status}
+            />
           </div>
         </Card>
       </div>
@@ -103,17 +120,25 @@ export default async function CustomerOverviewPage() {
             </tr>
           </thead>
           <tbody>
-            {recentOrders.map((order) => (
-              <tr key={order.id} className="transition hover:bg-ivory/60">
-                <Td className="font-extrabold">{order.id}</Td>
-                <Td className="text-ink/70">{order.plan}</Td>
-                <Td className="text-ink/55">{order.date}</Td>
-                <Td>
-                  <StatusPill tone={statusTone(order.status)}>{order.status}</StatusPill>
+            {recentOrders.length ? (
+              recentOrders.map((order) => (
+                <tr key={order.id} className="transition hover:bg-ivory/60">
+                  <Td className="font-extrabold">{order.id}</Td>
+                  <Td className="text-ink/70">{order.plan}</Td>
+                  <Td className="text-ink/55">{order.date}</Td>
+                  <Td>
+                    <StatusPill tone={statusTone(order.status)}>{order.status}</StatusPill>
+                  </Td>
+                  <Td className="font-black">{formatCurrency(order.total)}</Td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <Td colSpan={5} className="py-8 text-center text-sm font-bold text-ink/45">
+                  No orders yet. Your first order will appear here after checkout.
                 </Td>
-                <Td className="font-black">{formatCurrency(order.total)}</Td>
               </tr>
-            ))}
+            )}
           </tbody>
         </Table>
       </Card>

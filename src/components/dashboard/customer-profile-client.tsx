@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Loader2, Plus, X } from "lucide-react";
-import { type FormEvent, useState, useTransition } from "react";
+import { Loader2 } from "lucide-react";
+import { type FormEvent, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardHeader, Field, Input, PageHeader } from "@/components/dashboard/primitives";
@@ -13,16 +13,7 @@ import type { CustomerProfileDetails } from "@/lib/types";
 
 export function CustomerProfileClient({ profile }: { profile: CustomerProfileDetails }) {
   const router = useRouter();
-  const [prefs, setPrefs] = useState(profile.preferences);
-  const [draft, setDraft] = useState("");
   const [pending, startTransition] = useTransition();
-
-  function addPref() {
-    const value = draft.trim();
-    if (!value || prefs.includes(value)) return;
-    setPrefs((list) => [...list, value]);
-    setDraft("");
-  }
 
   function saveDetails(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -87,48 +78,25 @@ export function CustomerProfileClient({ profile }: { profile: CustomerProfileDet
           </Card>
 
           <Card>
-            <CardHeader title="Food preferences" description="These notes come from your latest order and can guide your next checkout." />
+            <CardHeader title="Food preferences" description="Latest checkout notes saved from your most recent order." />
             <div className="p-5">
               <div className="flex flex-wrap gap-2">
-                {prefs.length ? (
-                  prefs.map((pref) => (
+                {profile.preferences.length ? (
+                  profile.preferences.map((pref) => (
                     <span
                       key={pref}
-                      className="inline-flex items-center gap-2 rounded-full border border-saffron/30 bg-saffron/15 px-3 py-1.5 text-sm font-bold text-masala"
+                      className="inline-flex items-center rounded-full border border-saffron/30 bg-saffron/15 px-3 py-1.5 text-sm font-bold text-masala"
                     >
                       {pref}
-                      <button
-                        type="button"
-                        onClick={() => setPrefs((list) => list.filter((item) => item !== pref))}
-                        aria-label={`Remove ${pref}`}
-                        className="text-masala/70 hover:text-masala"
-                      >
-                        <X size={14} />
-                      </button>
                     </span>
                   ))
                 ) : (
                   <p className="text-sm font-bold text-ink/50">No saved food notes yet.</p>
                 )}
               </div>
-              <div className="mt-4 flex gap-2">
-                <Input
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      addPref();
-                    }
-                  }}
-                  placeholder="e.g. No garlic"
-                  className="max-w-xs"
-                />
-                <Button type="button" onClick={addPref}>
-                  <Plus size={18} />
-                  Add
-                </Button>
-              </div>
+              <p className="mt-4 text-sm leading-6 text-ink/55">
+                Add or change food notes during checkout so they stay attached to the next order.
+              </p>
             </div>
           </Card>
         </div>

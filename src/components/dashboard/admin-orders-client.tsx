@@ -111,35 +111,43 @@ function OrderTable({ orders }: { orders: AdminOrder[] }) {
           </tr>
         </thead>
         <tbody>
-          {orders.map((order) => (
-            <tr key={order.id} className="transition hover:bg-ivory/60">
-              <Td className="font-extrabold">{order.id}</Td>
-              <Td className="text-ink/70">{order.customer}</Td>
-              <Td className="text-ink/60">{order.plan}</Td>
-              <Td className="font-black">{formatCurrency(order.total)}</Td>
-              <Td>
-                <StatusPill tone={paymentTone(order.payment)}>{order.payment}</StatusPill>
-              </Td>
-              <Td>
-                <StatusPill tone={statusTone(order.status)}>{order.status}</StatusPill>
-              </Td>
-              <Td>
-                <div className="flex justify-end">
-                  <Drawer
-                    title={order.id}
-                    description={`${order.customer} - ${order.date}`}
-                    trigger={({ open }) => (
-                      <Button variant="secondary" onClick={open} className="h-9 px-4">
-                        View
-                      </Button>
-                    )}
-                  >
-                    {({ close }) => <OrderDetails order={order} close={close} />}
-                  </Drawer>
-                </div>
+          {orders.length ? (
+            orders.map((order) => (
+              <tr key={order.id} className="transition hover:bg-ivory/60">
+                <Td className="font-extrabold">{order.id}</Td>
+                <Td className="text-ink/70">{order.customer}</Td>
+                <Td className="text-ink/60">{order.plan}</Td>
+                <Td className="font-black">{formatCurrency(order.total)}</Td>
+                <Td>
+                  <StatusPill tone={paymentTone(order.payment)}>{order.payment}</StatusPill>
+                </Td>
+                <Td>
+                  <StatusPill tone={statusTone(order.status)}>{order.status}</StatusPill>
+                </Td>
+                <Td>
+                  <div className="flex justify-end">
+                    <Drawer
+                      title={order.id}
+                      description={`${order.customer} - ${order.date}`}
+                      trigger={({ open }) => (
+                        <Button variant="secondary" onClick={open} className="h-9 px-4">
+                          View
+                        </Button>
+                      )}
+                    >
+                      {({ close }) => <OrderDetails order={order} close={close} />}
+                    </Drawer>
+                  </div>
+                </Td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <Td colSpan={7} className="py-8 text-center text-sm font-bold text-ink/45">
+                No orders in this view.
               </Td>
             </tr>
-          ))}
+          )}
         </tbody>
       </Table>
     </Card>
