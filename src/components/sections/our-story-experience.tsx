@@ -52,7 +52,7 @@ const storyBeats = [
 const differences = [
   "Daily fresh and hygienic meals",
   "Authentic Indian taste",
-  "On-time delivery across California zones",
+  "On-time delivery across San Diego zones",
   "Weekly, monthly, and student tiffin plans",
   "Vegetarian and customizable options",
 ];
@@ -306,7 +306,7 @@ function StoryHero() {
         MEHKO guided
       </FloatingIngredient>
       <FloatingIngredient className="bottom-[18%] right-[16%] hidden md:inline-flex" delay={1.45}>
-        California delivery
+        San Diego delivery
       </FloatingIngredient>
 
       <div className="section-shell flex min-h-screen items-center pb-20 pt-32">
@@ -327,7 +327,7 @@ function StoryHero() {
             transition={{ duration: 0.82, ease: easeOut, delay: 0.64 }}
             className="mt-7 max-w-3xl text-lg font-bold leading-8 text-white/78 md:text-xl"
           >
-            Curry Kitchen began as a home-based kitchen in San Marcos, California, built around
+            Curry Kitchen began as a home-based kitchen near San Diego, built around
             family recipes, fresh vegetables, and the simple promise that weekday food should still
             feel personal.
           </motion.p>
@@ -434,7 +434,7 @@ export function OurStoryExperience() {
             </h2>
             <p className="mx-auto mt-5 max-w-2xl text-base font-bold leading-8 text-white/64">
               This animated route is the heart of the page: the meal moves from family recipe to
-              fresh prep, then into a packed tiffin and across California delivery zones.
+              fresh prep, then into a packed tiffin and across San Diego delivery zones.
             </p>
           </motion.div>
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronDown,
   LayoutDashboard,
@@ -16,6 +17,8 @@ import {
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
+import { PackageCartDrawer } from "@/components/cart/package-cart-drawer";
+import { usePackageCart } from "@/components/providers/package-cart-provider";
 import { ButtonLink, buttonStyles } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +45,7 @@ function initialsFromSession(name?: string | null, email?: string | null) {
 export function Navbar() {
   const pathname = usePathname();
   const { data: session, status } = useSession();
+  const { items: cartItems, openCart, pulseKey } = usePackageCart();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -53,6 +57,7 @@ export function Navbar() {
   const dashboardHref = isAdmin ? "/admin" : "/dashboard";
   const userInitials = initialsFromSession(user?.name, user?.email);
   const userLabel = isAdmin ? "Admin" : "Customer";
+  const cartCount = cartItems.length;
 
   useEffect(() => {
     function updateHeader() {
@@ -185,7 +190,8 @@ export function Navbar() {
     );
 
   return (
-    <header
+    <>
+      <header
       className={cn(
         "z-50 transition duration-500",
         pathname === "/" ? "fixed inset-x-0 top-4" : "sticky top-0 bg-white/88 py-3 backdrop-blur-xl",
@@ -193,56 +199,91 @@ export function Navbar() {
     >
       <div
         className={cn(
-          "section-shell flex h-16 items-center justify-between rounded-full border px-3 pl-4 transition duration-500 md:px-4",
+          "section-shell flex min-h-16 items-center justify-between rounded-[2rem] border px-3 py-2 pl-4 transition duration-500 md:px-4",
           transparent
             ? "border-white/16 bg-black/30 text-white shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur-xl"
             : "border-ink/10 bg-white/94 text-ink shadow-[0_18px_46px_rgba(7,7,7,0.08)] backdrop-blur-xl",
         )}
       >
-        <Link href="/" className="group flex items-center gap-3" onClick={() => setOpen(false)}>
-          <span
-            className={cn(
-              "grid size-10 place-items-center rounded-full font-display text-lg font-black shadow-inset transition group-hover:rotate-[-4deg]",
-              transparent ? "bg-saffron text-ink" : "bg-ink text-saffron",
-            )}
-          >
-            CK
-          </span>
-          <span>
-            <span className="block font-display text-2xl font-black leading-none">Curry Kitchen</span>
-          </span>
-        </Link>
-
-        <nav
-          className={cn(
-            "hidden items-center gap-1 rounded-full border p-1 lg:flex",
-            transparent ? "border-white/12 bg-white/8" : "border-ink/10 bg-ink/[0.03]",
-          )}
-        >
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
+        <div className="flex min-w-0 shrink-0 items-center">
+          <Link href="/" className="group flex items-center gap-3" onClick={() => setOpen(false)}>
+            <span
               className={cn(
-                "rounded-full px-4 py-2 text-sm font-extrabold transition",
-                transparent
-                  ? "text-white/80 hover:bg-white hover:text-ink"
-                  : "text-ink/64 hover:bg-white hover:text-ink",
-                pathname === link.href &&
-                  (transparent
-                    ? "bg-white text-ink"
-                    : "bg-ink text-ivory hover:bg-ink hover:text-ivory"),
+                "grid size-10 place-items-center rounded-full font-display text-lg font-black shadow-inset transition group-hover:rotate-[-4deg]",
+                transparent ? "bg-saffron text-ink" : "bg-ink text-saffron",
               )}
             >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
+              CK
+            </span>
+            <span>
+              <span className="block whitespace-nowrap font-display text-2xl font-black leading-none">Curry Kitchen</span>
+            </span>
+          </Link>
 
-        <div className="hidden items-center gap-2 lg:flex">
+          <nav
+            className={cn(
+              "mx-8 hidden items-center gap-1 rounded-full border p-1 min-[1240px]:flex",
+              transparent ? "border-white/12 bg-white/8" : "border-ink/10 bg-ink/[0.03]",
+            )}
+          >
+            {links.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={cn(
+                  "rounded-full px-4 py-2 text-sm font-extrabold transition",
+                  transparent
+                    ? "text-white/80 hover:bg-white hover:text-ink"
+                    : "text-ink/64 hover:bg-white hover:text-ink",
+                  pathname === link.href &&
+                    (transparent
+                      ? "bg-white text-ink"
+                      : "bg-ink text-ivory hover:bg-ink hover:text-ivory"),
+                )}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+
+        <div className="hidden shrink-0 items-center gap-2 min-[1240px]:flex">
           {profileControl}
+          <motion.button
+            key={pulseKey}
+            type="button"
+            aria-label={`Open package cart${cartCount ? `, ${cartCount} package${cartCount === 1 ? "" : "s"}` : ""}`}
+            title="Open cart"
+            onClick={openCart}
+            initial={pulseKey ? { scale: 0.92, rotate: -8 } : false}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 420, damping: 20 }}
+            className={cn(
+              "relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-sm font-extrabold transition duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-saffron focus-visible:ring-offset-2",
+              transparent
+                ? "border-white/18 bg-white/10 text-white hover:bg-white hover:text-ink focus-visible:ring-offset-ink"
+                : "border-ink/15 bg-white text-ink hover:-translate-y-0.5 hover:border-saffron hover:bg-rose focus-visible:ring-offset-ivory",
+            )}
+          >
+            <ShoppingBag size={18} />
+            <AnimatePresence initial={false}>
+              {cartCount ? (
+                <motion.span
+                  key={cartCount}
+                  initial={{ opacity: 0, scale: 0.4, y: 4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.4 }}
+                  transition={{ type: "spring", stiffness: 520, damping: 24 }}
+                  className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-saffron text-[10px] font-black text-ink shadow-[0_4px_14px_rgba(255,122,26,0.48)]"
+                >
+                  {cartCount > 9 ? "9+" : cartCount}
+                </motion.span>
+              ) : null}
+            </AnimatePresence>
+            <span className="sr-only">Open cart</span>
+          </motion.button>
           <ButtonLink
-            href="/checkout"
+            href="/packages#build-plan"
             variant="primary"
             className={cn(
               "h-11 rounded-full px-5",
@@ -254,20 +295,42 @@ export function Navbar() {
           </ButtonLink>
         </div>
 
-        <button
-          className={cn(
-            "grid size-11 place-items-center rounded-full border lg:hidden",
-            transparent ? "border-white/18 bg-white/10 text-white" : "border-ink/10 bg-white text-ink",
-          )}
-          aria-label="Toggle navigation"
-          onClick={() => setOpen((value) => !value)}
-        >
-          {open ? <X size={21} /> : <Menu size={21} />}
-        </button>
+        <div className="flex shrink-0 items-center gap-2 min-[1240px]:hidden">
+          <motion.button
+            key={`mobile-${pulseKey}`}
+            type="button"
+            aria-label={`Open package cart${cartCount ? `, ${cartCount} package${cartCount === 1 ? "" : "s"}` : ""}`}
+            onClick={openCart}
+            initial={pulseKey ? { scale: 0.9, rotate: -8 } : false}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 420, damping: 20 }}
+            className={cn(
+              "relative grid size-11 place-items-center rounded-full border",
+              transparent ? "border-white/18 bg-white/10 text-white" : "border-ink/10 bg-white text-ink",
+            )}
+          >
+            <ShoppingBag size={18} />
+            {cartCount ? (
+              <span className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-saffron text-[10px] font-black text-ink">
+                {cartCount > 9 ? "9+" : cartCount}
+              </span>
+            ) : null}
+          </motion.button>
+          <button
+            className={cn(
+              "grid size-11 place-items-center rounded-full border",
+              transparent ? "border-white/18 bg-white/10 text-white" : "border-ink/10 bg-white text-ink",
+            )}
+            aria-label="Toggle navigation"
+            onClick={() => setOpen((value) => !value)}
+          >
+            {open ? <X size={21} /> : <Menu size={21} />}
+          </button>
+        </div>
       </div>
 
       {open ? (
-        <div className="section-shell mt-3 rounded-lg border border-ink/10 bg-ivory px-4 py-5 shadow-soft lg:hidden">
+        <div className="section-shell mt-3 rounded-lg border border-ink/10 bg-ivory px-4 py-5 shadow-soft min-[1240px]:hidden">
           <nav className="grid gap-2">
             {links.map((link) => (
               <Link
@@ -282,10 +345,17 @@ export function Navbar() {
                 {link.label}
               </Link>
             ))}
-            <ButtonLink href="/checkout" className="mt-2" onClick={() => setOpen(false)}>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                openCart();
+              }}
+              className={buttonStyles("primary", "mt-2 w-full")}
+            >
               <ShoppingBag size={18} />
-              Open cart
-            </ButtonLink>
+              Open cart{cartCount ? ` (${cartCount})` : ""}
+            </button>
             {user ? (
               <>
                 <Link
@@ -318,6 +388,8 @@ export function Navbar() {
           </nav>
         </div>
       ) : null}
-    </header>
+      </header>
+      <PackageCartDrawer />
+    </>
   );
 }

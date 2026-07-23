@@ -47,17 +47,17 @@ export function Footer() {
               <Phone size={17} /> (858) 599-1613
             </span>
             <span className="flex items-center gap-3">
-              <Mail size={17} /> info@currykitcheninc.com
+              <Mail size={17} /> currykitcheninc@gmail.com
             </span>
             <span className="flex items-center gap-3">
-              <MapPin size={17} /> California Bay Area delivery zones
+              <MapPin size={17} /> San Diego delivery zones
             </span>
           </div>
         </div>
       </div>
       <div className="border-t border-white/10 py-5">
         <div className="section-shell flex flex-col gap-2 text-xs font-bold uppercase tracking-[0.16em] text-ivory/48 md:flex-row md:items-center md:justify-between">
-          <span>Fresh meals. Clear plans. Daily comfort.</span>
+          <span>San Diego Rooted &gt; Freshly Made &gt; Delivered Daily.</span>
           <span>2026 Curry Kitchen</span>
         </div>
       </div>

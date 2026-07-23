@@ -101,6 +101,7 @@ export type CustomerProfileDetails = CustomerProfile & {
 export type CustomerPackageSummary = {
   id?: string;
   plan: string;
+  quantity: number;
   status: "Active" | "Paused" | "Pending payment" | "Needs student approval" | "Expired" | "No active plan";
   totalDeliveryDays: number;
   usedDeliveryDays: number;

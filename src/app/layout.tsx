@@ -16,9 +16,9 @@ const body = Lato({
 });
 
 export const metadata: Metadata = {
-  title: "Curry Kitchen - Homemade Tiffin Delivery",
+  title: "Curry Kitchen - San Diego Tiffin Delivery",
   description:
-    "A premium Curry Kitchen mockup for homemade Indian meal plans, weekly menus, and tiffin delivery.",
+    "Homemade Indian meal plans, weekly menus, and tiffin delivery for San Diego customers.",
 };
 
 export default function RootLayout({

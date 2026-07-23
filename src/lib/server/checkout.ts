@@ -1,14 +1,23 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { db } from "@/lib/db";
 import { getCurrentSession } from "@/lib/auth";
+import { db } from "@/lib/db";
+import {
+  calculateDeliveryDates,
+  nextEligiblePackageStartDate,
+  validatePackageStartInput,
+} from "@/lib/package-schedule";
 import { shouldUseMockData } from "@/lib/server/data-source";
 import { getStripe } from "@/lib/stripe";
 
-const checkoutSchema = z.object({
+const checkoutItemSchema = z.object({
   packageId: z.string().min(1),
-  quantity: z.number().int().min(1).max(10).default(1),
-  addonIds: z.array(z.string()).default([]),
+  addonIds: z.array(z.string().min(1)).min(1).max(20),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a valid package start date."),
+});
+
+const checkoutSchema = z.object({
+  items: z.array(checkoutItemSchema).min(1).max(10),
   customer: z.object({
     name: z.string().min(2),
     email: z.string().email().trim().toLowerCase(),
@@ -41,8 +50,27 @@ type DeliveryZoneCandidate = {
   postalCodes: Prisma.JsonValue;
 };
 
+export class CheckoutError extends Error {
+  constructor(
+    message: string,
+    public statusCode = 400,
+    public code = "CHECKOUT_INVALID",
+  ) {
+    super(message);
+    this.name = "CheckoutError";
+  }
+}
+
 function toNumber(value: Prisma.Decimal | number | string) {
   return Number(value.toString());
+}
+
+function roundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function decimal(value: number) {
+  return new Prisma.Decimal(roundMoney(value).toFixed(2));
 }
 
 function cents(value: number) {
@@ -63,8 +91,8 @@ function matchesZone(zone: DeliveryZoneCandidate, city: string, postalCode: stri
   );
 }
 
-async function getOutsideZoneFee() {
-  const setting = await db.setting.findUnique({ where: { key: "outside_zone_fee" } });
+async function getOutsideZoneFee(tx: Prisma.TransactionClient) {
+  const setting = await tx.setting.findUnique({ where: { key: "outside_zone_fee" } });
   const value = setting?.value;
 
   if (typeof value === "number") return value;
@@ -77,32 +105,11 @@ function makeOrderNumber() {
   return `CK-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 900 + 100)}`;
 }
 
-function calculateDeliveryDates(totalDays: number) {
-  const dates: Date[] = [];
-  const cursor = new Date();
-  cursor.setDate(cursor.getDate() + 1);
-
-  while (dates.length < totalDays) {
-    const day = cursor.getDay();
-
-    if (day !== 0 && day !== 6) {
-      dates.push(new Date(cursor));
-    }
-
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return dates;
-}
-
 export async function markOrderPaidAndActivate(orderId: string, stripePaymentId?: string) {
   const order = await db.order.findUnique({
     where: { id: orderId },
     include: {
-      items: { include: { package: true } },
       customerPackages: { include: { package: true, deliveryDays: true } },
-      studentVerifications: true,
-      payments: true,
     },
   });
 
@@ -113,10 +120,7 @@ export async function markOrderPaidAndActivate(orderId: string, stripePaymentId?
   await db.$transaction(async (tx) => {
     await tx.payment.updateMany({
       where: { orderId: order.id },
-      data: {
-        status: "PAID",
-        stripePaymentId,
-      },
+      data: { status: "PAID", stripePaymentId },
     });
 
     await tx.order.update({
@@ -127,10 +131,10 @@ export async function markOrderPaidAndActivate(orderId: string, stripePaymentId?
     for (const customerPackage of order.customerPackages) {
       const requiresStudentApproval = customerPackage.package.studentOnly;
       const nextStatus = requiresStudentApproval ? "PENDING_STUDENT_VERIFICATION" : "ACTIVE";
-      const startDate = requiresStudentApproval ? null : new Date();
+      const startDate = customerPackage.startDate ?? nextEligiblePackageStartDate();
       const deliveryDates = requiresStudentApproval
         ? []
-        : calculateDeliveryDates(customerPackage.totalDeliveryDays);
+        : calculateDeliveryDates(customerPackage.totalDeliveryDays, startDate);
 
       await tx.customerPackage.update({
         where: { id: customerPackage.id },
@@ -158,6 +162,16 @@ export async function markOrderPaidAndActivate(orderId: string, stripePaymentId?
 export async function createCheckoutOrder(rawInput: unknown) {
   const input = checkoutSchema.parse(rawInput);
 
+  const session = await getCurrentSession().catch(() => null);
+
+  if (!session?.user?.id) {
+    throw new CheckoutError(
+      "Please sign in or create an account before checkout.",
+      401,
+      "AUTH_REQUIRED",
+    );
+  }
+
   if (shouldUseMockData()) {
     return {
       checkoutUrl: `/dashboard/orders?checkout=mock&order=CK-MOCK-${Date.now().toString().slice(-5)}`,
@@ -165,72 +179,115 @@ export async function createCheckoutOrder(rawInput: unknown) {
     };
   }
 
-  const session = await getCurrentSession().catch(() => null);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   const created = await db.$transaction(async (tx) => {
-    const plan = await tx.package.findUnique({
-      where: { id: input.packageId },
-      include: {
-        addons: { include: { addon: true } },
-      },
+    const packageIds = Array.from(new Set(input.items.map((item) => item.packageId)));
+    const plans = await tx.package.findMany({
+      where: { id: { in: packageIds }, status: "ACTIVE" },
+      include: { addons: { include: { addon: true } } },
     });
 
-    if (!plan || plan.status !== "ACTIVE") {
-      throw new Error("Selected package is not available.");
+    if (plans.length !== packageIds.length) {
+      throw new CheckoutError(
+        "One or more selected packages are no longer available. Review your cart and try again.",
+        409,
+        "PACKAGE_UNAVAILABLE",
+      );
     }
 
-    if (plan.studentOnly && !input.student) {
-      throw new Error("Student package requires university verification details.");
+    const pricedItems = input.items.map((item) => {
+      const plan = plans.find((candidate) => candidate.id === item.packageId);
+
+      if (!plan) {
+        throw new CheckoutError("Selected package is not available.", 409, "PACKAGE_UNAVAILABLE");
+      }
+
+      const requestedAddonIds = Array.from(new Set(item.addonIds));
+      const eligibleAddons = plan.addons
+        .map(({ addon }) => addon)
+        .filter(
+          (addon) => requestedAddonIds.includes(addon.id) && addon.status === "ACTIVE",
+        );
+
+      if (!requestedAddonIds.length || eligibleAddons.length !== requestedAddonIds.length) {
+        throw new CheckoutError(
+          `${plan.name} needs at least one currently available add-on.`,
+          409,
+          "ADDON_UNAVAILABLE",
+        );
+      }
+
+      const startDate = validatePackageStartInput(item.startDate);
+      const packageTotal = toNumber(plan.price);
+      const addonTotal = eligibleAddons.reduce((sum, addon) => sum + toNumber(addon.price), 0);
+      const subtotal = packageTotal + addonTotal;
+
+      return {
+        plan,
+        eligibleAddons,
+        startDate,
+        packageTotal,
+        addonTotal,
+        subtotal,
+      };
+    });
+
+    if (pricedItems.some(({ plan }) => plan.studentOnly) && !input.student) {
+      throw new CheckoutError(
+        "Student or military packages require verification details.",
+        400,
+        "VERIFICATION_REQUIRED",
+      );
     }
 
-    const eligibleAddons = plan.addons
-      .map(({ addon }) => addon)
-      .filter((addon) => input.addonIds.includes(addon.id) && addon.status === "ACTIVE");
-    const subtotal =
-      (toNumber(plan.price) +
-        eligibleAddons.reduce((sum, addon) => sum + toNumber(addon.price), 0)) *
-      input.quantity;
-
+    const subtotal = pricedItems.reduce((sum, item) => sum + item.subtotal, 0);
     const zones = await tx.deliveryZone.findMany({
       where: { status: "ACTIVE" },
       orderBy: [{ outsideZone: "asc" }, { createdAt: "asc" }],
     });
     const matchedZone =
       zones.find(
-        (zone) => !zone.outsideZone && matchesZone(zone, input.address.city, input.address.postalCode),
+        (zone) =>
+          !zone.outsideZone && matchesZone(zone, input.address.city, input.address.postalCode),
       ) ?? zones.find((zone) => zone.outsideZone);
     const deliveryFeePerPackage = matchedZone
       ? matchedZone.isFreeDelivery
         ? 0
         : toNumber(matchedZone.fee)
-      : await getOutsideZoneFee();
-    const deliveryFee = deliveryFeePerPackage * input.quantity;
-
+      : await getOutsideZoneFee(tx);
+    const deliveryFee = deliveryFeePerPackage * pricedItems.length;
     const coupon = input.couponCode
       ? await tx.coupon.findUnique({ where: { code: input.couponCode.toUpperCase() } })
       : null;
-    const discountAmount =
+    const rawDiscount =
       coupon && coupon.status === "ACTIVE"
         ? coupon.type === "PERCENT"
           ? subtotal * (toNumber(coupon.value) / 100)
           : toNumber(coupon.value)
         : 0;
-    const taxableSubtotal = Math.max(0, subtotal - discountAmount);
-    const taxAmount = taxableSubtotal * toNumber(plan.taxRate);
-    const total = taxableSubtotal + taxAmount + deliveryFee;
+    const discountAmount = Math.min(subtotal, Math.max(0, rawDiscount));
+    const discountRatio = subtotal > 0 ? discountAmount / subtotal : 0;
+    const taxAmount = pricedItems.reduce(
+      (sum, item) =>
+        sum + item.subtotal * (1 - discountRatio) * toNumber(item.plan.taxRate),
+      0,
+    );
+    const total = roundMoney(subtotal - discountAmount + taxAmount + deliveryFee);
 
-    let customer = session?.user?.id
-      ? await tx.customer.findUnique({ where: { userId: session.user.id } })
-      : null;
+    let customer = await tx.customer.findUnique({ where: { userId: session.user.id } });
+    customer ??= await tx.customer.findFirst({ where: { email: input.customer.email } });
 
-    customer ??= await tx.customer.findFirst({
-      where: { email: input.customer.email },
-    });
+    if (customer && !customer.userId) {
+      customer = await tx.customer.update({
+        where: { id: customer.id },
+        data: { userId: session.user.id },
+      });
+    }
 
     customer ??= await tx.customer.create({
       data: {
-        userId: session?.user?.id,
+        userId: session.user.id,
         name: input.customer.name,
         email: input.customer.email,
         phone: input.customer.phone,
@@ -257,45 +314,17 @@ export async function createCheckoutOrder(rawInput: unknown) {
         addressId: address.id,
         deliveryZoneId: matchedZone?.id,
         couponId: coupon?.id,
-        guestName: session?.user ? null : input.customer.name,
-        guestEmail: session?.user ? null : input.customer.email,
-        guestPhone: session?.user ? null : input.customer.phone,
-        subtotal: new Prisma.Decimal(subtotal),
-        deliveryFee: new Prisma.Decimal(deliveryFee),
-        taxAmount: new Prisma.Decimal(taxAmount),
-        discountAmount: new Prisma.Decimal(discountAmount),
-        total: new Prisma.Decimal(total),
+        guestName: null,
+        guestEmail: null,
+        guestPhone: null,
+        subtotal: decimal(subtotal),
+        deliveryFee: decimal(deliveryFee),
+        taxAmount: decimal(taxAmount),
+        discountAmount: decimal(discountAmount),
+        total: decimal(total),
         foodPreferences: input.foodPreferences,
-        items: {
-          create: {
-            packageId: plan.id,
-            quantity: input.quantity,
-            unitPrice: plan.price,
-            total: new Prisma.Decimal(toNumber(plan.price) * input.quantity),
-          },
-        },
-        addons: {
-          create: eligibleAddons.map((addon) => ({
-            addonId: addon.id,
-            quantity: input.quantity,
-            unitPrice: addon.price,
-            total: new Prisma.Decimal(toNumber(addon.price) * input.quantity),
-          })),
-        },
         payments: {
-          create: {
-            amount: new Prisma.Decimal(total),
-            status: "PENDING",
-            method: "STRIPE",
-          },
-        },
-        customerPackages: {
-          create: {
-            customerId: customer.id,
-            packageId: plan.id,
-            totalDeliveryDays: plan.deliveryDayCount * input.quantity,
-            status: "PENDING_PAYMENT",
-          },
+          create: { amount: decimal(total), status: "PENDING", method: "STRIPE" },
         },
         studentVerifications: input.student
           ? {
@@ -309,15 +338,46 @@ export async function createCheckoutOrder(rawInput: unknown) {
             }
           : undefined,
       },
-      include: {
-        payments: true,
-      },
     });
+
+    for (const pricedItem of pricedItems) {
+      const orderItem = await tx.orderItem.create({
+        data: {
+          orderId: order.id,
+          packageId: pricedItem.plan.id,
+          startDate: pricedItem.startDate,
+          unitPrice: pricedItem.plan.price,
+          total: decimal(pricedItem.packageTotal),
+        },
+      });
+
+      await tx.orderAddon.createMany({
+        data: pricedItem.eligibleAddons.map((addon) => ({
+          orderId: order.id,
+          orderItemId: orderItem.id,
+          addonId: addon.id,
+          unitPrice: addon.price,
+          total: addon.price,
+        })),
+      });
+
+      await tx.customerPackage.create({
+        data: {
+          customerId: customer.id,
+          orderId: order.id,
+          orderItemId: orderItem.id,
+          packageId: pricedItem.plan.id,
+          totalDeliveryDays: pricedItem.plan.deliveryDayCount,
+          status: "PENDING_PAYMENT",
+          startDate: pricedItem.startDate,
+        },
+      });
+    }
 
     return {
       orderId: order.id,
       orderNumber: order.orderNumber,
-      planName: plan.name,
+      planNames: pricedItems.map((item) => item.plan.name),
       total,
     };
   });
@@ -335,11 +395,8 @@ export async function createCheckoutOrder(rawInput: unknown) {
   const stripeSession = await stripe.checkout.sessions.create({
     mode: "payment",
     success_url: `${appUrl}/dashboard/orders?checkout=success&order=${created.orderNumber}`,
-    cancel_url: `${appUrl}/checkout?checkout=cancelled`,
-    metadata: {
-      orderId: created.orderId,
-      orderNumber: created.orderNumber,
-    },
+    cancel_url: `${appUrl}/dashboard/orders?checkout=cancelled&order=${created.orderNumber}`,
+    metadata: { orderId: created.orderId, orderNumber: created.orderNumber },
     line_items: [
       {
         quantity: 1,
@@ -347,7 +404,10 @@ export async function createCheckoutOrder(rawInput: unknown) {
           currency: "usd",
           unit_amount: cents(created.total),
           product_data: {
-            name: `Curry Kitchen - ${created.planName}`,
+            name:
+              created.planNames.length === 1
+                ? `Curry Kitchen - ${created.planNames[0]}`
+                : `Curry Kitchen - ${created.planNames.length} tiffin packages`,
           },
         },
       },

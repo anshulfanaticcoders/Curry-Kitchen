@@ -22,18 +22,18 @@ export const dynamic = "force-dynamic";
 const serviceNotes = [
   {
     icon: CookingPot,
-    title: "Small-batch cooking",
-    copy: "Daily prep and rotating dishes, portioned for regular life.",
+    title: "Guilt-free eating",
+    copy: "#Ghar Ka Khana Roz Khana, without another takeout compromise.",
   },
   {
     icon: Leaf,
-    title: "Veg-first comfort",
-    copy: "Daal, sabzi, roti, rice, and salad without decision fatigue.",
+    title: "Homemade food",
+    copy: "Dal, sabzi, roti, rice, and salad cooked with everyday home-kitchen care.",
   },
   {
     icon: Truck,
-    title: "Dinner-hour delivery",
-    copy: "A dependable Mon-Fri rhythm for Fremont, San Jose, and Milpitas.",
+    title: "San Diego delivery",
+    copy: "A dependable Monday to Friday dinner rhythm for local homes and students.",
   },
   {
     icon: ShieldCheck,
@@ -44,12 +44,12 @@ const serviceNotes = [
 
 const orderingSteps = [
   {
-    title: "Choose your rhythm",
-    copy: "Monthly, weekly, or student plans organized by appetite and routine.",
+    title: "Choose your old-school dabba",
+    copy: "Weekly trial, monthly fixed, or student and military packages organized by routine.",
   },
   {
-    title: "Tune the tiffin",
-    copy: "Rice, roti, spice notes, and delivery preferences set before checkout.",
+    title: "Keep the old-school method",
+    copy: "Rice, roti, spice notes, and add-ons stay simple before checkout.",
   },
   {
     title: "Know what is coming",
@@ -63,7 +63,12 @@ export default async function Home() {
     getWeeklyMenu(),
     getTestimonials(),
   ]);
-  const featured = packagePlans.slice(0, 3);
+  const featured = [
+    ...packagePlans.filter((plan) => plan.category === "Weekly").slice(0, 1),
+    ...packagePlans.filter((plan) => plan.category === "Monthly").slice(0, 1),
+    ...packagePlans.filter((plan) => plan.category === "Student").slice(0, 1),
+  ];
+  const featuredPlans = featured.length >= 3 ? featured : packagePlans.slice(0, 3);
   const menuPreview = weeklyMenu.slice(0, 3);
 
   return (
@@ -79,12 +84,12 @@ export default async function Home() {
                 The Curry Kitchen promise
               </RevealItem>
               <RevealItem as="h2" className="mt-3 max-w-xl font-display text-4xl font-black leading-[1.04] lg:text-5xl">
-                Homemade care, delivered with modern control.
+                Homemade food for guilt-free weekday eating.
               </RevealItem>
             </div>
             <RevealItem as="p" className="max-w-sm text-base font-medium leading-7 text-ink/68">
-              Fresh meals, clear weekly plans, and dependable dinner delivery in one premium tiffin
-              experience.
+              #Ghar Ka Khana Roz Khana, built into clear weekly plans and dependable San Diego
+              delivery.
             </RevealItem>
           </div>
           <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -120,11 +125,11 @@ export default async function Home() {
               A calmer order path
             </RevealItem>
             <RevealItem as="h2" className="mt-3 font-display text-4xl font-black leading-[1.04] lg:text-5xl">
-              From weekly menu to doorstep without the extra clicks.
+              Let&apos;s keep the old-school method.
             </RevealItem>
             <RevealItem as="p" className="mt-5 text-base leading-7 text-white/68">
               See what is cooking, pick the right portion, set preferences, and keep the week moving
-              without another dinner decision.
+              with a familiar tiffin rhythm.
             </RevealItem>
           </div>
 
@@ -160,10 +165,10 @@ export default async function Home() {
           <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div>
               <RevealItem as="p" className="text-sm font-black uppercase tracking-[0.18em] text-masala">
-                This week on the menu
+                Menu items
               </RevealItem>
               <RevealItem as="h2" className="mt-3 max-w-2xl font-display text-4xl font-black leading-[1.04] lg:text-5xl">
-                Taste the week before choosing a plan.
+                A weekly menu that still feels old school.
               </RevealItem>
             </div>
             <RevealItem>
@@ -227,7 +232,7 @@ export default async function Home() {
                 Featured packages
               </RevealItem>
               <RevealItem as="h2" className="mt-3 max-w-2xl font-display text-4xl font-black leading-[1.04] lg:text-5xl">
-                Plans built around real weekly routines.
+                Weekly trial, monthly fixed, student and military packages.
               </RevealItem>
               <RevealItem as="p" className="mt-4 max-w-xl text-base leading-7 text-white/68">
                 Clear portions, transparent pricing, and add-ons customers understand in seconds.
@@ -241,7 +246,7 @@ export default async function Home() {
             </RevealItem>
           </div>
           <div className="mt-9 grid gap-6 lg:grid-cols-3">
-            {featured.map((plan) => (
+            {featuredPlans.map((plan) => (
               <RevealItem key={plan.id}>
                 <PackageCard plan={plan} />
               </RevealItem>
@@ -277,14 +282,14 @@ export default async function Home() {
               Our story
             </RevealItem>
             <RevealItem as="h2" className="mt-4 max-w-2xl font-display text-4xl font-black leading-[1.05] lg:text-5xl">
-              A local kitchen for people who miss real weekday food.
+              For people who miss Ghar Ka Khana.
             </RevealItem>
             <RevealItem as="p" className="mt-5 max-w-xl text-base font-medium leading-7 text-ink/68">
               Curry Kitchen is built around home-style Indian comfort: dal that changes through the
               week, freshly prepared sabzi, soft roti, rice, salad, and the occasional sweet.
             </RevealItem>
             <div className="mt-8 grid gap-4 sm:grid-cols-3">
-              {["Bay Area rooted", "Daily cooking", "Clear portions"].map((item) => (
+              {["San Diego Rooted", "Freshly Made", "Delivered Daily"].map((item) => (
                 <RevealItem key={item} className="border-y border-ink/12 py-4">
                   <p className="font-display text-xl font-black">{item}</p>
                   <p className="mt-1 text-sm font-medium leading-5 text-ink/55">
@@ -321,7 +326,7 @@ export default async function Home() {
               </RevealItem>
               <RevealItem as="p" className="mt-4 flex items-center gap-2 text-sm font-bold text-white/70">
                 <CheckCircle2 size={18} className="text-saffron" />
-                Monday to Friday delivery across California Bay Area zones.
+                San Diego Rooted &gt; Freshly Made &gt; Delivered Daily.
               </RevealItem>
             </div>
             <RevealItem className="relative flex flex-col gap-3 sm:flex-row md:flex-col">

@@ -23,7 +23,7 @@ const faqGroups = [
       {
         question: "Can I buy without creating an account?",
         answer:
-          "Yes. Guests can check out with delivery details. Creating an account gives access to package tracking, orders, payments, and notifications.",
+          "No. Customers need an account before checkout so package tracking, start dates, reminders, order history, and notifications stay connected to the right profile.",
       },
     ],
   },
@@ -79,7 +79,7 @@ export default function FaqPage() {
         title="Clear answers before dinner is on the way."
         image="https://images.unsplash.com/photo-1543353071-10c8ba85a904?auto=format&fit=crop&w=1400&q=80"
         imageAlt="Fresh Indian meal bowls on a table"
-        chips={["Package pricing", "Delivery zones", "Student plans"]}
+        chips={["Package pricing", "Delivery zones", "Student and military plans"]}
         actions={
           <>
             <ButtonLink href="/packages">

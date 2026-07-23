@@ -49,6 +49,7 @@ async function reset() {
   await prisma.orderAddon.deleteMany();
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
+  await prisma.cartItemAddon.deleteMany();
   await prisma.cartItem.deleteMany();
   await prisma.cart.deleteMany();
   await prisma.coupon.deleteMany();
@@ -105,7 +106,7 @@ async function main() {
   const categories = await Promise.all([
     prisma.packageCategory.create({ data: { name: "Monthly", slug: "monthly", description: "Full-month tiffin plans.", sortOrder: 1 } }),
     prisma.packageCategory.create({ data: { name: "Weekly", slug: "weekly", description: "Trial weekly packages.", sortOrder: 2 } }),
-    prisma.packageCategory.create({ data: { name: "Student", slug: "student", description: "Student-priced plans pending verification.", sortOrder: 3 } }),
+    prisma.packageCategory.create({ data: { name: "Student", slug: "student", description: "Student and military-priced plans pending verification.", sortOrder: 3 } }),
   ]);
   const [monthly, weekly, student] = categories;
 
@@ -130,7 +131,7 @@ async function main() {
         deliveryDayCount: days,
         servings: items.join(", "),
         imageUrl,
-        bestFor: studentOnly ? "Students" : cadence === PackageCadence.WEEKLY ? "Trial week" : "Daily dinner",
+        bestFor: studentOnly ? "Students / Military" : cadence === PackageCadence.WEEKLY ? "Trial week" : "Daily dinner",
         studentOnly,
         status: RecordStatus.ACTIVE,
         items: {
@@ -181,12 +182,12 @@ async function main() {
 
   const studentPack = await createPackage({
     category: student,
-    name: "Student Saver Pack",
+    name: "Student & Military Saver Pack",
     slug: "student-saver-pack",
     price: "220.00",
     cadence: PackageCadence.STUDENT,
     days: 20,
-    badge: "Student pricing",
+    badge: "Student / military pricing",
     imageUrl: image("1617692855027-33b14f061079"),
     items: ["simple veg meals", "4 roti", "dal", "sabzi"],
     studentOnly: true,
@@ -194,9 +195,9 @@ async function main() {
 
   await prisma.deliveryZone.createMany({
     data: [
-      { name: "Fremont Free Zone", cities: ["Fremont"], postalCodes: ["94536", "94538", "94539"], fee: "0.00", isFreeDelivery: true },
-      { name: "San Jose Zone", cities: ["San Jose"], postalCodes: ["95112", "95123", "95129"], fee: "6.00" },
-      { name: "Milpitas Zone", cities: ["Milpitas"], postalCodes: ["95035"], fee: "4.00" },
+      { name: "Downtown San Diego Free Zone", cities: ["San Diego"], postalCodes: ["92101", "92103", "92104", "92105", "92108"], fee: "0.00", isFreeDelivery: true },
+      { name: "Chula Vista Zone", cities: ["Chula Vista"], postalCodes: ["91910", "91911"], fee: "5.00" },
+      { name: "La Jolla Zone", cities: ["La Jolla"], postalCodes: ["92037", "92093"], fee: "6.00" },
       { name: "Outside Service Zone", cities: [], postalCodes: [], fee: "12.00", outsideZone: true },
     ],
   });
@@ -206,13 +207,13 @@ async function main() {
       userId: customerUser.id,
       name: "Maya Patel",
       email: "customer@currykitchen.test",
-      phone: "(510) 555-0148",
+      phone: "(858) 555-0148",
       addresses: {
         create: {
           name: "Home",
-          line1: "4128 Walnut Ave",
-          city: "Fremont",
-          postalCode: "94538",
+          line1: "750 B St",
+          city: "San Diego",
+          postalCode: "92101",
           isDefault: true,
         },
       },
@@ -225,13 +226,13 @@ async function main() {
       userId: studentUser.id,
       name: "Arjun Singh",
       email: "student@currykitchen.test",
-      phone: "(408) 555-0192",
+      phone: "(619) 555-0192",
       addresses: {
         create: {
           name: "Apartment",
-          line1: "88 S 4th St",
-          city: "San Jose",
-          postalCode: "95112",
+          line1: "9500 Gilman Dr",
+          city: "La Jolla",
+          postalCode: "92093",
           isDefault: true,
         },
       },
@@ -251,10 +252,13 @@ async function main() {
       total: "384.43",
       foodPreferences: "Medium spice, no raw onions.",
       items: {
-        create: [{ packageId: regular.id, quantity: 1, unitPrice: "350.00", total: "350.00" }],
-      },
-      addons: {
-        create: [{ addonId: addons[0].id, quantity: 1, unitPrice: "3.50", total: "3.50" }],
+        create: [{
+          packageId: regular.id,
+          quantity: 1,
+          startDate: new Date("2026-06-01T18:00:00-07:00"),
+          unitPrice: "350.00",
+          total: "350.00",
+        }],
       },
       payments: {
         create: {
@@ -266,13 +270,27 @@ async function main() {
         },
       },
     },
+    include: { items: true },
+  });
+
+  await prisma.orderAddon.create({
+    data: {
+      orderId: order.id,
+      orderItemId: order.items[0].id,
+      addonId: addons[0].id,
+      quantity: 1,
+      unitPrice: "3.50",
+      total: "3.50",
+    },
   });
 
   const activePackage = await prisma.customerPackage.create({
     data: {
       customerId: customer.id,
       orderId: order.id,
+      orderItemId: order.items[0].id,
       packageId: regular.id,
+      quantity: 1,
       status: CustomerPackageStatus.ACTIVE,
       totalDeliveryDays: regular.deliveryDayCount,
       usedDeliveryDays: 6,
@@ -296,23 +314,41 @@ async function main() {
       customerId: studentCustomer.id,
       addressId: studentCustomer.addresses[0].id,
       status: OrderStatus.PAID,
-      subtotal: "220.00",
+      subtotal: "222.50",
       deliveryFee: "6.00",
-      taxAmount: "19.78",
-      total: "245.78",
+      taxAmount: "19.47",
+      total: "247.97",
       foodPreferences: "Mild spice.",
       items: {
-        create: [{ packageId: studentPack.id, quantity: 1, unitPrice: "220.00", total: "220.00" }],
+        create: [{
+          packageId: studentPack.id,
+          quantity: 1,
+          startDate: new Date("2026-07-27T18:00:00-07:00"),
+          unitPrice: "220.00",
+          total: "220.00",
+        }],
       },
       payments: {
         create: {
           method: PaymentMethod.STRIPE,
           status: PaymentStatus.PAID,
-          amount: "245.78",
+          amount: "247.97",
           currency: "USD",
           stripeSessionId: "cs_test_seed_student",
         },
       },
+    },
+    include: { items: true },
+  });
+
+  await prisma.orderAddon.create({
+    data: {
+      orderId: studentOrder.id,
+      orderItemId: studentOrder.items[0].id,
+      addonId: addons[1].id,
+      quantity: 1,
+      unitPrice: "2.50",
+      total: "2.50",
     },
   });
 
@@ -320,9 +356,12 @@ async function main() {
     data: {
       customerId: studentCustomer.id,
       orderId: studentOrder.id,
+      orderItemId: studentOrder.items[0].id,
       packageId: studentPack.id,
+      quantity: 1,
       status: CustomerPackageStatus.PENDING_STUDENT_VERIFICATION,
       totalDeliveryDays: studentPack.deliveryDayCount,
+      startDate: new Date("2026-07-27T18:00:00-07:00"),
     },
   });
 
@@ -330,8 +369,8 @@ async function main() {
     data: {
       customerId: studentCustomer.id,
       orderId: studentOrder.id,
-      universityName: "San Jose State University",
-      studentNumber: "SJSU-2026-1048",
+      universityName: "UC San Diego",
+      studentNumber: "UCSD-2026-1048",
       idCardUrl: "/uploads/student-id-placeholder.jpg",
       status: StudentVerificationStatus.PENDING,
     },
@@ -339,7 +378,7 @@ async function main() {
 
   await prisma.weeklyMenu.create({
     data: {
-      title: "California Tiffin Week",
+      title: "San Diego Tiffin Week",
       weekStart: new Date("2026-06-22T00:00:00-07:00"),
       days: {
         create: [
@@ -402,7 +441,7 @@ async function main() {
 
   await prisma.setting.createMany({
     data: [
-      { key: "business", value: { name: "Curry Kitchen Inc.", currency: "USD", state: "CA", supportEmail: "info@currykitcheninc.com" } },
+      { key: "business", value: { name: "Curry Kitchen Inc.", currency: "USD", state: "CA", supportEmail: "currykitcheninc@gmail.com" } },
       { key: "delivery", value: { defaultWindow: "6:00 PM - 8:00 PM", outsideZoneFee: 12, deliveryDays: ["Mon", "Tue", "Wed", "Thu", "Fri"] } },
       { key: "pausePolicy", value: { customerSelfPauseLimit: 1, adminUnlimited: true } },
     ],

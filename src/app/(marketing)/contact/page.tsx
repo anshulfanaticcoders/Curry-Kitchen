@@ -14,13 +14,13 @@ const contactCards = [
   {
     icon: Mail,
     title: "Email",
-    value: "info@currykitcheninc.com",
+    value: "currykitcheninc@gmail.com",
     copy: "Useful for student verification, event orders, and account support.",
   },
   {
     icon: MapPin,
     title: "Delivery area",
-    value: "California Bay Area",
+    value: "San Diego",
     copy: "Checkout checks city and ZIP against active delivery zones.",
   },
 ];
@@ -40,7 +40,7 @@ export default function ContactPage() {
               <Phone size={18} />
               Call now
             </a>
-            <a href="mailto:info@currykitcheninc.com" className={buttonStyles("secondary")}>
+            <a href="mailto:currykitcheninc@gmail.com" className={buttonStyles("secondary")}>
               <Mail size={18} />
               Email us
             </a>
@@ -108,7 +108,7 @@ export default function ContactPage() {
           </div>
 
           <form
-            action="mailto:info@currykitcheninc.com"
+            action="mailto:currykitcheninc@gmail.com"
             className="rounded-lg border border-ink/10 bg-white p-7 shadow-soft"
           >
             <p className="text-sm font-black uppercase tracking-[0.18em] text-masala">
@@ -129,7 +129,7 @@ export default function ContactPage() {
               </label>
             </div>
             <a
-              href="mailto:info@currykitcheninc.com"
+              href="mailto:currykitcheninc@gmail.com"
               className={buttonStyles("primary", "mt-5")}
             >
               <Send size={18} />

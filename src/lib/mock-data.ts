@@ -108,9 +108,9 @@ export const packagePlans: PackagePlan[] = [
   },
   {
     id: "student-pack",
-    name: "Student Saver Pack",
+    name: "Student & Military Saver Pack",
     category: "Student",
-    badge: "Budget smart",
+    badge: "Verified pricing",
     price: 220,
     taxRate: 0.05,
     cadence: "Monthly",
@@ -119,8 +119,8 @@ export const packagePlans: PackagePlan[] = [
       "https://images.unsplash.com/photo-1617692855027-33b14f061079?auto=format&fit=crop&w=1200&q=80",
     description:
       "Affordable, steady meals for study weeks, long shifts, and shared student housing.",
-    bestFor: "Students",
-    includes: ["Veg meals", "Weekly menu", "Simple portions", "Student pricing"],
+    bestFor: "Students / Military",
+    includes: ["Veg meals", "Weekly menu", "Simple portions", "Verification pricing"],
     addOns: [
       { id: "rice", name: "Rice bowl", description: "Weekly add-on", price: 20 },
       { id: "roti", name: "Extra roti", description: "Two extra roti daily", price: 25 },
@@ -198,15 +198,15 @@ export const testimonials = [
   {
     name: "Priya Sharma",
     role: "Monthly plan customer",
-    area: "Fremont",
+    area: "San Diego",
     rating: "5.0",
     quote:
       "It feels like someone planned dinner for my week, not like I ordered takeout again.",
   },
   {
     name: "Aman Gill",
-    role: "Student saver plan",
-    area: "San Jose State",
+    role: "Student and military saver plan",
+    area: "UC San Diego",
     rating: "5.0",
     quote:
       "The meals are consistent, filling, and easy on my budget. I do not have to think about dinner after class.",
@@ -214,7 +214,7 @@ export const testimonials = [
   {
     name: "Neha Patel",
     role: "Weekly trial customer",
-    area: "San Jose",
+    area: "Chula Vista",
     rating: "4.9",
     quote:
       "The weekly menu helped me decide before ordering. Everything felt homemade, especially the dal and sabzi.",
@@ -222,7 +222,7 @@ export const testimonials = [
   {
     name: "Rohan Mehta",
     role: "Family portion plan",
-    area: "Milpitas",
+    area: "La Jolla",
     rating: "5.0",
     quote:
       "The larger tiffin works perfectly for our house. Portions are clear and delivery is dependable.",
@@ -232,10 +232,10 @@ export const testimonials = [
 export const customerProfile: CustomerProfile = {
   name: "Priya Sharma",
   email: "priya@example.com",
-  phone: "(510) 555-0148",
+  phone: "(858) 555-0148",
   plan: "Regular 8 Roti Tiffin",
   renewalDate: "Jul 22, 2026",
-  address: "3988 Washington Blvd, Fremont, CA",
+  address: "750 B St, San Diego, CA",
   preferences: ["Medium spice", "Rice on Monday", "No onion salad"],
 };
 
@@ -258,7 +258,7 @@ export const recentOrders: Order[] = [
   },
   {
     id: "CK-1033",
-    plan: "Student Saver Pack",
+    plan: "Student & Military Saver Pack",
     date: "Jun 07, 2026",
     total: 231,
     status: "Paused",
@@ -298,10 +298,10 @@ export const adminMetrics: AdminMetric[] = [
 ];
 
 export const adminCustomers: AdminCustomer[] = [
-  { name: "Priya Sharma", plan: "Regular Monthly", area: "Fremont", status: "Active", renewal: "Jul 22" },
-  { name: "Aman Gill", plan: "Student Saver", area: "San Jose State", status: "Active", renewal: "Jul 10" },
-  { name: "Neha Patel", plan: "Weekly Trial", area: "San Jose", status: "Trial", renewal: "Jun 29" },
-  { name: "Rohan Mehta", plan: "Extra Large", area: "Milpitas", status: "Paused", renewal: "Jul 02" },
+  { name: "Priya Sharma", plan: "Regular Monthly", area: "San Diego", status: "Active", renewal: "Jul 22" },
+  { name: "Aman Gill", plan: "Student & Military Saver", area: "UC San Diego", status: "Active", renewal: "Jul 10" },
+  { name: "Neha Patel", plan: "Weekly Trial", area: "Chula Vista", status: "Trial", renewal: "Jun 29" },
+  { name: "Rohan Mehta", plan: "Extra Large", area: "La Jolla", status: "Paused", renewal: "Jul 02" },
 ];
 
 export const revenueData: RevenuePoint[] = [
@@ -362,11 +362,11 @@ export const coupons: Coupon[] = [
 ];
 
 export const customers: Customer[] = [
-  { id: "cu-1", name: "Priya Sharma", email: "priya@example.com", phone: "(510) 555-0148", plan: "Regular 8 Roti Tiffin", status: "Active", joined: "Jan 12, 2026", orders: 18, spend: 6240, area: "Fremont" },
-  { id: "cu-2", name: "Aman Gill", email: "aman@example.com", phone: "(408) 555-0192", plan: "Student Saver Pack", status: "Active", joined: "Feb 3, 2026", orders: 12, spend: 2640, area: "San Jose State" },
-  { id: "cu-3", name: "Neha Patel", email: "neha@example.com", phone: "(408) 555-0110", plan: "Weekly Trial Pack", status: "Trial", joined: "Jun 14, 2026", orders: 1, spend: 95, area: "San Jose" },
-  { id: "cu-4", name: "Rohan Mehta", email: "rohan@example.com", phone: "(669) 555-0173", plan: "Extra Large 12 Roti Tiffin", status: "Paused", joined: "Mar 22, 2026", orders: 9, spend: 4050, area: "Milpitas" },
-  { id: "cu-5", name: "Simran Kaur", email: "simran@example.com", phone: "(510) 555-0166", plan: "Regular 8 Roti Tiffin", status: "Active", joined: "Apr 8, 2026", orders: 7, spend: 2450, area: "Fremont" },
+  { id: "cu-1", name: "Priya Sharma", email: "priya@example.com", phone: "(858) 555-0148", plan: "Regular 8 Roti Tiffin", status: "Active", joined: "Jan 12, 2026", orders: 18, spend: 6240, area: "San Diego" },
+  { id: "cu-2", name: "Aman Gill", email: "aman@example.com", phone: "(619) 555-0192", plan: "Student & Military Saver Pack", status: "Active", joined: "Feb 3, 2026", orders: 12, spend: 2640, area: "UC San Diego" },
+  { id: "cu-3", name: "Neha Patel", email: "neha@example.com", phone: "(619) 555-0110", plan: "Weekly Trial Pack", status: "Trial", joined: "Jun 14, 2026", orders: 1, spend: 95, area: "Chula Vista" },
+  { id: "cu-4", name: "Rohan Mehta", email: "rohan@example.com", phone: "(858) 555-0173", plan: "Extra Large 12 Roti Tiffin", status: "Paused", joined: "Mar 22, 2026", orders: 9, spend: 4050, area: "La Jolla" },
+  { id: "cu-5", name: "Simran Kaur", email: "simran@example.com", phone: "(858) 555-0166", plan: "Regular 8 Roti Tiffin", status: "Active", joined: "Apr 8, 2026", orders: 7, spend: 2450, area: "San Diego" },
 ];
 
 export const transactions: Transaction[] = [
@@ -379,7 +379,7 @@ export const transactions: Transaction[] = [
 
 export const reviewItems: ReviewItem[] = [
   { id: "rv-1", name: "Priya Sharma", plan: "Regular Monthly", rating: 5, text: "It feels like someone planned dinner for my week, not like I ordered takeout again.", status: "Published", date: "Jun 18, 2026" },
-  { id: "rv-2", name: "Aman Gill", plan: "Student Saver", rating: 5, text: "Consistent, filling, and easy on my budget. I don't think about dinner after class.", status: "Published", date: "Jun 16, 2026" },
+  { id: "rv-2", name: "Aman Gill", plan: "Student & Military Saver", rating: 5, text: "Consistent, filling, and easy on my budget. I don't think about dinner after class.", status: "Published", date: "Jun 16, 2026" },
   { id: "rv-3", name: "Neha Patel", plan: "Weekly Trial", rating: 4, text: "The weekly menu helped me decide before ordering. Dal and sabzi felt homemade.", status: "Pending", date: "Jun 22, 2026" },
   { id: "rv-4", name: "Unknown", plan: "—", rating: 1, text: "Buy cheap meds online now www.spam-link.example", status: "Spam", date: "Jun 21, 2026" },
 ];
@@ -392,7 +392,7 @@ export const notifications: NotificationItem[] = [
 ];
 
 export const seoEntries: SeoEntry[] = [
-  { id: "seo-home", page: "Home", path: "/", title: "Curry Kitchen - Homemade Tiffin Delivery in California", description: "Fresh Indian meals cooked daily and delivered Monday to Friday across Fremont, San Jose, and Milpitas.", indexed: true },
+  { id: "seo-home", page: "Home", path: "/", title: "Curry Kitchen - Homemade Tiffin Delivery in San Diego", description: "Fresh Indian meals cooked daily and delivered Monday to Friday across San Diego delivery zones.", indexed: true },
   { id: "seo-menu", page: "Weekly menu", path: "/menu", title: "This Week's Tiffin Menu | Curry Kitchen", description: "See the full week of dal, sabzi, rice, roti, salad, and desserts before you order.", indexed: true },
   { id: "seo-packages", page: "Packages", path: "/packages", title: "Tiffin Plans & Pricing | Curry Kitchen", description: "Compare monthly, weekly, and student tiffin plans with clear portions and pricing.", indexed: true },
   { id: "seo-about", page: "Our story", path: "/about", title: "About Curry Kitchen — A Local Home Kitchen", description: "Why Curry Kitchen exists: dependable, home-style Indian dinners for busy weekdays.", indexed: false },
@@ -401,7 +401,7 @@ export const seoEntries: SeoEntry[] = [
 export const adminOrders: AdminOrder[] = [
   { id: "CK-1048", customer: "Priya Sharma", plan: "Regular 8 Roti Tiffin", items: 5, total: 368, payment: "Paid", status: "Preparing", date: "Jun 21, 2026", window: "6:00 – 8:00 PM" },
   { id: "CK-1047", customer: "Simran Kaur", plan: "Regular 8 Roti Tiffin", items: 5, total: 350, payment: "Paid", status: "Out for delivery", date: "Jun 21, 2026", window: "6:00 – 8:00 PM" },
-  { id: "CK-1046", customer: "Aman Gill", plan: "Student Saver Pack", items: 5, total: 220, payment: "Paid", status: "Delivered", date: "Jun 20, 2026", window: "5:00 – 7:00 PM" },
+  { id: "CK-1046", customer: "Aman Gill", plan: "Student & Military Saver Pack", items: 5, total: 220, payment: "Paid", status: "Delivered", date: "Jun 20, 2026", window: "5:00 – 7:00 PM" },
   { id: "CK-1041", customer: "Neha Patel", plan: "Weekly Trial Pack", items: 6, total: 100, payment: "Refunded", status: "Delivered", date: "Jun 14, 2026", window: "6:00 – 8:00 PM" },
   { id: "CK-1040", customer: "Rohan Mehta", plan: "Extra Large 12 Roti Tiffin", items: 5, total: 450, payment: "Pending", status: "Paused", date: "Jun 13, 2026", window: "6:00 – 8:00 PM" },
 ];

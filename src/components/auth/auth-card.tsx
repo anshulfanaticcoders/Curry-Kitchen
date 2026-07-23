@@ -22,7 +22,7 @@ export function AuthCard({
             <span>
               <span className="block font-display text-xl font-black leading-none">Curry Kitchen</span>
               <span className="mt-1 block text-xs font-bold uppercase tracking-[0.16em] text-saffron">
-                California tiffin delivery
+                San Diego tiffin delivery
               </span>
             </span>
           </Link>

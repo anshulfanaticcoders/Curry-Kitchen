@@ -1,5 +1,5 @@
 import { ZodError } from "zod";
-import { createCheckoutOrder } from "@/lib/server/checkout";
+import { CheckoutError, createCheckoutOrder } from "@/lib/server/checkout";
 
 export const runtime = "nodejs";
 
@@ -13,13 +13,18 @@ export async function POST(request: Request) {
       ...checkout,
     });
   } catch (error) {
-    const message =
-      error instanceof ZodError
+    const knownError = error instanceof CheckoutError || error instanceof ZodError;
+    const message = error instanceof CheckoutError
+      ? error.message
+      : error instanceof ZodError
         ? error.issues[0]?.message ?? "Invalid checkout details."
-        : error instanceof Error
-          ? error.message
-          : "Checkout could not be created.";
+        : "Checkout could not be created. Please try again.";
+    const status = error instanceof CheckoutError ? error.statusCode : knownError ? 400 : 500;
 
-    return Response.json({ ok: false, error: message }, { status: 400 });
+    if (!knownError) {
+      console.error("Unexpected checkout error", error);
+    }
+
+    return Response.json({ ok: false, error: message }, { status });
   }
 }

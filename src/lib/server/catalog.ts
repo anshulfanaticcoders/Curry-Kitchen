@@ -171,7 +171,10 @@ export async function getPackagePlans(): Promise<PackagePlan[]> {
       include: {
         category: true,
         items: { orderBy: { sortOrder: "asc" } },
-        addons: { include: { addon: true } },
+        addons: {
+          where: { addon: { status: "ACTIVE" } },
+          include: { addon: true },
+        },
       },
       orderBy: [{ studentOnly: "asc" }, { price: "asc" }],
     });
@@ -234,7 +237,7 @@ export async function getTestimonials(): Promise<Testimonial[]> {
     return reviews.map((review) => ({
       name: review.name,
       role: review.planName ?? "Curry Kitchen customer",
-      area: "California",
+      area: "San Diego",
       rating: review.rating,
       quote: review.text,
     }));
@@ -288,7 +291,7 @@ export async function getAdminOrders(): Promise<AdminOrder[]> {
     return orders.map((order) => ({
       id: order.orderNumber,
       customer: order.customer?.name ?? order.guestName ?? "Guest customer",
-      plan: order.items[0]?.package.name ?? "Custom tiffin",
+      plan: order.items.map((item) => item.package.name).join(", ") || "Custom tiffin",
       items: order.items.reduce((total, item) => total + item.quantity, 0),
       total: toNumber(order.total),
       payment: mapPaymentStatus(order.payments[0]?.status ?? "PENDING"),
@@ -337,7 +340,7 @@ export async function getAdminCustomers(): Promise<Customer[]> {
         joined: formatDate(customer.joinedAt),
         orders: customer.orders.length,
         spend,
-        area: customer.addresses[0]?.city ?? "California",
+        area: customer.addresses[0]?.city ?? "San Diego",
       };
     });
   } catch {
@@ -395,7 +398,7 @@ export async function getCustomerOrders(): Promise<Order[]> {
 
     return orders.map((order) => ({
       id: order.orderNumber,
-      plan: order.items[0]?.package.name ?? "Custom tiffin",
+      plan: order.items.map((item) => item.package.name).join(", ") || "Custom tiffin",
       date: formatDate(order.createdAt),
       total: toNumber(order.total),
       status: mapOrderStatus(order.status),
@@ -440,91 +443,86 @@ export async function getUpcomingDeliveries(): Promise<Delivery[]> {
   }
 }
 
-export async function getCustomerPackageSummary(): Promise<CustomerPackageSummary> {
-  const empty: CustomerPackageSummary = {
-    plan: "No active plan",
-    status: "No active plan",
-    totalDeliveryDays: 0,
-    usedDeliveryDays: 0,
-    remainingDeliveryDays: 0,
-    customerPauseUsed: false,
-    canSelfPause: false,
-    startDate: "Not started",
-    endDate: "Not scheduled",
-  };
+const emptyCustomerPackage: CustomerPackageSummary = {
+  plan: "No active plan",
+  quantity: 0,
+  status: "No active plan",
+  totalDeliveryDays: 0,
+  usedDeliveryDays: 0,
+  remainingDeliveryDays: 0,
+  customerPauseUsed: false,
+  canSelfPause: false,
+  startDate: "Not started",
+  endDate: "Not scheduled",
+};
 
+export async function getCustomerPackageSummaries(): Promise<CustomerPackageSummary[]> {
   if (!hasDatabaseUrl()) {
     const latestOrder = mockRecentOrders[0];
 
-    return {
-      id: latestOrder?.id,
-      plan: latestOrder?.plan ?? empty.plan,
-      status: latestOrder ? "Active" : empty.status,
-      totalDeliveryDays: 20,
-      usedDeliveryDays: 4,
-      remainingDeliveryDays: 16,
-      customerPauseUsed: false,
-      canSelfPause: Boolean(latestOrder),
-      startDate: "Jul 1",
-      endDate: "Jul 28",
-    };
+    return latestOrder
+      ? [{
+          id: latestOrder.id,
+          plan: latestOrder.plan,
+          quantity: 1,
+          status: "Active",
+          totalDeliveryDays: 20,
+          usedDeliveryDays: 4,
+          remainingDeliveryDays: 16,
+          customerPauseUsed: false,
+          canSelfPause: true,
+          startDate: "Jul 1",
+          endDate: "Jul 28",
+        }]
+      : [];
   }
 
   try {
     const customer = await getCurrentCustomer();
 
     if (!customer) {
-      return empty;
+      return [];
     }
 
     const packages = await db.customerPackage.findMany({
       where: { customerId: customer.id },
-      include: {
-        package: true,
-        deliveryDays: true,
-      },
+      include: { package: true, deliveryDays: true },
       orderBy: { createdAt: "desc" },
-      take: 10,
+      take: 20,
     });
 
-    const preferredStatuses = [
-      "ACTIVE",
-      "PAUSED",
-      "PENDING_STUDENT_VERIFICATION",
-      "PENDING_PAYMENT",
-    ];
-    const currentPackage =
-      packages.find((item) => preferredStatuses.includes(item.status)) ?? packages[0];
+    return packages.map((customerPackage) => {
+      const deliveredDays = customerPackage.deliveryDays.filter(
+        (day) => day.status === "DELIVERED",
+      ).length;
+      const usedDeliveryDays = Math.max(customerPackage.usedDeliveryDays, deliveredDays);
+      const remainingDeliveryDays = Math.max(
+        customerPackage.totalDeliveryDays - usedDeliveryDays,
+        0,
+      );
+      const status = mapCustomerPackageStatus(customerPackage.status);
 
-    if (!currentPackage) {
-      return empty;
-    }
-
-    const deliveredDays = currentPackage.deliveryDays.filter(
-      (day) => day.status === "DELIVERED",
-    ).length;
-    const usedDeliveryDays = Math.max(currentPackage.usedDeliveryDays, deliveredDays);
-    const remainingDeliveryDays = Math.max(
-      currentPackage.totalDeliveryDays - usedDeliveryDays,
-      0,
-    );
-    const status = mapCustomerPackageStatus(currentPackage.status);
-
-    return {
-      id: currentPackage.id,
-      plan: currentPackage.package.name,
-      status,
-      totalDeliveryDays: currentPackage.totalDeliveryDays,
-      usedDeliveryDays,
-      remainingDeliveryDays,
-      customerPauseUsed: currentPackage.customerPauseUsed,
-      canSelfPause: status === "Active" && !currentPackage.customerPauseUsed,
-      startDate: currentPackage.startDate ? formatDate(currentPackage.startDate) : "Not started",
-      endDate: currentPackage.endDate ? formatDate(currentPackage.endDate) : "Not scheduled",
-    };
+      return {
+        id: customerPackage.id,
+        plan: customerPackage.package.name,
+        quantity: customerPackage.quantity,
+        status,
+        totalDeliveryDays: customerPackage.totalDeliveryDays,
+        usedDeliveryDays,
+        remainingDeliveryDays,
+        customerPauseUsed: customerPackage.customerPauseUsed,
+        canSelfPause: status === "Active" && !customerPackage.customerPauseUsed,
+        startDate: customerPackage.startDate ? formatDate(customerPackage.startDate) : "Not started",
+        endDate: customerPackage.endDate ? formatDate(customerPackage.endDate) : "Not scheduled",
+      };
+    });
   } catch {
-    return empty;
+    return [];
   }
+}
+
+export async function getCustomerPackageSummary(): Promise<CustomerPackageSummary> {
+  return (await getCustomerPackageSummaries())[0] ?? emptyCustomerPackage;
 }
 
 export async function getCustomerNotifications(): Promise<NotificationItem[]> {
@@ -568,9 +566,9 @@ export async function getCustomerProfileDetails(): Promise<CustomerProfileDetail
     return {
       ...customerProfile,
       line1: customerProfile.address,
-      city: "Fremont",
+      city: "San Diego",
       state: "CA",
-      postalCode: "94538",
+      postalCode: "92101",
     };
   }
 

@@ -15,16 +15,26 @@ const accentStyles = {
   masala: "border-masala/30 bg-rose text-masala",
 };
 
+function categoryLabel(category: PackagePlan["category"]) {
+  return category === "Student" ? "Student / Military" : category;
+}
+
 export function PackageCard({
   plan,
   onSelect,
   compact = false,
   selected = false,
+  actionLabel = "Select plan",
+  selectedLabel = "Selected",
+  disableSelected = true,
 }: {
   plan: PackagePlan;
   onSelect?: (plan: PackagePlan) => void;
   compact?: boolean;
   selected?: boolean;
+  actionLabel?: string;
+  selectedLabel?: string;
+  disableSelected?: boolean;
 }) {
   const router = useRouter();
 
@@ -57,7 +67,7 @@ export function PackageCard({
         </div>
         <div className="absolute bottom-4 left-4 right-4 text-white">
           <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-white/72">
-            {plan.category}
+            {categoryLabel(plan.category)}
           </p>
           <h3 className="mt-1 font-display text-3xl font-black leading-none">{plan.name}</h3>
         </div>
@@ -90,10 +100,11 @@ export function PackageCard({
         <Button
           className={cn(
             "mt-6 w-full",
-            selected && "cursor-default bg-ink text-saffron shadow-none hover:translate-y-0 hover:bg-ink",
+            selected && "bg-ink text-saffron shadow-none hover:bg-ink",
+            selected && disableSelected && "cursor-default hover:translate-y-0",
           )}
           variant={selected || plan.accent === "leaf" ? "dark" : "primary"}
-          disabled={selected}
+          disabled={selected && disableSelected}
           onClick={() =>
             onSelect
               ? onSelect(plan)
@@ -102,12 +113,12 @@ export function PackageCard({
         >
           {selected ? (
             <>
-              Selected
+              {selectedLabel}
               <CheckCircle2 size={18} />
             </>
           ) : (
             <>
-              Select plan
+              {actionLabel}
               <ArrowRight size={18} />
             </>
           )}

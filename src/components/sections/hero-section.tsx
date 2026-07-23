@@ -37,7 +37,7 @@ function AnimatedTitle() {
       ))}
       <span className="inline-block w-[0.28em]" aria-hidden />
       {kitchen.map((char, i) =>
-        char === "h" ? (
+        char === "i" ? (
           <span key={`k-${i}`} className="relative inline-block">
             <motion.span variants={titleChar} className="inline-block">
               {char}
@@ -76,8 +76,8 @@ export function HeroSection() {
     <section className="dark-band relative isolate min-h-screen overflow-hidden">
       <motion.div style={{ y }} className="absolute inset-0 -z-10">
         <Image
-          src="https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=1800&q=80"
-          alt="Colorful Indian thali with curry, rice, and flatbread"
+          src="https://images.unsplash.com/photo-1630409346824-4f0e7b080087?auto=format&fit=crop&w=1800&q=82"
+          alt="Nostalgic steel tiffin dabba packed with Indian food"
           fill
           priority
           className="object-cover"
@@ -102,7 +102,7 @@ export function HeroSection() {
             className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.24em] backdrop-blur-md"
           >
             <Sparkles size={15} className="text-saffron" />
-            Homemade tiffin delivery
+            San Diego tiffin delivery
           </motion.p>
           <AnimatedTitle />
           <motion.p
@@ -110,8 +110,8 @@ export function HeroSection() {
             transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
             className="mt-6 max-w-2xl text-lg font-medium leading-8 text-white/82 md:text-xl"
           >
-            Fresh Indian meals cooked daily, packed with care, and delivered across California
-            for students, families, and busy professionals.
+            Fresh Indian meals cooked daily, packed in the spirit of a classic tiffin dabba,
+            and delivered across San Diego for students, families, and busy professionals.
           </motion.p>
           <motion.div
             variants={heroReveal}
@@ -134,7 +134,7 @@ export function HeroSection() {
           >
             <span className="inline-flex items-center gap-2 rounded-full border border-white/14 bg-white/10 px-4 py-2">
               <MapPin size={16} />
-              Fremont, San Jose, Milpitas
+              San Diego, California
             </span>
             <span className="rounded-full border border-white/14 bg-white/10 px-4 py-2">
               Monday to Friday delivery
@@ -151,7 +151,7 @@ export function HeroSection() {
       >
         <div className="section-shell grid grid-cols-[1fr_1fr_1fr_auto] overflow-hidden rounded-full border border-white/16 bg-white/12 p-2 text-white shadow-[0_24px_80px_rgba(0,0,0,0.38)] backdrop-blur-xl">
           {[
-            { icon: MapPin, label: "Delivery area", value: "California Bay Area" },
+            { icon: MapPin, label: "Delivery area", value: "San Diego" },
             { icon: Clock, label: "Dinner window", value: "6:00 PM - 8:00 PM" },
             { icon: Truck, label: "Weekly rhythm", value: "Monday to Friday" },
           ].map((item) => (

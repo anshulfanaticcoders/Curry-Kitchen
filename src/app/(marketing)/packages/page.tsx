@@ -4,6 +4,7 @@ import { PackageExperience } from "@/components/sections/package-experience";
 import { AnimatedSection } from "@/components/ui/animated-section";
 import { ButtonLink } from "@/components/ui/button";
 import { getPackagePlans } from "@/lib/server/catalog";
+import { parsePackageCart } from "@/lib/package-cart";
 import { formatCurrency } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -11,10 +12,17 @@ export const dynamic = "force-dynamic";
 export default async function PackagesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ plan?: string | string[] }>;
+  searchParams: Promise<{
+    plan?: string | string[];
+    cart?: string | string[];
+    edit?: string | string[];
+  }>;
 }) {
   const [params, packagePlans] = await Promise.all([searchParams, getPackagePlans()]);
   const initialPlanId = Array.isArray(params.plan) ? params.plan[0] : params.plan;
+  const cartParam = Array.isArray(params.cart) ? params.cart[0] : params.cart;
+  const editLineId = Array.isArray(params.edit) ? params.edit[0] : params.edit;
+  const initialCartItems = parsePackageCart(cartParam);
 
   return (
     <main>
@@ -23,7 +31,7 @@ export default async function PackagesPage({
         title="Choose the tiffin rhythm that fits the week."
         image="https://images.unsplash.com/photo-1630409346824-4f0e7b080087?auto=format&fit=crop&w=1400&q=80"
         imageAlt="Stacked tiffin meal containers"
-        chips={["Monthly plans", "Weekly trials", "Student pricing"]}
+        chips={["Weekly trial packages", "Monthly fixed packages", "Student and military packages"]}
         actions={
           <>
             <ButtonLink href="#build-plan">
@@ -54,7 +62,12 @@ export default async function PackagesPage({
       {/* Build your plan — LIGHT */}
       <section className="section relative bg-ivory">
         <AnimatedSection>
-          <PackageExperience plans={packagePlans} initialPlanId={initialPlanId} />
+          <PackageExperience
+            plans={packagePlans}
+            initialPlanId={initialPlanId}
+            initialCartItems={initialCartItems}
+            initialEditLineId={editLineId}
+          />
         </AnimatedSection>
       </section>
 

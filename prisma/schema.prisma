@@ -100,7 +100,7 @@ model User {
   customer      Customer?
   adminProfile  AdminProfile?
   notifications Notification[]
-  auditLogs      AuditLog[]
+  auditLogs     AuditLog[]
 
   @@map("users")
 }
@@ -148,20 +148,20 @@ model VerificationToken {
 }
 
 model Customer {
-  id        String   @id @default(cuid())
-  userId    String?  @unique
+  id        String       @id @default(cuid())
+  userId    String?      @unique
   name      String
   email     String
   phone     String?
   status    RecordStatus @default(ACTIVE)
-  joinedAt  DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  joinedAt  DateTime     @default(now())
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
-  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
-  addresses        Address[]
-  orders           Order[]
-  packages         CustomerPackage[]
+  user                 User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  addresses            Address[]
+  orders               Order[]
+  packages             CustomerPackage[]
   studentVerifications StudentVerification[]
 
   @@index([email])
@@ -180,18 +180,18 @@ model AdminProfile {
 }
 
 model Address {
-  id          String   @id @default(cuid())
-  customerId  String?
-  name        String?
-  line1       String
-  line2       String?
-  city        String
-  state       String   @default("CA")
-  postalCode  String
-  country     String   @default("US")
-  isDefault   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  customerId String?
+  name       String?
+  line1      String
+  line2      String?
+  city       String
+  state      String   @default("CA")
+  postalCode String
+  country    String   @default("US")
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   orders   Order[]
@@ -217,29 +217,30 @@ model PackageCategory {
 }
 
 model Package {
-  id                String         @id @default(cuid())
-  categoryId        String
-  name              String
-  slug              String         @unique
-  badge             String?
-  description       String         @db.Text
-  price             Decimal        @db.Decimal(10, 2)
-  taxRate           Decimal        @default(0.0875) @db.Decimal(6, 4)
-  cadence           PackageCadence
-  deliveryDayCount  Int
-  servings          String
-  imageUrl          String         @db.VarChar(600)
-  bestFor           String?
-  studentOnly       Boolean        @default(false)
-  accent            String         @default("saffron")
-  status            RecordStatus   @default(ACTIVE)
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  id               String         @id @default(cuid())
+  categoryId       String
+  name             String
+  slug             String         @unique
+  badge            String?
+  description      String         @db.Text
+  price            Decimal        @db.Decimal(10, 2)
+  taxRate          Decimal        @default(0.0875) @db.Decimal(6, 4)
+  cadence          PackageCadence
+  deliveryDayCount Int
+  servings         String
+  imageUrl         String         @db.VarChar(600)
+  bestFor          String?
+  studentOnly      Boolean        @default(false)
+  accent           String         @default("saffron")
+  status           RecordStatus   @default(ACTIVE)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
-  category         PackageCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  category         PackageCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   items            PackageItem[]
   addons           PackageAddon[]
   orderItems       OrderItem[]
+  cartItems        CartItem[]
   customerPackages CustomerPackage[]
 
   @@index([categoryId])
@@ -249,11 +250,11 @@ model Package {
 }
 
 model PackageItem {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   packageId String
   name      String
   quantity  String?
-  sortOrder Int      @default(0)
+  sortOrder Int     @default(0)
 
   package Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
 
@@ -272,8 +273,9 @@ model Addon {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  packages    PackageAddon[]
-  orderAddons OrderAddon[]
+  packages       PackageAddon[]
+  cartItemAddons CartItemAddon[]
+  orderAddons    OrderAddon[]
 
   @@map("addons")
 }
@@ -340,16 +342,16 @@ model WeeklyMenuDay {
 }
 
 model DeliveryZone {
-  id              String       @id @default(cuid())
-  name            String
-  cities          Json
-  postalCodes     Json
-  fee             Decimal      @db.Decimal(10, 2)
-  isFreeDelivery  Boolean      @default(false)
-  outsideZone     Boolean      @default(false)
-  status          RecordStatus @default(ACTIVE)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id             String       @id @default(cuid())
+  name           String
+  cities         Json
+  postalCodes    Json
+  fee            Decimal      @db.Decimal(10, 2)
+  isFreeDelivery Boolean      @default(false)
+  outsideZone    Boolean      @default(false)
+  status         RecordStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   orders Order[]
 
@@ -357,16 +359,16 @@ model DeliveryZone {
 }
 
 model Coupon {
-  id          String       @id @default(cuid())
-  code        String       @unique
-  type        CouponType
-  value       Decimal      @db.Decimal(10, 2)
-  status      RecordStatus @default(ACTIVE)
-  usageCount  Int          @default(0)
-  usageLimit  Int?
-  expiresAt   DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id         String       @id @default(cuid())
+  code       String       @unique
+  type       CouponType
+  value      Decimal      @db.Decimal(10, 2)
+  status     RecordStatus @default(ACTIVE)
+  usageCount Int          @default(0)
+  usageLimit Int?
+  expiresAt  DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
 
   orders Order[]
 
@@ -387,46 +389,63 @@ model Cart {
 }
 
 model CartItem {
-  id        String @id @default(cuid())
+  id        String    @id @default(cuid())
   cartId    String
   packageId String
-  quantity  Int    @default(1)
+  quantity  Int       @default(1)
+  startDate DateTime?
 
-  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  cart    Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  package Package         @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  addons  CartItemAddon[]
 
   @@index([cartId])
+  @@index([packageId])
   @@map("cart_items")
 }
 
-model Order {
-  id                  String      @id @default(cuid())
-  orderNumber         String      @unique
-  customerId          String?
-  addressId           String?
-  deliveryZoneId      String?
-  couponId            String?
-  guestName           String?
-  guestEmail          String?
-  guestPhone          String?
-  status              OrderStatus @default(PENDING_PAYMENT)
-  subtotal            Decimal     @db.Decimal(10, 2)
-  deliveryFee         Decimal     @default(0) @db.Decimal(10, 2)
-  taxAmount           Decimal     @default(0) @db.Decimal(10, 2)
-  discountAmount      Decimal     @default(0) @db.Decimal(10, 2)
-  total               Decimal     @db.Decimal(10, 2)
-  foodPreferences     String?     @db.Text
-  stripeCheckoutId    String?
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
+model CartItemAddon {
+  cartItemId String
+  addonId    String
+  quantity   Int    @default(1)
 
-  customer          Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  address           Address?           @relation(fields: [addressId], references: [id], onDelete: SetNull)
-  deliveryZone      DeliveryZone?      @relation(fields: [deliveryZoneId], references: [id], onDelete: SetNull)
-  coupon            Coupon?            @relation(fields: [couponId], references: [id], onDelete: SetNull)
-  items             OrderItem[]
-  addons            OrderAddon[]
-  payments          Payment[]
-  customerPackages  CustomerPackage[]
+  cartItem CartItem @relation(fields: [cartItemId], references: [id], onDelete: Cascade)
+  addon    Addon    @relation(fields: [addonId], references: [id], onDelete: Cascade)
+
+  @@id([cartItemId, addonId])
+  @@index([addonId])
+  @@map("cart_item_addons")
+}
+
+model Order {
+  id               String      @id @default(cuid())
+  orderNumber      String      @unique
+  customerId       String?
+  addressId        String?
+  deliveryZoneId   String?
+  couponId         String?
+  guestName        String?
+  guestEmail       String?
+  guestPhone       String?
+  status           OrderStatus @default(PENDING_PAYMENT)
+  subtotal         Decimal     @db.Decimal(10, 2)
+  deliveryFee      Decimal     @default(0) @db.Decimal(10, 2)
+  taxAmount        Decimal     @default(0) @db.Decimal(10, 2)
+  discountAmount   Decimal     @default(0) @db.Decimal(10, 2)
+  total            Decimal     @db.Decimal(10, 2)
+  foodPreferences  String?     @db.Text
+  stripeCheckoutId String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  customer             Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  address              Address?              @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  deliveryZone         DeliveryZone?         @relation(fields: [deliveryZoneId], references: [id], onDelete: SetNull)
+  coupon               Coupon?               @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  items                OrderItem[]
+  addons               OrderAddon[]
+  payments             Payment[]
+  customerPackages     CustomerPackage[]
   studentVerifications StudentVerification[]
 
   @@index([customerId])
@@ -436,15 +455,18 @@ model Order {
 }
 
 model OrderItem {
-  id        String  @id @default(cuid())
+  id        String    @id @default(cuid())
   orderId   String
   packageId String
-  quantity  Int     @default(1)
-  unitPrice Decimal @db.Decimal(10, 2)
-  total     Decimal @db.Decimal(10, 2)
+  quantity  Int       @default(1)
+  startDate DateTime?
+  unitPrice Decimal   @db.Decimal(10, 2)
+  total     Decimal   @db.Decimal(10, 2)
 
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  package Package @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  order           Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  package         Package          @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  addons          OrderAddon[]
+  customerPackage CustomerPackage?
 
   @@index([orderId])
   @@index([packageId])
@@ -452,32 +474,35 @@ model OrderItem {
 }
 
 model OrderAddon {
-  id        String  @id @default(cuid())
-  orderId   String
-  addonId   String
-  quantity  Int     @default(1)
-  unitPrice Decimal @db.Decimal(10, 2)
-  total     Decimal @db.Decimal(10, 2)
+  id          String  @id @default(cuid())
+  orderId     String
+  orderItemId String?
+  addonId     String
+  quantity    Int     @default(1)
+  unitPrice   Decimal @db.Decimal(10, 2)
+  total       Decimal @db.Decimal(10, 2)
 
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  addon Addon @relation(fields: [addonId], references: [id], onDelete: Restrict)
+  order     Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  addon     Addon      @relation(fields: [addonId], references: [id], onDelete: Restrict)
 
   @@index([orderId])
+  @@index([orderItemId])
   @@index([addonId])
   @@map("order_addons")
 }
 
 model Payment {
   id              String        @id @default(cuid())
-  orderId          String
-  method           PaymentMethod @default(STRIPE)
-  status           PaymentStatus @default(PENDING)
-  amount           Decimal       @db.Decimal(10, 2)
-  currency         String        @default("USD")
-  stripePaymentId  String?
-  stripeSessionId  String?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  orderId         String
+  method          PaymentMethod @default(STRIPE)
+  status          PaymentStatus @default(PENDING)
+  amount          Decimal       @db.Decimal(10, 2)
+  currency        String        @default("USD")
+  stripePaymentId String?
+  stripeSessionId String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
@@ -487,33 +512,36 @@ model Payment {
 }
 
 model StripeEvent {
-  id         String   @id
-  type       String
-  payload    Json
-  processed  Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  id        String   @id
+  type      String
+  payload   Json
+  processed Boolean  @default(false)
+  createdAt DateTime @default(now())
 
   @@map("stripe_events")
 }
 
 model CustomerPackage {
-  id                  String                @id @default(cuid())
-  customerId           String?
-  orderId              String
-  packageId            String
-  status               CustomerPackageStatus @default(PENDING_PAYMENT)
-  totalDeliveryDays    Int
-  usedDeliveryDays     Int                   @default(0)
-  startDate            DateTime?
-  endDate              DateTime?
-  customerPauseUsed    Boolean               @default(false)
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
+  id                String                @id @default(cuid())
+  customerId        String?
+  orderId           String
+  orderItemId       String?               @unique
+  packageId         String
+  quantity          Int                   @default(1)
+  status            CustomerPackageStatus @default(PENDING_PAYMENT)
+  totalDeliveryDays Int
+  usedDeliveryDays  Int                   @default(0)
+  startDate         DateTime?
+  endDate           DateTime?
+  customerPauseUsed Boolean               @default(false)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
 
-  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  package  Package  @relation(fields: [packageId], references: [id], onDelete: Restrict)
-  deliveryDays PackageDeliveryDay[]
+  customer      Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  order         Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem     OrderItem?           @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  package       Package              @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  deliveryDays  PackageDeliveryDay[]
   pauseRequests PauseRequest[]
 
   @@index([customerId])
@@ -523,11 +551,11 @@ model CustomerPackage {
 
 model PackageDeliveryDay {
   id                String      @id @default(cuid())
-  customerPackageId  String
-  deliveryDate       DateTime
-  status             OrderStatus @default(PREPARING)
-  menuSummary        String?
-  deliveryWindow     String      @default("6:00 PM - 8:00 PM")
+  customerPackageId String
+  deliveryDate      DateTime
+  status            OrderStatus @default(PREPARING)
+  menuSummary       String?
+  deliveryWindow    String      @default("6:00 PM - 8:00 PM")
 
   customerPackage CustomerPackage @relation(fields: [customerPackageId], references: [id], onDelete: Cascade)
 
@@ -537,16 +565,16 @@ model PackageDeliveryDay {
 }
 
 model PauseRequest {
-  id                 String             @id @default(cuid())
-  customerPackageId   String
-  requestedByUserId   String?
-  status             PauseRequestStatus @default(REQUESTED)
-  startDate           DateTime
-  endDate             DateTime
-  reason              String?            @db.Text
-  adminNote           String?            @db.Text
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  id                String             @id @default(cuid())
+  customerPackageId String
+  requestedByUserId String?
+  status            PauseRequestStatus @default(REQUESTED)
+  startDate         DateTime
+  endDate           DateTime
+  reason            String?            @db.Text
+  adminNote         String?            @db.Text
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   customerPackage CustomerPackage @relation(fields: [customerPackageId], references: [id], onDelete: Cascade)
 
@@ -556,17 +584,17 @@ model PauseRequest {
 }
 
 model StudentVerification {
-  id              String                    @id @default(cuid())
-  customerId       String?
-  orderId          String?
-  universityName   String
-  studentNumber    String
-  idCardUrl        String?                   @db.VarChar(600)
-  status           StudentVerificationStatus @default(PENDING)
-  adminNote        String?                   @db.Text
-  reviewedAt       DateTime?
-  createdAt        DateTime                  @default(now())
-  updatedAt        DateTime                  @updatedAt
+  id             String                    @id @default(cuid())
+  customerId     String?
+  orderId        String?
+  universityName String
+  studentNumber  String
+  idCardUrl      String?                   @db.VarChar(600)
+  status         StudentVerificationStatus @default(PENDING)
+  adminNote      String?                   @db.Text
+  reviewedAt     DateTime?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
 
   customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   order    Order?    @relation(fields: [orderId], references: [id], onDelete: Cascade)

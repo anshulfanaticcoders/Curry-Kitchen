@@ -6,6 +6,7 @@ import { z } from "zod";
 import { fail, ok } from "@/lib/action-result";
 import { getCurrentSession } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { calculateDeliveryDates, nextEligiblePackageStartDate } from "@/lib/package-schedule";
 
 const formBoolean = z.preprocess(
   (value) => value === true || value === "true" || value === "on" || value === "1",
@@ -116,6 +117,29 @@ function splitCsv(value: string) {
     .filter(Boolean);
 }
 
+async function ensureAddonCanBeDeactivated(addonId: string) {
+  const assignedPackages = await db.package.findMany({
+    where: {
+      status: "ACTIVE",
+      addons: { some: { addonId } },
+    },
+    select: {
+      name: true,
+      addons: {
+        where: { addon: { status: "ACTIVE" } },
+        select: { addonId: true },
+      },
+    },
+  });
+  const blockedPackages = assignedPackages.filter((plan) => plan.addons.length <= 1);
+
+  if (blockedPackages.length) {
+    throw new Error(
+      `Keep this add-on active or assign another active add-on to: ${blockedPackages.map((plan) => plan.name).join(", ")}.`,
+    );
+  }
+}
+
 export async function savePackageAction(formData: FormData) {
   try {
     const admin = await requireAdmin();
@@ -127,6 +151,17 @@ export async function savePackageAction(formData: FormData) {
     }
 
     const { id, includes, ...data } = parsed.data;
+
+    if (data.status === "ACTIVE") {
+      const activeAddonCount = await db.addon.count({
+        where: { id: { in: addonIds }, status: "ACTIVE" },
+      });
+
+      if (activeAddonCount < 1) {
+        return fail("An active package must have at least one active add-on.");
+      }
+    }
+
     const packageRecord = await db.package.upsert({
       where: { id: id ?? "__new_package__" },
       create: {
@@ -212,6 +247,11 @@ export async function saveAddonAction(formData: FormData) {
     }
 
     const { id, imageUrl, ...data } = parsed.data;
+
+    if (id && data.status !== "ACTIVE") {
+      await ensureAddonCanBeDeactivated(id);
+    }
+
     const addon = await db.addon.upsert({
       where: { id: id ?? "__new_addon__" },
       create: {
@@ -247,6 +287,8 @@ export async function saveAddonAction(formData: FormData) {
 export async function deleteAddonAction(addonId: string) {
   try {
     const admin = await requireAdmin();
+
+    await ensureAddonCanBeDeactivated(addonId);
 
     await db.addon.update({
       where: { id: addonId },
@@ -556,9 +598,42 @@ export async function approveStudentVerificationAction(verificationId: string) {
     });
 
     if (verification.orderId) {
-      await db.customerPackage.updateMany({
+      const pendingPackages = await db.customerPackage.findMany({
         where: { orderId: verification.orderId, status: "PENDING_STUDENT_VERIFICATION" },
-        data: { status: "ACTIVE", startDate: new Date() },
+        include: { deliveryDays: true, package: true },
+      });
+
+      await db.$transaction(async (tx) => {
+        for (const customerPackage of pendingPackages) {
+          const startDate =
+            customerPackage.startDate && customerPackage.startDate > new Date()
+              ? customerPackage.startDate
+              : nextEligiblePackageStartDate();
+          const deliveryDates = calculateDeliveryDates(
+            customerPackage.totalDeliveryDays,
+            startDate,
+          );
+
+          await tx.customerPackage.update({
+            where: { id: customerPackage.id },
+            data: {
+              status: "ACTIVE",
+              startDate,
+              endDate: deliveryDates.at(-1) ?? null,
+            },
+          });
+
+          if (customerPackage.deliveryDays.length === 0) {
+            await tx.packageDeliveryDay.createMany({
+              data: deliveryDates.map((deliveryDate) => ({
+                customerPackageId: customerPackage.id,
+                deliveryDate,
+                status: "PREPARING",
+                menuSummary: customerPackage.package.name,
+              })),
+            });
+          }
+        }
       });
     }
 

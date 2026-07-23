@@ -65,7 +65,7 @@ function GeneralTab() {
           <Input defaultValue="Curry Kitchen Inc." />
         </Field>
         <Field label="Support email">
-          <Input defaultValue="info@currykitcheninc.com" />
+          <Input defaultValue="currykitcheninc@gmail.com" />
         </Field>
         <Field label="Phone">
           <Input defaultValue="(858) 599-1613" />
@@ -76,7 +76,7 @@ function GeneralTab() {
           </Select>
         </Field>
         <Field label="Service areas" className="md:col-span-2">
-          <Input defaultValue="Fremont, San Jose, Milpitas" />
+          <Input defaultValue="San Diego, Chula Vista, La Jolla" />
         </Field>
       </div>
     </Card>
@@ -120,14 +120,14 @@ function ZoneForm({ zone, close }: { zone?: DeliveryZoneRecord; close: () => voi
     <form className="grid gap-5" onSubmit={(event) => submit(event, saveDeliveryZoneAction, close)}>
       {zone ? <input type="hidden" name="id" value={zone.id} /> : null}
       <Field label="Zone name">
-        <Input name="name" defaultValue={zone?.name} placeholder="Fremont Free Zone" required />
+        <Input name="name" defaultValue={zone?.name} placeholder="Downtown San Diego Free Zone" required />
       </Field>
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Cities" hint="Comma separated. Leave blank for outside-zone fallback.">
-          <Input name="cities" defaultValue={zone?.cities.join(", ")} placeholder="Fremont, San Jose" />
+          <Input name="cities" defaultValue={zone?.cities.join(", ")} placeholder="San Diego, Chula Vista" />
         </Field>
         <Field label="ZIP / postal codes" hint="Comma separated.">
-          <Input name="postalCodes" defaultValue={zone?.postalCodes.join(", ")} placeholder="94538, 95112" />
+          <Input name="postalCodes" defaultValue={zone?.postalCodes.join(", ")} placeholder="92101, 92093" />
         </Field>
       </div>
       <div className="grid gap-5 sm:grid-cols-2">
@@ -253,6 +253,9 @@ function NotificationsTab() {
       <CardHeader title="Notifications" className="border-0 p-0" />
       <div className="mt-5 grid gap-3">
         <Toggle label="Order confirmation emails" description="Send a receipt when an order is placed." defaultChecked />
+        <Toggle label="Package completion reminder email" description="Email customers before the final few deliveries." defaultChecked />
+        <Toggle label="Package completion reminder SMS" description="Text customers before the package finishes." />
+        <Toggle label="Package completed email" description="Send a completion message with a buy-again link." defaultChecked />
         <Toggle label="Out-for-delivery SMS" description="Text customers when their tiffin leaves the kitchen." />
         <Toggle label="Weekly menu email" description="Email the new menu every Monday morning." defaultChecked />
       </div>

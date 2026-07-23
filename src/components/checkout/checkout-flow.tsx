@@ -1,11 +1,31 @@
 "use client";
 
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, CheckCircle2, CreditCard, Loader2, MapPin, Minus, Plus, ShoppingBag, Truck } from "lucide-react";
-import { Fragment, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  CreditCard,
+  Loader2,
+  LockKeyhole,
+  MapPin,
+  Pencil,
+  ShoppingBag,
+  Trash2,
+  Truck,
+} from "lucide-react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { usePackageCart } from "@/components/providers/package-cart-provider";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import {
+  packageCartQuery,
+  type PackageCartItemInput,
+} from "@/lib/package-cart";
+import { packageStartDateIssue } from "@/lib/package-schedule";
 import type { DeliveryZoneRecord, PackagePlan } from "@/lib/types";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -15,59 +35,102 @@ const checkoutSteps = [
   { label: "Payment", icon: CreditCard },
 ];
 
+function categoryLabel(category: PackagePlan["category"]) {
+  return category === "Student" ? "Student / Military" : category;
+}
+
+function displayStartDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(`${value}T12:00:00`));
+}
+
 export function CheckoutFlow({
   plans,
   deliveryZones,
-  initialPackageId,
-  initialAddonIds = [],
+  initialItems,
 }: {
   plans: PackagePlan[];
   deliveryZones: DeliveryZoneRecord[];
-  initialPackageId?: string;
-  initialAddonIds?: string[];
+  initialItems: PackageCartItemInput[];
 }) {
   const router = useRouter();
+  const { data: session, status } = useSession();
+  const {
+    items: savedCartItems,
+    hydrated: cartHydrated,
+    registerPlans,
+    replaceCart,
+    removeItem,
+  } = usePackageCart();
   const [step, setStep] = useState(0);
-  const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [customer, setCustomer] = useState({
     firstName: "Priya",
     lastName: "Sharma",
-    phone: "+1 510 555 0148",
+    phone: "+1 858 555 0148",
     email: "priya@example.com",
   });
   const [address, setAddress] = useState({
-    line1: "3988 Washington Blvd",
+    line1: "750 B St",
     line2: "",
-    city: "Fremont",
+    city: "San Diego",
     state: "CA",
-    postalCode: "94538",
+    postalCode: "92101",
   });
-  const [foodPreferences, setFoodPreferences] = useState("Medium spice, rice on Monday, no onion salad.");
+  const [foodPreferences, setFoodPreferences] = useState(
+    "Medium spice, rice on Monday, no onion salad.",
+  );
   const [student, setStudent] = useState({
     universityName: "",
     studentNumber: "",
     idCardUrl: "",
   });
-  const selectedPlan = useMemo(
-    () => plans.find((plan) => plan.id === initialPackageId) ?? plans[1] ?? plans[0],
-    [initialPackageId, plans],
+  const initialCartApplied = useRef(false);
+  const cartItems = !cartHydrated && initialItems.length ? initialItems : savedCartItems;
+
+  useEffect(() => {
+    registerPlans(plans);
+  }, [plans, registerPlans]);
+
+  useEffect(() => {
+    if (!cartHydrated || initialCartApplied.current) return;
+
+    if (initialItems.length) {
+      replaceCart(initialItems);
+    }
+
+    initialCartApplied.current = true;
+  }, [cartHydrated, initialItems, replaceCart]);
+
+  const resolvedItems = useMemo(
+    () =>
+      cartItems.flatMap((item) => {
+        const plan = plans.find((candidate) => candidate.id === item.packageId);
+
+        if (!plan) return [];
+
+        const addons = plan.addOns.filter((addon) => item.addonIds.includes(addon.id));
+        const addonTotal = addons.reduce((total, addon) => total + addon.price, 0);
+        const subtotal = plan.price + addonTotal;
+        const valid =
+          addons.length > 0 &&
+          addons.length === new Set(item.addonIds).size &&
+          !packageStartDateIssue(item.startDate);
+
+        return [{ item, plan, addons, addonTotal, subtotal, valid }];
+      }),
+    [cartItems, plans],
   );
 
-  if (!selectedPlan) {
-    return null;
-  }
-
-  const selectedAddonIds =
-    initialAddonIds.length > 0
-      ? initialAddonIds
-      : selectedPlan?.addOns[0]
-        ? [selectedPlan.addOns[0].id]
-        : [];
-  const selectedAddOns = selectedPlan.addOns.filter((addOn) => selectedAddonIds.includes(addOn.id));
-  const addOnTotal = selectedAddOns.reduce((total, addOn) => total + addOn.price, 0);
-  const subtotal = (selectedPlan.price + addOnTotal) * quantity;
+  const subtotal = resolvedItems.reduce((total, line) => total + line.subtotal, 0);
+  const taxAmount = resolvedItems.reduce(
+    (total, line) => total + line.subtotal * line.plan.taxRate,
+    0,
+  );
   const normalizedCity = address.city.trim().toLowerCase();
   const normalizedPostalCode = address.postalCode.trim().toLowerCase();
   const matchedZone =
@@ -75,15 +138,35 @@ export function CheckoutFlow({
       (zone) =>
         !zone.outsideZone &&
         (zone.cities.some((city) => city.toLowerCase() === normalizedCity) ||
-          zone.postalCodes.some((postalCode) => postalCode.toLowerCase() === normalizedPostalCode)),
+          zone.postalCodes.some(
+            (postalCode) => postalCode.toLowerCase() === normalizedPostalCode,
+          )),
     ) ?? deliveryZones.find((zone) => zone.outsideZone);
-  const deliveryFeePerPackage = matchedZone ? (matchedZone.isFreeDelivery ? 0 : matchedZone.fee) : 0;
-  const deliveryFee = deliveryFeePerPackage * quantity;
-  const taxAmount = subtotal * selectedPlan.taxRate;
+  const deliveryFeePerPackage = matchedZone
+    ? matchedZone.isFreeDelivery
+      ? 0
+      : matchedZone.fee
+    : 0;
+  const deliveryFee = deliveryFeePerPackage * resolvedItems.length;
   const total = subtotal + taxAmount + deliveryFee;
-  const deliveryReady = address.city.trim().length > 1 && address.postalCode.trim().length >= 5;
-  const requiresStudent = selectedPlan.category === "Student";
-  const deliveryLabel = !deliveryReady
+  const addressReady =
+    address.line1.trim().length >= 4 &&
+    address.city.trim().length > 1 &&
+    address.postalCode.trim().length >= 5;
+  const requiresStudent = resolvedItems.some((line) => line.plan.category === "Student");
+  const studentReady =
+    !requiresStudent ||
+    (student.universityName.trim().length > 1 && student.studentNumber.trim().length > 1);
+  const cartReady =
+    resolvedItems.length === cartItems.length &&
+    resolvedItems.length > 0 &&
+    resolvedItems.every((line) => line.valid);
+  const isSignedIn = Boolean(session?.user?.id);
+  const currentCheckoutPath = `/checkout?cart=${packageCartQuery(cartItems)}`;
+  const signInHref = `/login?callbackUrl=${encodeURIComponent(currentCheckoutPath)}`;
+  const packagesHref = `/packages?cart=${packageCartQuery(cartItems)}#build-plan`;
+  const canConfirm = isSignedIn && addressReady && studentReady && cartReady;
+  const deliveryLabel = !addressReady
     ? "Enter ZIP"
     : matchedZone?.outsideZone
       ? "Outside zone"
@@ -91,7 +174,41 @@ export function CheckoutFlow({
         ? "Free delivery"
         : matchedZone?.name ?? "Delivery";
 
+  function removeLine(lineId: string) {
+    removeItem(lineId);
+    toast.success("Package removed");
+  }
+
   async function submitCheckout() {
+    if (!isSignedIn) {
+      toast.error("Sign in required", {
+        description: "Create an account or sign in before checkout.",
+      });
+      router.push(signInHref);
+      return;
+    }
+
+    if (!cartReady) {
+      toast.error("Cart needs attention", {
+        description: "Every package needs an active add-on and a valid start date.",
+      });
+      return;
+    }
+
+    if (!addressReady) {
+      toast.error("Delivery address required", {
+        description: "Enter a complete street address, city, and ZIP code.",
+      });
+      return;
+    }
+
+    if (!studentReady) {
+      toast.error("Verification details required", {
+        description: "Enter the school or military organization and verification number.",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -99,9 +216,11 @@ export function CheckoutFlow({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          packageId: selectedPlan.id,
-          quantity,
-          addonIds: selectedAddonIds,
+          items: cartItems.map(({ packageId, addonIds, startDate }) => ({
+            packageId,
+            addonIds,
+            startDate,
+          })),
           customer: {
             name: `${customer.firstName} ${customer.lastName}`.trim(),
             email: customer.email,
@@ -115,24 +234,27 @@ export function CheckoutFlow({
             postalCode: address.postalCode,
           },
           foodPreferences,
-          student:
-            requiresStudent
-              ? {
-                  universityName: student.universityName,
-                  studentNumber: student.studentNumber,
-                  idCardUrl: student.idCardUrl,
-                }
-              : undefined,
+          student: requiresStudent
+            ? {
+                universityName: student.universityName,
+                studentNumber: student.studentNumber,
+                idCardUrl: student.idCardUrl,
+              }
+            : undefined,
         }),
       });
-      const payload = (await response.json()) as { ok: boolean; checkoutUrl?: string; error?: string };
+      const payload = (await response.json()) as {
+        ok: boolean;
+        checkoutUrl?: string;
+        error?: string;
+      };
 
       if (!response.ok || !payload.ok) {
         throw new Error(payload.error ?? "Checkout could not be created.");
       }
 
       toast.success("Checkout created", {
-        description: "Your order was saved and payment is ready.",
+        description: `${cartItems.length} configured ${cartItems.length === 1 ? "package is" : "packages are"} ready for payment.`,
       });
 
       if (payload.checkoutUrl?.startsWith("http")) {
@@ -162,13 +284,14 @@ export function CheckoutFlow({
             Order received
           </p>
           <h1 className="mt-3 font-display text-4xl font-black leading-tight">
-            Dinner is on the schedule.
+            Your tiffin plans are scheduled.
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-ink/64">
-            Your Regular 8 Roti Tiffin is queued for Monday delivery between 6:00 PM and 8:00 PM.
+            Each package will begin on its selected start date and can be tracked separately from
+            your dashboard.
           </p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <ButtonLink href="/dashboard">Track in dashboard</ButtonLink>
+            <ButtonLink href="/dashboard">Track packages</ButtonLink>
             <ButtonLink href="/menu" variant="secondary">View weekly menu</ButtonLink>
           </div>
         </div>
@@ -179,15 +302,20 @@ export function CheckoutFlow({
   return (
     <section className="section section-shell grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
       <div className="rounded-lg border border-ink/10 bg-white p-6 shadow-soft md:p-8">
-        {/* Numbered progress */}
         <div className="mb-8 flex items-center">
           {checkoutSteps.map((item, index) => {
             const done = index < step;
             const active = index === step;
+
             return (
               <Fragment key={item.label}>
                 <button
-                  onClick={() => setStep(index)}
+                  type="button"
+                  onClick={() => {
+                    if (index === 0 || (index === 1 && cartReady) || (index === 2 && cartReady && addressReady && studentReady)) {
+                      setStep(index);
+                    }
+                  }}
                   className="flex items-center gap-3"
                   aria-current={active ? "step" : undefined}
                 >
@@ -201,64 +329,103 @@ export function CheckoutFlow({
                   >
                     {done ? <Check size={18} /> : index + 1}
                   </span>
-                  <span
-                    className={cn(
-                      "hidden text-sm font-extrabold sm:block",
-                      active ? "text-ink" : "text-ink/50",
-                    )}
-                  >
+                  <span className={cn("hidden text-sm font-extrabold sm:block", active ? "text-ink" : "text-ink/50")}>
                     {item.label}
                   </span>
                 </button>
                 {index < checkoutSteps.length - 1 ? (
-                  <span
-                    className={cn(
-                      "mx-3 h-px flex-1 transition",
-                      index < step ? "bg-ink" : "bg-ink/12",
-                    )}
-                  />
+                  <span className={cn("mx-3 h-px flex-1 transition", index < step ? "bg-ink" : "bg-ink/12")} />
                 ) : null}
               </Fragment>
             );
           })}
         </div>
 
-        {step === 0 ? (
-          <div>
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-masala">
-              Selected plan
-            </p>
-            <div className="mt-5 rounded-lg border border-ink/10 bg-ivory p-5">
-              <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+        {status !== "loading" && !isSignedIn ? (
+          <div className="mb-6 rounded-lg border border-saffron/35 bg-rose p-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex gap-3">
+                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-saffron text-ink">
+                  <LockKeyhole size={18} />
+                </span>
                 <div>
-                  <StatusPill tone="amber">Monthly</StatusPill>
-                  <h2 className="mt-4 font-display text-3xl font-black">{selectedPlan.name}</h2>
-                  <p className="mt-3 max-w-xl text-sm leading-6 text-ink/62">
-                    Includes daal, sabzi, roti, yogurt, salad, dessert once a week, and rice add-on.
+                  <p className="text-sm font-black">Account required for checkout</p>
+                  <p className="mt-1 text-xs font-bold leading-5 text-ink/58">
+                    Your cart will return after sign-in so every package can be tracked separately.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    aria-label="Decrease quantity"
-                    className="grid size-10 place-items-center rounded-button border border-ink/10 bg-white transition hover:border-masala/40"
-                    onClick={() => setQuantity((value) => Math.max(1, value - 1))}
-                  >
-                    <Minus size={16} />
-                  </button>
-                  <span className="grid size-10 place-items-center rounded-button bg-white text-sm font-black">
-                    {quantity}
-                  </span>
-                  <button
-                    aria-label="Increase quantity"
-                    className="grid size-10 place-items-center rounded-button border border-ink/10 bg-white transition hover:border-masala/40"
-                    onClick={() => setQuantity((value) => value + 1)}
-                  >
-                    <Plus size={16} />
-                  </button>
-                </div>
               </div>
+              <ButtonLink href={signInHref} variant="dark" className="shrink-0">Sign in</ButtonLink>
             </div>
-            <Button className="mt-6" onClick={() => setStep(1)}>
+          </div>
+        ) : null}
+
+        {step === 0 ? (
+          <div>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-sm font-black uppercase tracking-[0.16em] text-masala">Package review</p>
+                <h2 className="mt-2 font-display text-3xl font-black">Your configured tiffins</h2>
+              </div>
+              <ButtonLink href={packagesHref} variant="secondary">Add another package</ButtonLink>
+            </div>
+
+            {resolvedItems.length ? (
+              <div className="mt-6 divide-y divide-ink/10 overflow-hidden rounded-lg border border-ink/10 bg-ivory">
+                {resolvedItems.map(({ item, plan, addons, subtotal: lineSubtotal, valid }, index) => {
+                  const editHref = `/packages?cart=${packageCartQuery(cartItems)}&edit=${encodeURIComponent(item.lineId)}#build-plan`;
+
+                  return (
+                    <article key={item.lineId} className="p-5">
+                      <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+                        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ink text-sm font-black text-saffron">
+                          {index + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <StatusPill tone={valid ? "green" : "red"}>{valid ? "Ready" : "Needs attention"}</StatusPill>
+                            <StatusPill tone="amber">{categoryLabel(plan.category)}</StatusPill>
+                          </div>
+                          <h3 className="mt-3 font-display text-2xl font-black">{plan.name}</h3>
+                          <p className="mt-2 text-sm font-bold text-ink/58">
+                            {addons.length ? addons.map((addon) => addon.name).join(", ") : "No active add-on selected"}
+                          </p>
+                          <p className="mt-2 flex items-center gap-2 text-sm font-extrabold text-leaf">
+                            <CalendarDays size={16} />
+                            Starts {displayStartDate(item.startDate)}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between gap-4 sm:block sm:text-right">
+                          <p className="text-xl font-black">{formatCurrency(lineSubtotal)}</p>
+                          <div className="mt-3 flex justify-end gap-2">
+                            <ButtonLink href={editHref} variant="secondary" className="h-9 px-3 text-xs">
+                              <Pencil size={14} />
+                              Edit
+                            </ButtonLink>
+                            <button
+                              type="button"
+                              aria-label={`Remove ${plan.name}`}
+                              onClick={() => removeLine(item.lineId)}
+                              className="grid size-9 place-items-center rounded-button border border-ink/10 bg-white text-masala transition hover:border-masala/35 hover:bg-rose"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mt-6 rounded-lg border border-dashed border-ink/15 bg-ivory p-8 text-center">
+                <ShoppingBag className="mx-auto text-masala" size={30} />
+                <h3 className="mt-4 font-display text-2xl font-black">No packages in your cart</h3>
+                <p className="mt-2 text-sm font-bold text-ink/55">Configure at least one package before checkout.</p>
+              </div>
+            )}
+
+            <Button className="mt-6" onClick={() => setStep(1)} disabled={!cartReady}>
               Continue to delivery
             </Button>
           </div>
@@ -266,11 +433,10 @@ export function CheckoutFlow({
 
         {step === 1 ? (
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-masala">
-              Delivery details
-            </p>
+            <p className="text-sm font-black uppercase tracking-[0.16em] text-masala">Shared delivery details</p>
+            <p className="mt-2 text-sm font-bold text-ink/55">This address applies to every package in this order.</p>
             <div className="mt-5 grid gap-4 md:grid-cols-2">
-              {["First name", "Last name", "Phone", "Email"].map((label) => (
+              {(["First name", "Last name", "Phone", "Email"] as const).map((label) => (
                 <label key={label} className="grid gap-2 text-sm font-extrabold">
                   {label}
                   <input
@@ -339,30 +505,23 @@ export function CheckoutFlow({
                   className="h-12 rounded-button border border-ink/10 bg-ivory px-4 font-medium outline-none transition focus:border-leaf"
                   value={address.postalCode}
                   onChange={(event) => setAddress((current) => ({ ...current, postalCode: event.target.value }))}
-                  placeholder="94538"
+                  placeholder="92101"
                 />
               </label>
-              <div className="md:col-span-2 rounded-lg border border-ink/10 bg-white p-4">
+              <div className="rounded-lg border border-ink/10 bg-white p-4 md:col-span-2">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-extrabold">Delivery eligibility</p>
                     <p className="mt-1 text-xs font-bold text-ink/50">
-                      {deliveryReady
+                      {addressReady
                         ? matchedZone
                           ? `${matchedZone.name} matched by city or ZIP.`
                           : "No active zone matched."
-                        : "Enter city and ZIP to check delivery pricing."}
+                        : "Enter a complete address and ZIP to check delivery pricing."}
                     </p>
                   </div>
-                  <span
-                    className={cn(
-                      "rounded-full px-3 py-1 text-xs font-black",
-                      deliveryReady && deliveryFee === 0
-                        ? "bg-mint text-leaf"
-                        : "bg-rose text-masala",
-                    )}
-                  >
-                    {deliveryReady
+                  <span className={cn("rounded-full px-3 py-1 text-xs font-black", addressReady && deliveryFee === 0 ? "bg-mint text-leaf" : "bg-rose text-masala")}>
+                    {addressReady
                       ? deliveryFee === 0
                         ? "Free delivery"
                         : `${formatCurrency(deliveryFee)} delivery`
@@ -379,12 +538,12 @@ export function CheckoutFlow({
                 />
               </label>
               {requiresStudent ? (
-                <div className="md:col-span-2 grid gap-4 rounded-lg border border-saffron/30 bg-rose p-4 md:grid-cols-2">
-                  <p className="md:col-span-2 text-sm font-extrabold text-masala">
-                    Student verification is required before this package activates.
+                <div className="grid gap-4 rounded-lg border border-saffron/30 bg-rose p-4 md:col-span-2 md:grid-cols-2">
+                  <p className="text-sm font-extrabold text-masala md:col-span-2">
+                    Verification is required before student or military packages activate.
                   </p>
                   <label className="grid gap-2 text-sm font-extrabold">
-                    University name
+                    School / military organization
                     <input
                       className="h-12 rounded-button border border-ink/10 bg-white px-4 font-medium outline-none transition focus:border-leaf"
                       value={student.universityName}
@@ -392,7 +551,7 @@ export function CheckoutFlow({
                     />
                   </label>
                   <label className="grid gap-2 text-sm font-extrabold">
-                    Roll / student number
+                    Student / service number
                     <input
                       className="h-12 rounded-button border border-ink/10 bg-white px-4 font-medium outline-none transition focus:border-leaf"
                       value={student.studentNumber}
@@ -405,7 +564,7 @@ export function CheckoutFlow({
                       className="h-12 rounded-button border border-ink/10 bg-white px-4 font-medium outline-none transition focus:border-leaf"
                       value={student.idCardUrl}
                       onChange={(event) => setStudent((current) => ({ ...current, idCardUrl: event.target.value }))}
-                      placeholder="/uploads/student-id-placeholder.jpg"
+                      placeholder="/uploads/verification-id-placeholder.jpg"
                     />
                   </label>
                 </div>
@@ -416,7 +575,7 @@ export function CheckoutFlow({
                 <ArrowLeft size={18} />
                 Back
               </Button>
-              <Button onClick={() => setStep(2)} disabled={!deliveryReady}>
+              <Button onClick={() => setStep(2)} disabled={!addressReady || !studentReady}>
                 Continue to payment
               </Button>
             </div>
@@ -425,27 +584,25 @@ export function CheckoutFlow({
 
         {step === 2 ? (
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-masala">
-              Payment method
-            </p>
+            <p className="text-sm font-black uppercase tracking-[0.16em] text-masala">Payment method</p>
             <div className="mt-5 rounded-lg border border-ink/10 bg-ivory p-5">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
+              <div className="flex items-center justify-between gap-4">
+                <div>
                   <p className="text-sm font-extrabold">Stripe Checkout</p>
                   <p className="mt-1 text-xs font-bold text-ink/55">Card details are entered securely after order confirmation.</p>
-                  </div>
-                  <CreditCard className="text-leaf" size={34} />
                 </div>
+                <CreditCard className="text-leaf" size={34} />
+              </div>
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
               <Button variant="secondary" onClick={() => setStep(1)}>
                 <ArrowLeft size={18} />
                 Back
               </Button>
-            <Button onClick={submitCheckout} disabled={loading}>
-              {loading ? <Loader2 className="animate-spin" size={18} /> : null}
-              {loading ? "Creating checkout" : "Confirm order"}
-            </Button>
+              <Button onClick={submitCheckout} disabled={loading || !canConfirm}>
+                {loading ? <Loader2 className="animate-spin" size={18} /> : null}
+                {loading ? "Creating checkout" : isSignedIn ? "Confirm order" : "Sign in to confirm"}
+              </Button>
             </div>
           </div>
         ) : null}
@@ -454,36 +611,43 @@ export function CheckoutFlow({
       <aside className="dark-band relative h-fit rounded-lg border border-white/10 p-6 text-ivory shadow-soft lg:sticky lg:top-24">
         <div className="relative flex items-start justify-between gap-5">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-saffron">
-              Order summary
-            </p>
-            <h2 className="mt-3 font-display text-3xl font-black">{selectedPlan.name}</h2>
+            <p className="text-sm font-black uppercase tracking-[0.16em] text-saffron">Order summary</p>
+            <h2 className="mt-3 font-display text-3xl font-black">
+              {resolvedItems.length} {resolvedItems.length === 1 ? "package" : "packages"}
+            </h2>
           </div>
           <Truck className="text-saffron" size={30} />
         </div>
 
-        <div className="relative mt-8 grid gap-4 text-sm font-bold">
+        <div className="relative mt-7 max-h-72 divide-y divide-white/10 overflow-y-auto border-y border-white/10">
+          {resolvedItems.map(({ item, plan, addons, subtotal: lineSubtotal }) => (
+            <div key={item.lineId} className="py-4">
+              <div className="flex justify-between gap-4 text-sm font-extrabold">
+                <span>{plan.name}</span>
+                <span>{formatCurrency(lineSubtotal)}</span>
+              </div>
+              <p className="mt-1 text-xs font-bold text-ivory/55">{addons.map((addon) => addon.name).join(", ")}</p>
+              <p className="mt-1 text-xs font-bold text-saffron">Starts {displayStartDate(item.startDate)}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="relative mt-5 grid gap-4 text-sm font-bold">
           <div className="flex justify-between border-b border-white/10 pb-4">
-            <span className="text-ivory/62">Base plan x{quantity}</span>
-            <span>{formatCurrency(selectedPlan.price * quantity)}</span>
+            <span className="text-ivory/62">Package subtotal</span>
+            <span>{formatCurrency(subtotal)}</span>
           </div>
           <div className="flex justify-between border-b border-white/10 pb-4">
-            <span className="text-ivory/62">
-              {selectedAddOns.length ? selectedAddOns.map((addOn) => addOn.name).join(", ") : "Add-ons"}
-            </span>
-            <span>{formatCurrency(addOnTotal * quantity)}</span>
-          </div>
-          <div className="flex justify-between border-b border-white/10 pb-4">
-            <span className="text-ivory/62">Delivery x{quantity}</span>
+            <span className="text-ivory/62">Delivery · {deliveryLabel}</span>
             <span>{deliveryFee === 0 ? deliveryLabel : formatCurrency(deliveryFee)}</span>
           </div>
           <div className="flex justify-between border-b border-white/10 pb-4">
-            <span className="text-ivory/62">Tax estimate ({(selectedPlan.taxRate * 100).toFixed(2)}%)</span>
+            <span className="text-ivory/62">Tax estimate</span>
             <span>{formatCurrency(taxAmount)}</span>
           </div>
         </div>
 
-        <div className="relative mt-8 flex items-end justify-between">
+        <div className="relative mt-8 flex items-end justify-between gap-4">
           <span className="text-sm font-black uppercase tracking-[0.18em] text-saffron">Total</span>
           <span className="font-display text-4xl font-black">{formatCurrency(total)}</span>
         </div>
