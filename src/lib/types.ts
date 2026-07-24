@@ -189,6 +189,28 @@ export type Customer = {
   area: string;
 };
 
+export type PackagingPackage = {
+  id: string;
+  name: string;
+  status: string;
+  startDate: string;
+  deliveryProgress: string;
+  nextDelivery: string;
+  deliveryWindow: string;
+  includes: string[];
+  addons: string[];
+  foodPreferences: string;
+};
+
+export type PackagingRecord = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  packages: PackagingPackage[];
+};
+
 export type Transaction = {
   id: string;
   orderId: string;

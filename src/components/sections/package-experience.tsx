@@ -49,7 +49,6 @@ export function PackageExperience({
   const router = useRouter();
   const {
     items: cartItems,
-    hydrated,
     registerPlans,
     replaceCart,
     addItem,
@@ -68,9 +67,8 @@ export function PackageExperience({
   const [editingLineId, setEditingLineId] = useState<string | undefined>();
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
   const [startDate, setStartDate] = useState(nextEligiblePackageStartInput());
-  const [portalReady, setPortalReady] = useState(false);
-  const initialCartApplied = useRef(false);
-  const initialRouteHandled = useRef(false);
+  const appliedInitialCartKey = useRef<string | null>(null);
+  const handledRouteKey = useRef<string | null>(null);
 
   const visiblePlans = useMemo(
     () => plans.filter((plan) => category === "All" || plan.category === category),
@@ -84,46 +82,54 @@ export function PackageExperience({
     : 0;
   const startDateError = packageStartDateIssue(startDate);
   const minimumStartDate = nextEligiblePackageStartInput();
+  const initialCartKey = validInitialCart.length ? packageCartQuery(validInitialCart) : "";
+  const routeKey = `${initialPlanId ?? ""}:${initialEditLineId ?? ""}:${initialCartKey}`;
 
   useEffect(() => {
     registerPlans(plans);
   }, [plans, registerPlans]);
 
   useEffect(() => {
-    setPortalReady(true);
-  }, []);
+    if (!initialCartKey || appliedInitialCartKey.current === initialCartKey) return;
+
+    replaceCart(validInitialCart);
+    appliedInitialCartKey.current = initialCartKey;
+  }, [initialCartKey, replaceCart, validInitialCart]);
 
   useEffect(() => {
-    if (!hydrated || initialCartApplied.current) return;
+    if (handledRouteKey.current === routeKey) return;
 
-    if (validInitialCart.length) {
-      replaceCart(validInitialCart);
-    }
+    const timeoutId = window.setTimeout(() => {
+      if (handledRouteKey.current === routeKey) return;
 
-    initialCartApplied.current = true;
-  }, [hydrated, replaceCart, validInitialCart]);
+      const editItem = initialEditLineId
+        ? cartItems.find((item) => item.lineId === initialEditLineId) ??
+          validInitialCart.find((item) => item.lineId === initialEditLineId)
+        : undefined;
+      const plan = plans.find((candidate) => candidate.id === (editItem?.packageId ?? initialPlanId));
 
-  useEffect(() => {
-    if (!hydrated || initialRouteHandled.current) return;
+      if (!plan) {
+        handledRouteKey.current = routeKey;
+        return;
+      }
 
-    const editItem = initialEditLineId
-      ? cartItems.find((item) => item.lineId === initialEditLineId) ??
-        validInitialCart.find((item) => item.lineId === initialEditLineId)
-      : undefined;
-    const plan = plans.find((candidate) => candidate.id === (editItem?.packageId ?? initialPlanId));
+      setSelectedPlanId(plan.id);
+      setEditingLineId(editItem?.lineId);
+      setSelectedAddOns(editItem?.addonIds ?? []);
+      setStartDate(editItem?.startDate ?? nextEligiblePackageStartInput());
+      setModalOpen(true);
+      handledRouteKey.current = routeKey;
+    }, 0);
 
-    if (!plan) {
-      initialRouteHandled.current = true;
-      return;
-    }
-
-    setSelectedPlanId(plan.id);
-    setEditingLineId(editItem?.lineId);
-    setSelectedAddOns(editItem?.addonIds ?? []);
-    setStartDate(editItem?.startDate ?? nextEligiblePackageStartInput());
-    setModalOpen(true);
-    initialRouteHandled.current = true;
-  }, [cartItems, hydrated, initialEditLineId, initialPlanId, plans, validInitialCart]);
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    cartItems,
+    initialEditLineId,
+    initialPlanId,
+    plans,
+    routeKey,
+    validInitialCart,
+  ]);
 
   useEffect(() => {
     if (!modalOpen) return;
@@ -257,7 +263,7 @@ export function PackageExperience({
         ))}
       </div>
 
-      {portalReady ? createPortal(
+      {typeof document !== "undefined" ? createPortal(
       <AnimatePresence>
         {modalOpen && selectedPlan ? (
           <motion.div

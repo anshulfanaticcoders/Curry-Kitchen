@@ -1,9 +1,9 @@
 "use client";
 
-import { Mail, Phone } from "lucide-react";
+import { Mail, Phone, QrCode } from "lucide-react";
 import { Drawer } from "@/components/dashboard/interactive";
 import { Card, CardHeader, PageHeader, StatCard, Table, Td, Th } from "@/components/dashboard/primitives";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import type { Customer } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
@@ -115,6 +115,14 @@ export function AdminCustomersClient({ customers }: { customers: Customer[] }) {
                               <p className="text-xs font-black uppercase tracking-[0.14em] text-ink/45">Current plan</p>
                               <p className="mt-1 font-bold">{customer.plan}</p>
                             </div>
+                            <ButtonLink
+                              href={`/admin/packing/${customer.id}`}
+                              variant="dark"
+                              className="w-full"
+                            >
+                              <QrCode size={18} />
+                              Open packing label
+                            </ButtonLink>
                           </div>
                         )}
                       </Drawer>

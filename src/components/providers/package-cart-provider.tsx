@@ -4,9 +4,9 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import {
@@ -18,6 +18,11 @@ import {
 import type { PackagePlan } from "@/lib/types";
 
 const STORAGE_KEY = "currykitchen-package-cart";
+const STORAGE_EVENT = "currykitchen-package-cart-change";
+const EMPTY_CART: PackageCartItemInput[] = [];
+
+let cachedStorageValue: string | null | undefined;
+let cachedCartItems: PackageCartItemInput[] = EMPTY_CART;
 
 type PackageCartContextValue = {
   items: PackageCartItemInput[];
@@ -56,32 +61,81 @@ function normalizeCart(items: PackageCartItemInput[]) {
     }));
 }
 
+function readStoredCart() {
+  if (typeof window === "undefined") return EMPTY_CART;
+
+  try {
+    const storedValue = window.localStorage.getItem(STORAGE_KEY);
+
+    if (storedValue === cachedStorageValue) return cachedCartItems;
+
+    cachedStorageValue = storedValue;
+    cachedCartItems = normalizeCart(parsePackageCart(storedValue));
+    return cachedCartItems;
+  } catch {
+    return cachedCartItems;
+  }
+}
+
+function getServerCartSnapshot() {
+  return EMPTY_CART;
+}
+
+function subscribeToCart(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => undefined;
+
+  function handleStorage(event: StorageEvent) {
+    if (event.key === STORAGE_KEY) onStoreChange();
+  }
+
+  window.addEventListener(STORAGE_EVENT, onStoreChange);
+  window.addEventListener("storage", handleStorage);
+
+  return () => {
+    window.removeEventListener(STORAGE_EVENT, onStoreChange);
+    window.removeEventListener("storage", handleStorage);
+  };
+}
+
+function persistCart(nextItems: PackageCartItemInput[]) {
+  const normalizedItems = normalizeCart(nextItems);
+  const serializedItems = JSON.stringify(normalizedItems);
+
+  cachedStorageValue = serializedItems;
+  cachedCartItems = normalizedItems;
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY, serializedItems);
+  } catch {
+    // Memory remains the source of truth for this visit if storage is unavailable.
+  }
+
+  window.dispatchEvent(new Event(STORAGE_EVENT));
+  return normalizedItems;
+}
+
+function subscribeToHydration() {
+  return () => undefined;
+}
+
+function getClientHydrationState() {
+  return true;
+}
+
+function getServerHydrationState() {
+  return false;
+}
+
 export function PackageCartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<PackageCartItemInput[]>([]);
+  const items = useSyncExternalStore(subscribeToCart, readStoredCart, getServerCartSnapshot);
   const [plansById, setPlansById] = useState<Record<string, PackagePlan>>({});
-  const [hydrated, setHydrated] = useState(false);
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    getClientHydrationState,
+    getServerHydrationState,
+  );
   const [cartOpen, setCartOpen] = useState(false);
   const [pulseKey, setPulseKey] = useState(0);
-
-  useEffect(() => {
-    try {
-      setItems(parsePackageCart(window.localStorage.getItem(STORAGE_KEY)));
-    } catch {
-      // The cart still works for this visit when storage is unavailable.
-    } finally {
-      setHydrated(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch {
-      // Local state remains usable if the browser rejects persistent storage.
-    }
-  }, [hydrated, items]);
 
   const registerPlans = useCallback((plans: PackagePlan[]) => {
     setPlansById((current) => {
@@ -96,26 +150,26 @@ export function PackageCartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const replaceCart = useCallback((nextItems: PackageCartItemInput[]) => {
-    setItems(normalizeCart(nextItems));
+    persistCart(nextItems);
   }, []);
 
   const addItem = useCallback((item: PackageCartItemInput) => {
     if (items.length >= MAX_PACKAGE_CART_ITEMS) return false;
 
-    setItems((current) => normalizeCart([...current, item]));
+    persistCart([...items, item]);
     setPulseKey((current) => current + 1);
     return true;
-  }, [items.length]);
+  }, [items]);
 
   const updateItem = useCallback((item: PackageCartItemInput) => {
-    setItems((current) => normalizeCart(current.map((currentItem) => (
+    persistCart(items.map((currentItem) => (
       currentItem.lineId === item.lineId ? item : currentItem
-    ))));
-  }, []);
+    )));
+  }, [items]);
 
   const removeItem = useCallback((lineId: string) => {
-    setItems((current) => current.filter((item) => item.lineId !== lineId));
-  }, []);
+    persistCart(items.filter((item) => item.lineId !== lineId));
+  }, [items]);
 
   const checkoutHref = useMemo(
     () => (items.length ? `/checkout?cart=${packageCartQuery(items)}` : "/packages#build-plan"),

@@ -18,6 +18,7 @@ import type {
   Order,
   PackageCategory,
   PackagePlan,
+  PackagingRecord,
   ReviewItem,
   Transaction,
   WeeklyMenuDay,
@@ -345,6 +346,119 @@ export async function getAdminCustomers(): Promise<Customer[]> {
     });
   } catch {
     return [];
+  }
+}
+
+function formatFullDate(value: Date) {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(value);
+}
+
+export async function getAdminPackagingRecord(customerId: string): Promise<PackagingRecord | null> {
+  if (!hasDatabaseUrl()) {
+    const customer = mockCustomers.find((item) => item.id === customerId);
+
+    if (!customer) return null;
+
+    return {
+      id: customer.id,
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+      address: `${customer.area}, San Diego, CA`,
+      packages: [
+        {
+          id: `demo-${customer.id}`,
+          name: customer.plan,
+          status: customer.status,
+          startDate: "Current delivery cycle",
+          deliveryProgress: "Ready for preparation",
+          nextDelivery: "See daily delivery queue",
+          deliveryWindow: "6:00 PM - 8:00 PM",
+          includes: ["See package configuration in the live database"],
+          addons: ["No add-ons recorded in demo mode"],
+          foodPreferences: "No preferences recorded in demo mode",
+        },
+      ],
+    };
+  }
+
+  try {
+    const customer = await db.customer.findUnique({
+      where: { id: customerId },
+      include: {
+        addresses: {
+          orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }],
+          take: 1,
+        },
+        packages: {
+          orderBy: { createdAt: "desc" },
+          take: 8,
+          include: {
+            package: {
+              include: {
+                items: { orderBy: { sortOrder: "asc" } },
+              },
+            },
+            order: { select: { foodPreferences: true } },
+            orderItem: {
+              include: {
+                addons: { include: { addon: true } },
+              },
+            },
+            deliveryDays: {
+              where: { deliveryDate: { gte: new Date() } },
+              orderBy: { deliveryDate: "asc" },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    if (!customer) return null;
+
+    const address = customer.addresses[0];
+
+    return {
+      id: customer.id,
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone ?? "Not provided",
+      address: address
+        ? [address.name, address.line1, address.line2, `${address.city}, ${address.state} ${address.postalCode}`]
+            .filter(Boolean)
+            .join(", ")
+        : "No delivery address on file",
+      packages: customer.packages.map((customerPackage) => {
+        const nextDelivery = customerPackage.deliveryDays[0];
+
+        return {
+          id: customerPackage.id,
+          name: customerPackage.package.name,
+          status: titleCase(customerPackage.status),
+          startDate: customerPackage.startDate
+            ? formatFullDate(customerPackage.startDate)
+            : "Not scheduled",
+          deliveryProgress: `${customerPackage.usedDeliveryDays} of ${customerPackage.totalDeliveryDays} delivery days used`,
+          nextDelivery: nextDelivery
+            ? formatFullDate(nextDelivery.deliveryDate)
+            : "No upcoming delivery scheduled",
+          deliveryWindow: nextDelivery?.deliveryWindow ?? "6:00 PM - 8:00 PM",
+          includes: customerPackage.package.items.map((item) =>
+            item.quantity ? `${item.quantity} ${item.name}` : item.name,
+          ),
+          addons: customerPackage.orderItem?.addons.map(({ addon }) => addon.name) ?? [],
+          foodPreferences: customerPackage.order.foodPreferences?.trim() || "No special food preferences",
+        };
+      }),
+    };
+  } catch {
+    return null;
   }
 }
 
