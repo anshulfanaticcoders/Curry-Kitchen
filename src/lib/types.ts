@@ -136,12 +136,16 @@ export type WeeklyMenuDay = {
 
 export type OrderStatus = "Preparing" | "Out for delivery" | "Delivered" | "Paused";
 
+// Orders themselves are only ever pending review, accepted, or declined;
+// per-day delivery tracking keeps the richer OrderStatus labels.
+export type OrderDecision = "Pending" | "Accepted" | "Declined";
+
 export type Order = {
   id: string;
   plan: string;
   date: string;
   total: number;
-  status: OrderStatus;
+  status: OrderDecision;
   deliveryWindow: string;
 };
 
@@ -382,7 +386,7 @@ export type AdminOrder = {
   items: number;
   total: number;
   payment: "Paid" | "Pending" | "Refunded";
-  status: OrderStatus;
+  status: OrderDecision;
   date: string;
   window: string;
 };

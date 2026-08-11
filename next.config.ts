@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
     root: process.cwd(),
   },
   images: {
+    // Image optimization is failing in the current Windows/OneDrive runtime.
+    // Serve the approved Unsplash images directly so every page still renders.
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",

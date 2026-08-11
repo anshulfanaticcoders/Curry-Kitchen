@@ -88,6 +88,13 @@ function formatDay(value: Date) {
 }
 
 function mapOrderStatus(status: string): Order["status"] {
+  if (status === "DECLINED" || status === "CANCELLED") return "Declined";
+  if (status === "PENDING_PAYMENT" || status === "PAID") return "Pending";
+  // ACCEPTED plus legacy fulfilment statuses all mean the order was taken on.
+  return "Accepted";
+}
+
+function mapDeliveryStatus(status: string): Delivery["status"] {
   if (status === "DELIVERED") return "Delivered";
   if (status === "OUT_FOR_DELIVERY") return "Out for delivery";
   if (status === "PAUSED" || status === "CANCELLED") return "Paused";
@@ -644,7 +651,7 @@ export async function getUpcomingDeliveries(): Promise<Delivery[]> {
       id: delivery.id,
       day: formatDay(delivery.deliveryDate),
       meal: delivery.menuSummary ?? delivery.customerPackage.package.name,
-      status: mapOrderStatus(delivery.status),
+      status: mapDeliveryStatus(delivery.status),
       eta: delivery.deliveryWindow,
     }));
   } catch {

@@ -1082,12 +1082,10 @@ export async function deleteCouponAction(couponId: string) {
   }
 }
 
-export async function updateOrderStatusAction(orderId: string, status: string) {
+export async function decideOrderAction(orderId: string, decision: "ACCEPTED" | "DECLINED") {
   try {
     const admin = await requireAdmin();
-    const parsed = z
-      .enum(["PENDING_PAYMENT", "PAID", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "PAUSED", "CANCELLED"])
-      .parse(status);
+    const parsed = z.enum(["ACCEPTED", "DECLINED"]).parse(decision);
     const order = await db.order.findFirst({
       where: { OR: [{ id: orderId }, { orderNumber: orderId }] },
       select: { id: true },
@@ -1097,19 +1095,42 @@ export async function updateOrderStatusAction(orderId: string, status: string) {
       throw new Error("Order was not found.");
     }
 
-    await db.order.update({
-      where: { id: order.id },
-      data: { status: parsed },
+    await db.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: order.id },
+        data: { status: parsed },
+      });
+
+      // Declining an order stops its packages and scheduled deliveries.
+      if (parsed === "DECLINED") {
+        await tx.customerPackage.updateMany({
+          where: { orderId: order.id },
+          data: { status: "CANCELLED" },
+        });
+        await tx.packageDeliveryDay.updateMany({
+          where: { customerPackage: { orderId: order.id } },
+          data: { status: "CANCELLED" },
+        });
+      }
     });
+
     await db.auditLog.create({
-      data: { userId: admin.id, action: "order.status_updated", entity: "order", entityId: order.id },
+      data: {
+        userId: admin.id,
+        action: parsed === "ACCEPTED" ? "order.accepted" : "order.declined",
+        entity: "order",
+        entityId: order.id,
+      },
     });
 
     revalidatePath("/admin/orders");
     revalidatePath("/admin");
-    return ok({ id: order.id, status: parsed }, "Order status updated.");
+    return ok(
+      { id: order.id, status: parsed },
+      parsed === "ACCEPTED" ? "Order accepted." : "Order declined.",
+    );
   } catch (error) {
-    return fail(error instanceof Error ? error.message : "Order status could not be updated.");
+    return fail(error instanceof Error ? error.message : "Order could not be updated.");
   }
 }
 

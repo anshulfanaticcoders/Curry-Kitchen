@@ -261,7 +261,7 @@ export const recentOrders: Order[] = [
     plan: "Regular 8 Roti Tiffin",
     date: "Jun 21, 2026",
     total: 368,
-    status: "Delivered",
+    status: "Accepted",
     deliveryWindow: "6:00 PM - 8:00 PM",
   },
   {
@@ -269,7 +269,7 @@ export const recentOrders: Order[] = [
     plan: "Weekly Trial Pack",
     date: "Jun 14, 2026",
     total: 100,
-    status: "Delivered",
+    status: "Accepted",
     deliveryWindow: "6:00 PM - 8:00 PM",
   },
   {
@@ -277,7 +277,7 @@ export const recentOrders: Order[] = [
     plan: "Student & Military Saver Pack",
     date: "Jun 07, 2026",
     total: 231,
-    status: "Paused",
+    status: "Accepted",
     deliveryWindow: "5:00 PM - 7:00 PM",
   },
 ];
@@ -409,9 +409,9 @@ export const seoEntries: SeoEntry[] = [
 ];
 
 export const adminOrders: AdminOrder[] = [
-  { id: "CK-1048", customer: "Priya Sharma", plan: "Regular 8 Roti Tiffin", items: 5, total: 368, payment: "Paid", status: "Preparing", date: "Jun 21, 2026", window: "6:00 – 8:00 PM" },
-  { id: "CK-1047", customer: "Simran Kaur", plan: "Regular 8 Roti Tiffin", items: 5, total: 350, payment: "Paid", status: "Out for delivery", date: "Jun 21, 2026", window: "6:00 – 8:00 PM" },
-  { id: "CK-1046", customer: "Aman Gill", plan: "Student & Military Saver Pack", items: 5, total: 220, payment: "Paid", status: "Delivered", date: "Jun 20, 2026", window: "5:00 – 7:00 PM" },
-  { id: "CK-1041", customer: "Neha Patel", plan: "Weekly Trial Pack", items: 6, total: 100, payment: "Refunded", status: "Delivered", date: "Jun 14, 2026", window: "6:00 – 8:00 PM" },
-  { id: "CK-1040", customer: "Rohan Mehta", plan: "Extra Large 12 Roti Tiffin", items: 5, total: 450, payment: "Pending", status: "Paused", date: "Jun 13, 2026", window: "6:00 – 8:00 PM" },
+  { id: "CK-1048", customer: "Priya Sharma", plan: "Regular 8 Roti Tiffin", items: 5, total: 368, payment: "Paid", status: "Pending", date: "Jun 21, 2026", window: "6:00 – 8:00 PM" },
+  { id: "CK-1047", customer: "Simran Kaur", plan: "Regular 8 Roti Tiffin", items: 5, total: 350, payment: "Paid", status: "Accepted", date: "Jun 21, 2026", window: "6:00 – 8:00 PM" },
+  { id: "CK-1046", customer: "Aman Gill", plan: "Student & Military Saver Pack", items: 5, total: 220, payment: "Paid", status: "Accepted", date: "Jun 20, 2026", window: "5:00 – 7:00 PM" },
+  { id: "CK-1041", customer: "Neha Patel", plan: "Weekly Trial Pack", items: 6, total: 100, payment: "Refunded", status: "Declined", date: "Jun 14, 2026", window: "6:00 – 8:00 PM" },
+  { id: "CK-1040", customer: "Rohan Mehta", plan: "Extra Large 12 Roti Tiffin", items: 5, total: 450, payment: "Pending", status: "Pending", date: "Jun 13, 2026", window: "6:00 – 8:00 PM" },
 ];

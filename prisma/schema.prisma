@@ -31,6 +31,8 @@ enum SeoTargetType {
 enum OrderStatus {
   PENDING_PAYMENT
   PAID
+  ACCEPTED
+  DECLINED
   PREPARING
   OUT_FOR_DELIVERY
   DELIVERED

@@ -12,8 +12,8 @@ import { formatCurrency } from "@/lib/utils";
 const statIcons = [DollarSign, Package, Truck, Users];
 
 function orderStatusTone(status: string) {
-  if (status === "Delivered") return "green" as const;
-  if (status === "Paused") return "red" as const;
+  if (status === "Accepted") return "green" as const;
+  if (status === "Declined") return "red" as const;
   return "amber" as const;
 }
 
@@ -36,7 +36,7 @@ export default async function AdminOverviewPage() {
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const revenue = adminOrders.reduce((total, order) => total + order.total, 0);
   const active = customers.filter((customer) => customer.status === "Active").length;
-  const deliveries = adminOrders.filter((order) => order.status !== "Delivered").length;
+  const deliveries = adminOrders.filter((order) => order.status === "Pending").length;
   const repeatRate = customers.length
     ? Math.round((customers.filter((customer) => customer.orders > 1).length / customers.length) * 100)
     : 0;

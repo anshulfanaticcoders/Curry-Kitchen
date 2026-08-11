@@ -35,7 +35,6 @@ type NavItem = { href: string; label: string; icon: LucideIcon };
 const adminNav: NavItem[] = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/orders", label: "Orders", icon: ShoppingBag },
-  { href: "/admin/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/admin/packages", label: "Packages", icon: Package },
   { href: "/admin/menu", label: "Menus", icon: UtensilsCrossed },
   { href: "/admin/media", label: "Media", icon: ImageIcon },

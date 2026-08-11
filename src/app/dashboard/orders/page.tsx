@@ -6,8 +6,8 @@ import { getCustomerOrders } from "@/lib/server/catalog";
 import { formatCurrency } from "@/lib/utils";
 
 function statusTone(status: string) {
-  if (status === "Delivered") return "green" as const;
-  if (status === "Paused") return "red" as const;
+  if (status === "Accepted") return "green" as const;
+  if (status === "Declined") return "red" as const;
   return "amber" as const;
 }
 
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CustomerOrdersPage() {
   const recentOrders = await getCustomerOrders();
-  const delivered = recentOrders.filter((order) => order.status === "Delivered").length;
+  const accepted = recentOrders.filter((order) => order.status === "Accepted").length;
   const spent = recentOrders.reduce((total, order) => total + order.total, 0);
 
   return (
@@ -33,7 +33,7 @@ export default async function CustomerOrdersPage() {
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Total orders" value={String(recentOrders.length)} />
-        <StatCard label="Delivered" value={String(delivered)} tone="good" />
+        <StatCard label="Accepted" value={String(accepted)} tone="good" />
         <StatCard label="Total spent" value={formatCurrency(spent)} />
       </div>
 

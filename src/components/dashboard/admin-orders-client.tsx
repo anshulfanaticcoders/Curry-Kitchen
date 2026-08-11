@@ -1,20 +1,20 @@
 "use client";
 
-import { Filter } from "lucide-react";
+import { Check, Filter, Loader2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { toast } from "sonner";
 import { Drawer, Tabs } from "@/components/dashboard/interactive";
-import { Card, Field, PageHeader, Select, Table, Td, Th } from "@/components/dashboard/primitives";
+import { Card, PageHeader, Table, Td, Th } from "@/components/dashboard/primitives";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
-import { updateOrderStatusAction } from "@/lib/actions/admin";
+import { decideOrderAction } from "@/lib/actions/admin";
 import type { AdminOrder } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 
 function statusTone(status: string) {
-  if (status === "Delivered") return "green" as const;
-  if (status === "Paused") return "red" as const;
+  if (status === "Accepted") return "green" as const;
+  if (status === "Declined") return "red" as const;
   return "amber" as const;
 }
 
@@ -24,21 +24,13 @@ function paymentTone(payment: string) {
   return "amber" as const;
 }
 
-function orderStatusValue(status: string) {
-  if (status === "Out for delivery") return "OUT_FOR_DELIVERY";
-  if (status === "Delivered") return "DELIVERED";
-  if (status === "Paused") return "PAUSED";
-  return "PREPARING";
-}
-
 function OrderDetails({ order, close }: { order: AdminOrder; close: () => void }) {
   const router = useRouter();
-  const [status, setStatus] = useState(orderStatusValue(order.status));
   const [pending, startTransition] = useTransition();
 
-  function updateStatus() {
+  function decide(decision: "ACCEPTED" | "DECLINED") {
     startTransition(async () => {
-      const result = await updateOrderStatusAction(order.id, status);
+      const result = await decideOrderAction(order.id, decision);
 
       if (result.ok) {
         toast.success(result.message ?? "Order updated.");
@@ -61,6 +53,8 @@ function OrderDetails({ order, close }: { order: AdminOrder; close: () => void }
           ["Items", `${order.items} meals`],
           ["Delivery window", order.window],
           ["Date", order.date],
+          ["Payment", order.payment],
+          ["Status", order.status],
         ].map(([label, value]) => (
           <div key={label} className="rounded-lg border border-ink/10 bg-ivory p-4">
             <p className="text-xs font-black uppercase tracking-[0.14em] text-ink/45">{label}</p>
@@ -68,29 +62,28 @@ function OrderDetails({ order, close }: { order: AdminOrder; close: () => void }
           </div>
         ))}
       </div>
-      <Field label="Delivery status">
-        <Select value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="PREPARING">Preparing</option>
-          <option value="OUT_FOR_DELIVERY">Out for delivery</option>
-          <option value="DELIVERED">Delivered</option>
-          <option value="PAUSED">Paused</option>
-          <option value="CANCELLED">Cancelled</option>
-        </Select>
-      </Field>
       <div className="dark-band rounded-lg p-5 text-white">
         <div className="flex items-center justify-between">
           <span className="text-sm font-black uppercase tracking-[0.16em] text-saffron">Total</span>
           <span className="font-display text-3xl font-black">{formatCurrency(order.total)}</span>
         </div>
       </div>
-      <div className="flex justify-end gap-3">
-        <Button variant="secondary" onClick={close}>
-          Close
-        </Button>
-        <Button onClick={updateStatus} disabled={pending}>
-          {pending ? "Saving" : "Update status"}
-        </Button>
-      </div>
+      {order.status === "Declined" ? (
+        <p className="rounded-lg bg-rose px-4 py-3 text-sm font-bold text-masala">
+          This order was declined. Its packages and deliveries are cancelled.
+        </p>
+      ) : (
+        <div className="flex justify-end gap-3">
+          <Button variant="secondary" onClick={() => decide("DECLINED")} disabled={pending}>
+            {pending ? <Loader2 className="animate-spin" size={17} /> : <X size={17} />}
+            Decline
+          </Button>
+          <Button onClick={() => decide("ACCEPTED")} disabled={pending || order.status === "Accepted"}>
+            {pending ? <Loader2 className="animate-spin" size={17} /> : <Check size={17} />}
+            {order.status === "Accepted" ? "Accepted" : "Accept order"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -154,14 +147,14 @@ function OrderTable({ orders }: { orders: AdminOrder[] }) {
   );
 }
 
-const statuses = ["Preparing", "Out for delivery", "Delivered", "Paused"];
+const statuses = ["Pending", "Accepted", "Declined"] as const;
 
 export function AdminOrdersClient({ orders }: { orders: AdminOrder[] }) {
   return (
     <div>
       <PageHeader
         title="Orders"
-        description="Track and update every tiffin order across the delivery week."
+        description="Review new orders and accept or decline them."
         action={
           <ButtonLink href="/api/admin/orders/export" variant="secondary">
             <Filter size={18} />
@@ -174,7 +167,7 @@ export function AdminOrdersClient({ orders }: { orders: AdminOrder[] }) {
           { id: "all", label: `All (${orders.length})`, content: <OrderTable orders={orders} /> },
           ...statuses.map((status) => ({
             id: status,
-            label: status,
+            label: `${status} (${orders.filter((order) => order.status === status).length})`,
             content: <OrderTable orders={orders.filter((order) => order.status === status)} />,
           })),
         ]}
