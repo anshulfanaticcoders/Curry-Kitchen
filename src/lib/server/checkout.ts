@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { getAppUrl } from "@/lib/app-url";
 import { getCurrentSession } from "@/lib/auth";
 import { businessRulesFromValue, getBusinessRules, isAfterOrderCutoff } from "@/lib/business-rules";
 import { db } from "@/lib/db";
@@ -211,7 +212,7 @@ export async function createCheckoutOrder(rawInput: unknown) {
     };
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = getAppUrl();
 
   const created = await db.$transaction(async (tx) => {
     const settings = await tx.setting.findUnique({ where: { key: "admin_settings" } });
@@ -485,6 +486,14 @@ export async function createCheckoutOrder(rawInput: unknown) {
   const stripe = getStripe();
 
   if (!stripe) {
+    if (process.env.NODE_ENV === "production") {
+      throw new CheckoutError(
+        "Card payment is temporarily unavailable. Please choose Zelle or try again later.",
+        503,
+        "CARD_PAYMENT_UNAVAILABLE",
+      );
+    }
+
     await markOrderPaidAndActivate(created.orderId);
     return {
       checkoutUrl: `/dashboard/orders?checkout=mock&order=${created.orderNumber}`,

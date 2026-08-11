@@ -1,3 +1,5 @@
+import { getAppUrl } from "@/lib/app-url";
+
 export type TransactionalEmail = {
   subject: string;
   text: string;
@@ -30,7 +32,6 @@ type SubscriptionLifecycleInput = {
   renewUrl?: string;
 };
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 function escapeHtml(value: string) {
   return value.replace(/[&<>'"]/g, (character) => {
@@ -63,7 +64,7 @@ function formatDate(value: Date) {
 }
 
 function route(path: string) {
-  return new URL(path, appUrl).toString();
+  return new URL(path, getAppUrl()).toString();
 }
 
 function emailLayout({

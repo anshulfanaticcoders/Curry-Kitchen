@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE `payments` MODIFY `method` ENUM('STRIPE', 'MANUAL', 'INTERAC', 'CASH', 'ZELLE') NOT NULL DEFAULT 'STRIPE';

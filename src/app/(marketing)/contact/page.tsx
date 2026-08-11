@@ -1,5 +1,6 @@
-import { ArrowRight, Clock, Mail, MapPin, Phone, Send } from "lucide-react";
+import { ArrowRight, Clock, Mail, MapPin, Phone } from "lucide-react";
 import type { Metadata } from "next";
+import { ContactForm } from "@/components/marketing/contact-form";
 import { JsonLd } from "@/components/seo/json-ld";
 import { PageHero } from "@/components/sections/page-hero";
 import { RevealItem, StaggerGroup } from "@/components/ui/animated-section";
@@ -116,35 +117,7 @@ export default async function ContactPage() {
             </ButtonLink>
           </div>
 
-          <form
-            action="mailto:currykitcheninc@gmail.com"
-            className="rounded-lg border border-ink/10 bg-white p-7 shadow-soft"
-          >
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-masala">
-              Message Curry Kitchen
-            </p>
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
-              <label className="grid gap-2 text-sm font-extrabold">
-                Name
-                <input className="h-12 rounded-button border border-ink/10 bg-ivory px-4 outline-none transition focus:border-leaf" />
-              </label>
-              <label className="grid gap-2 text-sm font-extrabold">
-                Email
-                <input type="email" className="h-12 rounded-button border border-ink/10 bg-ivory px-4 outline-none transition focus:border-leaf" />
-              </label>
-              <label className="grid gap-2 text-sm font-extrabold md:col-span-2">
-                What can we help with?
-                <textarea className="min-h-32 rounded-button border border-ink/10 bg-ivory px-4 py-3 outline-none transition focus:border-leaf" />
-              </label>
-            </div>
-            <a
-              href="mailto:currykitcheninc@gmail.com"
-              className={buttonStyles("primary", "mt-5")}
-            >
-              <Send size={18} />
-              Send email
-            </a>
-          </form>
+          <ContactForm />
         </div>
       </section>
     </main>

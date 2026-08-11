@@ -26,6 +26,10 @@ import { hasDatabaseUrl } from "@/lib/server/data-source";
 
 type DecimalLike = { toNumber: () => number } | number | string | null | undefined;
 
+// Mock content is a dev/demo convenience only. Production must never serve
+// fabricated packages, menus, or testimonials — fail empty instead.
+const allowMockContent = process.env.NODE_ENV !== "production";
+
 export type Testimonial = {
   name: string;
   role: string;
@@ -177,7 +181,7 @@ function planFromRecord(plan: {
 
 export async function getPackagePlans(): Promise<PackagePlan[]> {
   if (!hasDatabaseUrl()) {
-    return mockPackagePlans;
+    return allowMockContent ? mockPackagePlans : [];
   }
 
   try {
@@ -199,18 +203,21 @@ export async function getPackagePlans(): Promise<PackagePlan[]> {
     });
 
     if (!plans.length) {
-      return mockPackagePlans;
+      return allowMockContent ? mockPackagePlans : [];
     }
 
     return plans.map(planFromRecord);
-  } catch {
-    return mockPackagePlans;
+  } catch (error) {
+    console.error("getPackagePlans failed", error);
+    return allowMockContent ? mockPackagePlans : [];
   }
 }
 
 export async function getPackagePlanBySlug(slug: string): Promise<PackagePlan | null> {
   if (!hasDatabaseUrl()) {
-    return mockPackagePlans.find((plan) => plan.slug === slug) ?? null;
+    return allowMockContent
+      ? (mockPackagePlans.find((plan) => plan.slug === slug) ?? null)
+      : null;
   }
 
   try {
@@ -231,14 +238,17 @@ export async function getPackagePlanBySlug(slug: string): Promise<PackagePlan | 
     });
 
     return plan ? planFromRecord(plan) : null;
-  } catch {
-    return mockPackagePlans.find((plan) => plan.slug === slug) ?? null;
+  } catch (error) {
+    console.error("getPackagePlanBySlug failed", error);
+    return allowMockContent
+      ? (mockPackagePlans.find((plan) => plan.slug === slug) ?? null)
+      : null;
   }
 }
 
 export async function getWeeklyMenu(): Promise<WeeklyMenuDay[]> {
   if (!hasDatabaseUrl()) {
-    return mockWeeklyMenu;
+    return allowMockContent ? mockWeeklyMenu : [];
   }
 
   try {
@@ -249,7 +259,7 @@ export async function getWeeklyMenu(): Promise<WeeklyMenuDay[]> {
     });
 
     if (!menu?.days.length) {
-      return mockWeeklyMenu;
+      return allowMockContent ? mockWeeklyMenu : [];
     }
 
     return menu.days.map((day) => ({
@@ -264,8 +274,9 @@ export async function getWeeklyMenu(): Promise<WeeklyMenuDay[]> {
       spice: day.spice as WeeklyMenuDay["spice"],
       image: day.imageUrl,
     }));
-  } catch {
-    return mockWeeklyMenu;
+  } catch (error) {
+    console.error("getWeeklyMenu failed", error);
+    return allowMockContent ? mockWeeklyMenu : [];
   }
 }
 
@@ -307,7 +318,7 @@ export async function getActiveMenuUploads(): Promise<MenuUploadView[]> {
 
 export async function getTestimonials(): Promise<Testimonial[]> {
   if (!hasDatabaseUrl()) {
-    return mockTestimonials;
+    return allowMockContent ? mockTestimonials : [];
   }
 
   try {
@@ -324,8 +335,9 @@ export async function getTestimonials(): Promise<Testimonial[]> {
       rating: review.rating,
       quote: review.text,
     }));
-  } catch {
-    return mockTestimonials;
+  } catch (error) {
+    console.error("getTestimonials failed", error);
+    return allowMockContent ? mockTestimonials : [];
   }
 }
 

@@ -1,3 +1,0 @@
-ALTER TABLE `customers`
-  ADD COLUMN `emailReceipts` BOOLEAN NOT NULL DEFAULT true,
-  ADD COLUMN `smsUpdates` BOOLEAN NOT NULL DEFAULT false;

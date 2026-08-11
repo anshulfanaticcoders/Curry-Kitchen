@@ -25,7 +25,14 @@ export async function sendTransactionalEmail({
   const resend = getResend();
 
   if (!resend) {
-    console.warn("[email] RESEND_API_KEY missing, skipping:", email.subject, to);
+    console.error("[email] RESEND_API_KEY missing, email NOT sent:", email.subject, to);
+    return { sent: false };
+  }
+
+  // The Resend sandbox sender only delivers to the account owner, so customers
+  // would silently receive nothing. Production must use a verified domain.
+  if (!process.env.MAIL_FROM && process.env.NODE_ENV === "production") {
+    console.error("[email] MAIL_FROM missing in production, email NOT sent:", email.subject, to);
     return { sent: false };
   }
 

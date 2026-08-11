@@ -27,15 +27,19 @@ function cleanPath(path) {
   return withSlash.replace(/\/+$/, "");
 }
 
+// The public origin comes from NEXT_PUBLIC_APP_URL (set at build time in
+// production). The hardcoded domain is only a last-resort fallback.
+const FALLBACK_ORIGIN = "https://currykitchen.ca";
+
 export function siteOrigin(value = "") {
   try {
-    const url = new URL(value || "https://currykitchen.ca");
+    const url = new URL(value || process.env.NEXT_PUBLIC_APP_URL || FALLBACK_ORIGIN);
     if (["localhost", "127.0.0.1", "::1"].includes(url.hostname)) {
-      return "https://currykitchen.ca";
+      return process.env.NODE_ENV === "production" ? FALLBACK_ORIGIN : url.origin;
     }
     return url.origin;
   } catch {
-    return "https://currykitchen.ca";
+    return FALLBACK_ORIGIN;
   }
 }
 

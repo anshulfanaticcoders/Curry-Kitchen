@@ -5,6 +5,7 @@ import { PackingLabel } from "@/components/dashboard/packing-label";
 import { Card, CardHeader, PageHeader } from "@/components/dashboard/primitives";
 import { ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import { getAppUrl } from "@/lib/app-url";
 import { getAdminPackagingRecord } from "@/lib/server/catalog";
 
 export const dynamic = "force-dynamic";
@@ -25,8 +26,7 @@ export default async function PackingRecordPage({
 
   if (!record) notFound();
 
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
-  const lookupUrl = `${appUrl}/admin/packing/${record.id}`;
+  const lookupUrl = `${getAppUrl()}/admin/packing/${record.id}`;
 
   return (
     <div>

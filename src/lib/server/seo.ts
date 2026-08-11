@@ -229,6 +229,8 @@ export async function getPackageSchemas(plan: PackagePlan) {
   return buildPackageSchemas({ origin: getSiteOrigin(), businessName: business.businessName, currency: business.currency, plan });
 }
 
+const allowMockSeoContent = process.env.NODE_ENV !== "production";
+
 export async function getSitemap(): Promise<MetadataRoute.Sitemap> {
   const origin = getSiteOrigin();
   if (!hasDatabaseUrl()) {
@@ -236,7 +238,9 @@ export async function getSitemap(): Promise<MetadataRoute.Sitemap> {
       origin,
       targets: [
         ...STATIC_SEO_ROUTES.map((route) => ({ path: route.path, indexed: true, includeInSitemap: true })),
-        ...mockPackagePlans.map((plan) => ({ path: `/packages/${plan.slug}`, indexed: true, includeInSitemap: true })),
+        ...(allowMockSeoContent
+          ? mockPackagePlans.map((plan) => ({ path: `/packages/${plan.slug}`, indexed: true, includeInSitemap: true }))
+          : []),
       ],
     });
   }
@@ -269,12 +273,15 @@ export async function getSitemap(): Promise<MetadataRoute.Sitemap> {
       };
     });
     return buildSitemapEntries({ origin, targets: [...staticTargets, ...packageTargets] });
-  } catch {
+  } catch (error) {
+    console.error("getSitemap failed", error);
     return buildSitemapEntries({
       origin,
       targets: [
         ...STATIC_SEO_ROUTES.map((route) => ({ path: route.path })),
-        ...mockPackagePlans.map((plan) => ({ path: `/packages/${plan.slug}` })),
+        ...(allowMockSeoContent
+          ? mockPackagePlans.map((plan) => ({ path: `/packages/${plan.slug}` }))
+          : []),
       ],
     });
   }

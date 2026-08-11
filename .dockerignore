@@ -1,0 +1,15 @@
+node_modules
+.next
+out
+build
+.git
+.gitignore
+.env*
+!.env.example
+uploads
+dev-server-*.log
+*.tsbuildinfo
+.claude
+.vercel
+coverage
+README.md
