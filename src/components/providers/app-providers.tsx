@@ -12,7 +12,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         <Toaster
           closeButton
           richColors
-          position="top-right"
+          position="bottom-right"
           toastOptions={{
             style: {
               borderRadius: "12px",

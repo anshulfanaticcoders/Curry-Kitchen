@@ -1,103 +1,18 @@
 "use client";
 
-import { Loader2, Pencil, Plus } from "lucide-react";
-import { type FormEvent, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { Pencil, Plus } from "lucide-react";
+import Link from "next/link";
 import { ConfirmActionButton } from "@/components/dashboard/confirm-action-button";
-import { Drawer } from "@/components/dashboard/interactive";
-import { Card, CardHeader, Field, Input, PageHeader, Select, StatCard, Table, Td, Th } from "@/components/dashboard/primitives";
-import { Button } from "@/components/ui/button";
+import { Card, CardHeader, PageHeader, StatCard, Table, Td, Th } from "@/components/dashboard/primitives";
+import { ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
-import { deleteCouponAction, saveCouponAction } from "@/lib/actions/admin";
+import { deleteCouponAction } from "@/lib/actions/admin";
 import type { Coupon } from "@/lib/types";
-
-type ActionResult = Promise<{ ok: boolean; message?: string; error?: string }>;
 
 function statusTone(status: string) {
   if (status === "Active") return "green" as const;
   if (status === "Scheduled") return "amber" as const;
   return "ink" as const;
-}
-
-function statusValue(status?: string) {
-  return status === "Active" ? "ACTIVE" : "DRAFT";
-}
-
-function useSubmitAction() {
-  const router = useRouter();
-  const [, startTransition] = useTransition();
-
-  return function submit(
-    event: FormEvent<HTMLFormElement>,
-    action: (formData: FormData) => ActionResult,
-    close: () => void,
-  ) {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-
-    startTransition(async () => {
-      const result = await action(formData);
-
-      if (result.ok) {
-        toast.success(result.message ?? "Saved.");
-        close();
-        router.refresh();
-        return;
-      }
-
-      toast.error("Save failed", {
-        description: result.error ?? "Please check the fields and try again.",
-      });
-    });
-  };
-}
-
-function CouponForm({ coupon, close }: { coupon?: Coupon; close: () => void }) {
-  const submit = useSubmitAction();
-
-  return (
-    <form className="grid gap-5" onSubmit={(event) => submit(event, saveCouponAction, close)}>
-      {coupon ? <input type="hidden" name="id" value={coupon.id} /> : null}
-      <Field label="Code">
-        <Input name="code" defaultValue={coupon?.code} placeholder="WELCOME15" className="uppercase" required />
-      </Field>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="Discount type">
-          <Select name="type" defaultValue={coupon?.type === "Flat" ? "FLAT" : "PERCENT"}>
-            <option value="PERCENT">Percentage</option>
-            <option value="FLAT">Flat amount</option>
-          </Select>
-        </Field>
-        <Field label="Value">
-          <Input name="value" type="number" step="0.01" min="0" defaultValue={coupon?.value} placeholder="15" required />
-        </Field>
-      </div>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="Usage limit">
-          <Input name="usageLimit" type="number" min="1" defaultValue={coupon?.limit || ""} placeholder="500" />
-        </Field>
-        <Field label="Status">
-          <Select name="status" defaultValue={statusValue(coupon?.status)}>
-            <option value="ACTIVE">Active</option>
-            <option value="DRAFT">Draft / scheduled</option>
-          </Select>
-        </Field>
-      </div>
-      <Field label="Expires on">
-        <Input name="expiresAt" type="date" defaultValue={coupon?.expiresAt} />
-      </Field>
-      <div className="flex justify-end gap-3">
-        <Button type="button" variant="secondary" onClick={close}>
-          Cancel
-        </Button>
-        <Button type="submit">
-          <Loader2 className="hidden animate-spin" size={18} />
-          {coupon ? "Save offer" : "Create offer"}
-        </Button>
-      </div>
-    </form>
-  );
 }
 
 export function AdminOffersClient({ coupons }: { coupons: Coupon[] }) {
@@ -110,18 +25,10 @@ export function AdminOffersClient({ coupons }: { coupons: Coupon[] }) {
         title="Offers"
         description="Create discount codes and track redemptions."
         action={
-          <Drawer
-            title="Create offer"
-            description="Set up a new discount code."
-            trigger={({ open }) => (
-              <Button onClick={open}>
-                <Plus size={18} />
-                Create offer
-              </Button>
-            )}
-          >
-            {({ close }) => <CouponForm close={close} />}
-          </Drawer>
+          <ButtonLink href="/admin/offers/new">
+            <Plus size={18} />
+            Create offer
+          </ButtonLink>
         }
       />
 
@@ -138,6 +45,7 @@ export function AdminOffersClient({ coupons }: { coupons: Coupon[] }) {
             <tr>
               <Th>Code</Th>
               <Th>Discount</Th>
+              <Th>Customer</Th>
               <Th>Usage</Th>
               <Th>Expires</Th>
               <Th>Status</Th>
@@ -155,6 +63,7 @@ export function AdminOffersClient({ coupons }: { coupons: Coupon[] }) {
                 <Td className="font-black">
                   {coupon.type === "Percent" ? `${coupon.value}%` : `$${coupon.value}`}
                 </Td>
+                <Td className="text-ink/60">{coupon.customerName ?? "Any customer"}</Td>
                 <Td className="text-ink/60">
                   {coupon.usage} / {coupon.limit || "Unlimited"}
                 </Td>
@@ -164,22 +73,13 @@ export function AdminOffersClient({ coupons }: { coupons: Coupon[] }) {
                 </Td>
                 <Td>
                   <div className="flex items-center justify-end gap-2">
-                    <Drawer
-                      title="Edit offer"
-                      description={coupon.code}
-                      trigger={({ open }) => (
-                        <button
-                          type="button"
-                          onClick={open}
-                          aria-label={`Edit ${coupon.code}`}
-                          className="grid size-9 place-items-center rounded-button border border-ink/10 text-ink/60 transition hover:border-saffron/50 hover:text-ink"
-                        >
-                          <Pencil size={16} />
-                        </button>
-                      )}
+                    <Link
+                      href={`/admin/offers/${coupon.id}/edit`}
+                      aria-label={`Edit ${coupon.code}`}
+                      className="grid size-9 place-items-center rounded-button border border-ink/10 text-ink/60 transition hover:border-saffron/50 hover:text-ink"
                     >
-                      {({ close }) => <CouponForm coupon={coupon} close={close} />}
-                    </Drawer>
+                      <Pencil size={16} />
+                    </Link>
                     <ConfirmActionButton
                       label={`Delete ${coupon.code}`}
                       title={`Archive ${coupon.code}?`}

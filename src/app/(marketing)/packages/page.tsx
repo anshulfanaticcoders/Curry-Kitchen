@@ -1,4 +1,6 @@
 import { ArrowRight, ListChecks } from "lucide-react";
+import type { Metadata } from "next";
+import { JsonLd } from "@/components/seo/json-ld";
 import { PageHero } from "@/components/sections/page-hero";
 import { PackageExperience } from "@/components/sections/package-experience";
 import { AnimatedSection } from "@/components/ui/animated-section";
@@ -6,8 +8,13 @@ import { ButtonLink } from "@/components/ui/button";
 import { getPackagePlans } from "@/lib/server/catalog";
 import { parsePackageCart } from "@/lib/package-cart";
 import { formatCurrency } from "@/lib/utils";
+import { getMarketingMetadata, getPackagesSchemas } from "@/lib/server/seo";
 
 export const dynamic = "force-dynamic";
+
+export function generateMetadata(): Promise<Metadata> {
+  return getMarketingMetadata("/packages");
+}
 
 export default async function PackagesPage({
   searchParams,
@@ -23,9 +30,11 @@ export default async function PackagesPage({
   const cartParam = Array.isArray(params.cart) ? params.cart[0] : params.cart;
   const editLineId = Array.isArray(params.edit) ? params.edit[0] : params.edit;
   const initialCartItems = parsePackageCart(cartParam);
+  const schemas = await getPackagesSchemas(packagePlans);
 
   return (
     <main>
+      <JsonLd data={schemas} />
       <PageHero
         eyebrow="Packages"
         title="Choose the tiffin rhythm that fits the week."
@@ -76,7 +85,7 @@ export default async function PackagesPage({
         <AnimatedSection className="relative">
           <div className="mb-8 max-w-2xl">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-saffron">Comparison</p>
-            <h2 className="mt-3 font-display text-3xl font-black leading-[1.04] lg:text-4xl">
+            <h2 className="mt-3 font-display text-3xl font-black leading-[1.12] lg:text-4xl">
               Simple plan math, no hidden steps.
             </h2>
           </div>

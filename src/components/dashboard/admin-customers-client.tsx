@@ -1,17 +1,30 @@
 "use client";
 
 import { Mail, Phone, QrCode } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
+import { toast } from "sonner";
+import { ConfirmActionButton } from "@/components/dashboard/confirm-action-button";
 import { Drawer } from "@/components/dashboard/interactive";
-import { Card, CardHeader, PageHeader, StatCard, Table, Td, Th } from "@/components/dashboard/primitives";
+import { Card, CardHeader, EmptyState, PageHeader, StatCard, Table, Td, Th } from "@/components/dashboard/primitives";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import type { Customer } from "@/lib/types";
+import { adminPausePackageAction, adminResumePackageAction } from "@/lib/actions/admin";
 import { formatCurrency } from "@/lib/utils";
 
 function statusTone(status: string) {
   if (status === "Active") return "green" as const;
   if (status === "Paused") return "red" as const;
   return "amber" as const;
+}
+
+function PackageControl({ customer }: { customer: Customer }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  if (!customer.activePackageId) return <p className="text-sm font-bold text-ink/50">No active package to manage.</p>;
+  const paused = customer.status === "Paused";
+  return <ConfirmActionButton label={paused ? "Resume package" : "Pause package"} title={paused ? `Resume ${customer.plan}?` : `Pause ${customer.plan}?`} description={paused ? "Deliveries will resume on the next eligible schedule." : "Pause this customer package until an admin resumes it."} confirmLabel={paused ? "Resume" : "Pause"} action={() => new Promise((resolve) => startTransition(async () => { const result = paused ? await adminResumePackageAction(customer.activePackageId!) : await adminPausePackageAction(customer.activePackageId!); if (result.ok) { toast.success(result.message ?? "Package updated."); router.refresh(); } else { toast.error("Package could not be updated", { description: result.error }); } resolve(result); }))} />;
 }
 
 export function AdminCustomersClient({ customers }: { customers: Customer[] }) {
@@ -115,6 +128,7 @@ export function AdminCustomersClient({ customers }: { customers: Customer[] }) {
                               <p className="text-xs font-black uppercase tracking-[0.14em] text-ink/45">Current plan</p>
                               <p className="mt-1 font-bold">{customer.plan}</p>
                             </div>
+                            <PackageControl customer={customer} />
                             <ButtonLink
                               href={`/admin/packing/${customer.id}`}
                               variant="dark"
@@ -131,11 +145,7 @@ export function AdminCustomersClient({ customers }: { customers: Customer[] }) {
                 </tr>
               ))
             ) : (
-              <tr>
-                <Td colSpan={7} className="py-8 text-center text-sm font-bold text-ink/45">
-                  No customers yet. New account and checkout records will appear here.
-                </Td>
-              </tr>
+              <tr><Td colSpan={7}><EmptyState title="No customers yet" description="New account and checkout records will appear here." /></Td></tr>
             )}
           </tbody>
         </Table>

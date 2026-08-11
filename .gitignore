@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# customer ID uploads (served via authenticated API route)
+/uploads
+
 # debug
 npm-debug.log*
 yarn-debug.log*

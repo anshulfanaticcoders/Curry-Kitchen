@@ -69,7 +69,7 @@ export function PackageCard({
           <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-white/72">
             {categoryLabel(plan.category)}
           </p>
-          <h3 className="mt-1 font-display text-3xl font-black leading-none">{plan.name}</h3>
+          <h3 className="mt-1 font-display text-3xl font-black leading-[1.12]">{plan.name}</h3>
         </div>
       </div>
 

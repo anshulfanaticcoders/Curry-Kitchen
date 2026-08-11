@@ -23,6 +23,11 @@ enum RecordStatus {
   ARCHIVED
 }
 
+enum SeoTargetType {
+  STATIC_PAGE
+  PACKAGE
+}
+
 enum OrderStatus {
   PENDING_PAYMENT
   PAID
@@ -45,6 +50,7 @@ enum PaymentMethod {
   MANUAL
   INTERAC
   CASH
+  ZELLE
 }
 
 enum CustomerPackageStatus {
@@ -153,6 +159,8 @@ model Customer {
   name      String
   email     String
   phone     String?
+  emailReceipts Boolean @default(true)
+  smsUpdates    Boolean @default(false)
   status    RecordStatus @default(ACTIVE)
   joinedAt  DateTime     @default(now())
   createdAt DateTime     @default(now())
@@ -163,6 +171,7 @@ model Customer {
   orders               Order[]
   packages             CustomerPackage[]
   studentVerifications StudentVerification[]
+  coupons              Coupon[]
 
   @@index([email])
   @@map("customers")
@@ -239,9 +248,11 @@ model Package {
   category         PackageCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   items            PackageItem[]
   addons           PackageAddon[]
+  complimentaryItems PackageComplimentaryItem[]
   orderItems       OrderItem[]
   cartItems        CartItem[]
   customerPackages CustomerPackage[]
+  seoRecord        SeoRecord?
 
   @@index([categoryId])
   @@index([cadence])
@@ -290,6 +301,32 @@ model PackageAddon {
   @@id([packageId, addonId])
   @@index([addonId])
   @@map("package_addons")
+}
+
+model ComplimentaryItem {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  description String?      @db.Text
+  status      RecordStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  packages PackageComplimentaryItem[]
+
+  @@map("complimentary_items")
+}
+
+model PackageComplimentaryItem {
+  packageId           String
+  complimentaryItemId String
+
+  package           Package           @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  complimentaryItem ComplimentaryItem @relation(fields: [complimentaryItemId], references: [id], onDelete: Cascade)
+
+  @@id([packageId, complimentaryItemId])
+  @@index([complimentaryItemId])
+  @@map("package_complimentary_items")
 }
 
 model MenuItem {
@@ -341,6 +378,33 @@ model WeeklyMenuDay {
   @@map("weekly_menu_days")
 }
 
+model MediaAsset {
+  id        String   @id @default(cuid())
+  fileName  String
+  fileUrl   String   @db.VarChar(600)
+  folder    String   @default("general")
+  size      Int
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([folder])
+  @@map("media_assets")
+}
+
+model MenuUpload {
+  id        String   @id @default(cuid())
+  title     String
+  fileUrl   String   @db.VarChar(600)
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([endDate])
+  @@index([startDate])
+  @@map("menu_uploads")
+}
+
 model DeliveryZone {
   id             String       @id @default(cuid())
   name           String
@@ -366,12 +430,15 @@ model Coupon {
   status     RecordStatus @default(ACTIVE)
   usageCount Int          @default(0)
   usageLimit Int?
+  customerId String?
   expiresAt  DateTime?
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
-  orders Order[]
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  orders   Order[]
 
+  @@index([customerId])
   @@map("coupons")
 }
 
@@ -466,6 +533,7 @@ model OrderItem {
   order           Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
   package         Package          @relation(fields: [packageId], references: [id], onDelete: Restrict)
   addons          OrderAddon[]
+  complimentaryItems OrderComplimentaryItem[]
   customerPackage CustomerPackage?
 
   @@index([orderId])
@@ -490,6 +558,19 @@ model OrderAddon {
   @@index([orderItemId])
   @@index([addonId])
   @@map("order_addons")
+}
+
+model OrderComplimentaryItem {
+  id                  String @id @default(cuid())
+  orderItemId         String
+  complimentaryItemId String
+  name                String
+
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@index([orderItemId])
+  @@index([complimentaryItemId])
+  @@map("order_complimentary_items")
 }
 
 model Payment {
@@ -533,6 +614,7 @@ model CustomerPackage {
   usedDeliveryDays  Int                   @default(0)
   startDate         DateTime?
   endDate           DateTime?
+  reminderEmailSentAt DateTime?
   customerPauseUsed Boolean               @default(false)
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
@@ -583,13 +665,20 @@ model PauseRequest {
   @@map("pause_requests")
 }
 
+enum StudentVerificationType {
+  STUDENT
+  MILITARY
+}
+
 model StudentVerification {
-  id             String                    @id @default(cuid())
-  customerId     String?
-  orderId        String?
+  id               String                  @id @default(cuid())
+  customerId       String?
+  orderId          String?
+  verificationType StudentVerificationType @default(STUDENT)
   universityName String
   studentNumber  String
   idCardUrl      String?                   @db.VarChar(600)
+  idCardBackUrl  String?                   @db.VarChar(600)
   status         StudentVerificationStatus @default(PENDING)
   adminNote      String?                   @db.Text
   reviewedAt     DateTime?
@@ -640,6 +729,32 @@ model Setting {
   updatedAt DateTime @updatedAt
 
   @@map("settings")
+}
+
+model SeoRecord {
+  id               String        @id @default(cuid())
+  targetType       SeoTargetType @default(STATIC_PAGE)
+  packageId        String?       @unique
+  page             String
+  path             String        @unique
+  title            String?
+  description      String?       @db.Text
+  ogTitle          String?
+  ogDescription    String?       @db.Text
+  ogImageUrl       String?       @db.VarChar(600)
+  ogImageAlt       String?
+  indexed          Boolean       @default(true)
+  includeInSitemap Boolean       @default(true)
+  schemaEnabled    Boolean       @default(true)
+  status           RecordStatus  @default(ACTIVE)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  package Package? @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@index([targetType])
+  @@index([status])
+  @@map("seo_records")
 }
 
 model AuditLog {

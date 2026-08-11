@@ -14,12 +14,13 @@ export function Tabs({ items }: { items: Array<{ id: string; label: string; cont
           <button
             key={item.id}
             role="tab"
+            type="button"
             aria-selected={active === item.id}
             onClick={() => setActive(item.id)}
             className={cn(
               "rounded-full border px-4 py-2 text-sm font-extrabold transition",
               active === item.id
-                ? "border-ink bg-ink text-ivory"
+                ? "border-saffron bg-saffron text-white shadow-[0_8px_20px_rgba(255,122,26,0.3)]"
                 : "border-ink/10 bg-white text-ink/60 hover:border-saffron/40 hover:text-ink",
             )}
           >
@@ -37,10 +38,12 @@ export function Toggle({
   label,
   description,
   defaultChecked = false,
+  onCheckedChange,
 }: {
   label: string;
   description?: string;
   defaultChecked?: boolean;
+  onCheckedChange?: (checked: boolean) => void;
 }) {
   const [on, setOn] = useState(defaultChecked);
   return (
@@ -51,9 +54,14 @@ export function Toggle({
       </div>
       <button
         role="switch"
+        type="button"
         aria-checked={on}
         aria-label={label}
-        onClick={() => setOn((value) => !value)}
+        onClick={() => setOn((value) => {
+          const next = !value;
+          onCheckedChange?.(next);
+          return next;
+        })}
         className={cn(
           "relative h-7 w-12 shrink-0 rounded-full transition",
           on ? "bg-saffron" : "bg-ink/15",
@@ -92,6 +100,7 @@ export function Drawer({
       {open ? (
         <div className="fixed inset-0 z-[60]">
           <button
+            type="button"
             className="absolute inset-0 bg-ink/55 backdrop-blur-sm"
             aria-label="Close panel"
             onClick={close}
@@ -103,6 +112,7 @@ export function Drawer({
                 {description ? <p className="mt-1 text-sm text-ink/55">{description}</p> : null}
               </div>
               <button
+                type="button"
                 className="grid size-9 place-items-center rounded-button border border-ink/10 text-ink/60 hover:text-ink"
                 onClick={close}
                 aria-label="Close"

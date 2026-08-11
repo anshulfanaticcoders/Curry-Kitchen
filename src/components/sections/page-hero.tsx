@@ -43,7 +43,7 @@ export function PageHero({
       <div className="section-shell relative grid min-h-[64vh] items-center gap-10 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:py-24">
         <div className="max-w-2xl">
           <p className="text-sm font-black uppercase tracking-[0.18em] text-saffron">{eyebrow}</p>
-          <h1 className="mt-4 font-display text-4xl font-black leading-[1.02] md:text-5xl lg:text-6xl">
+          <h1 className="mt-4 font-display text-4xl font-black leading-[1.12] md:text-5xl lg:text-6xl">
             {title}
           </h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-white/75">{children}</p>

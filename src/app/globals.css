@@ -9,6 +9,7 @@
 }
 
 @theme inline {
+  --animate-aurora: aurora 100s linear infinite;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-ink: #070707;
@@ -19,6 +20,7 @@
   --color-rose: #fff0e6;
   --color-ivory: #ffffff;
   --color-cream: #f5f4f0;
+  --color-frost: #fafafa;
   --color-charcoal: #1b1b1b;
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
@@ -26,6 +28,16 @@
   --shadow-lift: 0 22px 44px rgba(255, 122, 26, 0.24);
   --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.65);
   --radius-button: 0.5rem;
+}
+
+@keyframes aurora {
+  from {
+    background-position: 50% 50%, 50% 50%;
+  }
+
+  to {
+    background-position: 350% 50%, 350% 50%;
+  }
 }
 
 * {
@@ -38,6 +50,12 @@ body {
   font-family: var(--font-body), sans-serif;
   font-kerning: normal;
   text-rendering: optimizeLegibility;
+}
+
+/* Plus Jakarta Sans is variable up to 800: let display-black headings use it. */
+.font-display.font-black {
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 h1,

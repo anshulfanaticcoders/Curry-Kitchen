@@ -1,17 +1,29 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { AuthCard } from "@/components/auth/auth-card";
 import { LoginForm } from "@/components/auth/login-form";
 
-export default function LoginPage() {
+export const metadata: Metadata = { title: "Sign in", robots: { index: false, follow: false } };
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ callbackUrl?: string }>;
+}) {
+  const { callbackUrl } = await searchParams;
+  const registerHref = callbackUrl
+    ? `/register?callbackUrl=${encodeURIComponent(callbackUrl)}`
+    : "/register";
+
   return (
     <AuthCard
-      title="Sign in"
-      description="Use your Curry Kitchen account to continue."
+      title="Welcome back!"
+      description="Sign in to manage your deliveries, weekly menu, and account."
       footer={
         <>
           New customer?{" "}
-          <Link href="/register" className="font-black text-masala hover:underline">
+          <Link href={registerHref} className="font-black text-masala hover:underline">
             Create an account
           </Link>
         </>

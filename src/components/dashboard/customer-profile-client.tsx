@@ -9,11 +9,24 @@ import { Card, CardHeader, Field, Input, PageHeader } from "@/components/dashboa
 import { Toggle } from "@/components/dashboard/interactive";
 import { Button } from "@/components/ui/button";
 import { saveCustomerProfileAction } from "@/lib/actions/customer";
+import { saveCustomerCommunicationPreferencesAction } from "@/lib/actions/customer";
 import type { CustomerProfileDetails } from "@/lib/types";
 
 export function CustomerProfileClient({ profile }: { profile: CustomerProfileDetails }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+
+  function savePreferences(emailReceipts: boolean, smsUpdates: boolean) {
+    startTransition(async () => {
+      const result = await saveCustomerCommunicationPreferencesAction(emailReceipts, smsUpdates);
+      if (result.ok) {
+        toast.success(result.message ?? "Communication preferences updated.");
+        router.refresh();
+      } else {
+        toast.error("Preference update failed", { description: result.error });
+      }
+    });
+  }
 
   function saveDetails(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -119,8 +132,8 @@ export function CustomerProfileClient({ profile }: { profile: CustomerProfileDet
           <Card>
             <CardHeader title="Account preferences" />
             <div className="grid gap-3 p-5">
-              <Toggle label="Email receipts" description="Get a receipt after each order." defaultChecked />
-              <Toggle label="SMS updates" description="Delivery texts on the day." defaultChecked />
+              <Toggle label="Email receipts" description="Get a receipt after each order." defaultChecked={profile.emailReceipts} onCheckedChange={(emailReceipts) => savePreferences(emailReceipts, profile.smsUpdates)} />
+              <Toggle label="SMS updates" description="Delivery texts on the day." defaultChecked={profile.smsUpdates} onCheckedChange={(smsUpdates) => savePreferences(profile.emailReceipts, smsUpdates)} />
             </div>
           </Card>
         </div>

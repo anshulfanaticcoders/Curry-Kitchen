@@ -110,7 +110,7 @@ function StoryTitle() {
         hidden: {},
         show: { transition: { staggerChildren: 0.065, delayChildren: 0.12 } },
       }}
-      className="max-w-5xl font-display text-[clamp(3.1rem,8vw,5.9rem)] font-black leading-[1.04] text-white"
+      className="max-w-5xl font-display text-[clamp(3.1rem,8vw,5.9rem)] font-black leading-[1.12] text-white"
     >
       {words.map((word) => (
         <motion.span
@@ -372,7 +372,7 @@ export function OurStoryExperience() {
             <p className="inline-flex rounded-full bg-ink px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-saffron">
               Story of our kitchen
             </p>
-            <h2 className="mt-5 max-w-2xl font-display text-[clamp(2.2rem,5vw,4.25rem)] font-black leading-[1.06]">
+            <h2 className="mt-5 max-w-2xl font-display text-[clamp(2.2rem,5vw,4.25rem)] font-black leading-[1.12]">
               Not restaurant food. Not meal-kit food. Real food with a route.
             </h2>
             <p className="mt-6 max-w-xl text-base font-bold leading-8 text-ink/66">
@@ -429,7 +429,7 @@ export function OurStoryExperience() {
             <p className="inline-flex rounded-full border border-white/14 bg-white/8 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-saffron">
               Main attraction
             </p>
-            <h2 className="mt-5 font-display text-[clamp(2.35rem,5vw,4.7rem)] font-black leading-[1.05]">
+            <h2 className="mt-5 font-display text-[clamp(2.35rem,5vw,4.7rem)] font-black leading-[1.12]">
               From morning prep to dinner at your door.
             </h2>
             <p className="mx-auto mt-5 max-w-2xl text-base font-bold leading-8 text-white/64">
@@ -464,7 +464,7 @@ export function OurStoryExperience() {
             viewport={{ once: true, amount: 0.3 }}
             transition={{ duration: 0.82, ease: easeOut }}
           >
-            <h2 className="max-w-2xl font-display text-[clamp(2.1rem,4.8vw,4.4rem)] font-black leading-[1.06]">
+            <h2 className="max-w-2xl font-display text-[clamp(2.1rem,4.8vw,4.4rem)] font-black leading-[1.12]">
               What makes the service feel different.
             </h2>
             <p className="mt-5 max-w-xl text-base font-bold leading-8 text-ink/66">
@@ -536,7 +536,7 @@ export function OurStoryExperience() {
                   <ShieldCheck size={15} />
                   Built for trust
                 </p>
-                <h2 className="mt-5 font-display text-[clamp(2.15rem,4.6vw,4.35rem)] font-black leading-[1.07]">
+                <h2 className="mt-5 font-display text-[clamp(2.15rem,4.6vw,4.35rem)] font-black leading-[1.12]">
                   Premium, but still personal.
                 </h2>
                 <p className="mt-5 text-base font-bold leading-8 text-white/68">

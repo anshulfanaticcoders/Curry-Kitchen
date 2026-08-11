@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { markOrderPaidAndActivate } from "@/lib/server/checkout";
 import { getStripe } from "@/lib/stripe";
@@ -11,20 +12,31 @@ export async function POST(request: Request) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   try {
-    const event =
-      stripe && webhookSecret && signature
-        ? stripe.webhooks.constructEvent(body, signature, webhookSecret)
-        : JSON.parse(body);
+    if (!stripe || !webhookSecret) {
+      return Response.json({ error: "Stripe webhook is not configured." }, { status: 503 });
+    }
+
+    if (!signature) {
+      return Response.json({ error: "Missing Stripe signature." }, { status: 400 });
+    }
+
+    const event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    const payload = JSON.parse(JSON.stringify(event)) as Prisma.InputJsonValue;
+
+    const existingEvent = await db.stripeEvent.findUnique({ where: { id: event.id } });
+    if (existingEvent?.processed) {
+      return Response.json({ received: true });
+    }
 
     await db.stripeEvent.upsert({
       where: { id: event.id },
       create: {
         id: event.id,
         type: event.type,
-        payload: event,
+        payload,
       },
       update: {
-        payload: event,
+        payload,
       },
     });
 

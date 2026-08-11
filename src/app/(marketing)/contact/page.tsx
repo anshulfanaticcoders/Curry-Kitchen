@@ -1,8 +1,11 @@
 import { ArrowRight, Clock, Mail, MapPin, Phone, Send } from "lucide-react";
+import type { Metadata } from "next";
+import { JsonLd } from "@/components/seo/json-ld";
 import { PageHero } from "@/components/sections/page-hero";
 import { RevealItem, StaggerGroup } from "@/components/ui/animated-section";
 import { ButtonLink, buttonStyles } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/section-heading";
+import { getMarketingMetadata, getSimplePageSchemas } from "@/lib/server/seo";
 
 const contactCards = [
   {
@@ -25,9 +28,15 @@ const contactCards = [
   },
 ];
 
-export default function ContactPage() {
+export function generateMetadata(): Promise<Metadata> {
+  return getMarketingMetadata("/contact");
+}
+
+export default async function ContactPage() {
+  const schemas = await getSimplePageSchemas("/contact");
   return (
     <main>
+      <JsonLd data={schemas} />
       <PageHero
         eyebrow="Contact"
         title="Need help choosing the right tiffin rhythm?"

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ChefHat } from "lucide-react";
+import { AuroraBackground } from "@/components/ui/aurora-background";
 
 export function AuthCard({
   title,
@@ -12,45 +14,50 @@ export function AuthCard({
   footer: React.ReactNode;
 }) {
   return (
-    <main className="min-h-screen bg-ivory">
-      <div className="grid min-h-screen lg:grid-cols-[0.85fr_1.15fr]">
+    <AuroraBackground className="h-auto min-h-screen bg-[#f3f6f8] px-4 py-8 sm:px-8" showRadialGradient={false}>
+      <div data-auth-shell className="relative z-10 grid w-full max-w-[1080px] overflow-hidden rounded-[1.25rem] bg-white shadow-[0_24px_70px_rgba(17,25,39,0.16)] lg:min-h-[38rem] lg:grid-cols-[0.92fr_1.08fr]">
         <section className="dark-band relative hidden overflow-hidden p-10 text-white lg:flex lg:flex-col lg:justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <span className="grid size-11 place-items-center rounded-full bg-saffron font-display text-lg font-black text-ink">
-              CK
-            </span>
-            <span>
-              <span className="block font-display text-xl font-black leading-none">Curry Kitchen</span>
-              <span className="mt-1 block text-xs font-bold uppercase tracking-[0.16em] text-saffron">
-                San Diego tiffin delivery
-              </span>
-            </span>
-          </Link>
-          <div>
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-saffron">Meal plans with control</p>
-            <h1 className="mt-4 max-w-xl font-display text-5xl font-black leading-[1.02]">
-              Homemade meals, cleaner ordering, better package tracking.
-            </h1>
-            <p className="mt-5 max-w-lg text-base font-medium leading-7 text-white/64">
-              Sign in to track package days, pause delivery once, review payments, and buy again.
-            </p>
+          <div className="pointer-events-none absolute inset-0 opacity-45">
+            <div className="absolute -left-20 -top-28 size-80 rounded-full border-[24px] border-saffron/45" />
+            <div className="absolute -bottom-20 left-20 size-80 rounded-full bg-saffron/15 blur-3xl" />
           </div>
+          <div className="relative z-10 text-center">
+            <p className="text-xl font-bold text-white/90">Welcome to</p>
+            <Link href="/" aria-label="Curry Kitchen home" className="mt-14 inline-flex flex-col items-center gap-4">
+              <span className="grid size-24 place-items-center rounded-full bg-white text-masala shadow-[0_14px_30px_rgba(0,0,0,0.2)]">
+                <ChefHat size={48} strokeWidth={2.1} />
+              </span>
+              <span className="font-display text-3xl font-black tracking-[-0.04em]">Curry Kitchen</span>
+            </Link>
+          </div>
+          <p className="relative z-10 mx-auto max-w-[18rem] text-center text-sm leading-6 text-white/70">
+            Homemade meals for busy weeks—planned with care and delivered to your door.
+          </p>
+          <div className="relative z-10 flex justify-center gap-4 text-[10px] font-bold uppercase tracking-[0.12em] text-white/55">
+            <span>Eat well</span>
+            <span className="text-saffron">|</span>
+            <span>Live well</span>
+          </div>
+
+          <svg aria-hidden="true" className="absolute -right-px top-0 z-20 h-full w-20" viewBox="0 0 96 1000" preserveAspectRatio="none">
+            <path
+              d="M46 0C0 65 96 125 46 190C0 255 96 315 46 380C0 445 96 505 46 570C0 635 96 695 46 760C0 825 96 890 46 1000H96V0H46Z"
+              fill="white"
+            />
+          </svg>
         </section>
 
-        <section className="flex items-center justify-center px-5 py-12">
-          <div className="w-full max-w-md rounded-lg border border-ink/10 bg-white p-6 shadow-soft md:p-8">
-            <div>
-              <p className="text-sm font-black uppercase tracking-[0.18em] text-masala">Account</p>
-              <h2 className="mt-3 font-display text-4xl font-black leading-tight">{title}</h2>
-              <p className="mt-3 text-sm leading-6 text-ink/60">{description}</p>
+        <section className="flex items-center justify-center px-6 py-12 sm:px-12 lg:px-20">
+          <div className="w-full max-w-sm">
+            <div className="text-center">
+              <h1 className="font-display text-4xl font-black tracking-[-0.04em] text-ink">{title}</h1>
+              <p className="mt-3 text-sm leading-6 text-ink/55">{description}</p>
             </div>
-            <div className="mt-7">{children}</div>
-            <div className="mt-6 border-t border-ink/10 pt-5 text-sm font-bold text-ink/60">
-              {footer}
-            </div>
+            <div className="mt-8">{children}</div>
+            <div className="mt-7 text-center text-sm text-ink/55">{footer}</div>
           </div>
         </section>
       </div>
-    </main>
+    </AuroraBackground>
   );
 }

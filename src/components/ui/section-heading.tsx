@@ -29,7 +29,7 @@ export function SectionHeading({
           {eyebrow}
         </p>
       ) : null}
-      <h2 className="font-display text-3xl font-black leading-[1.04] text-ink md:text-4xl lg:text-5xl">
+      <h2 className="font-display text-3xl font-black leading-[1.12] text-ink md:text-4xl lg:text-5xl">
         {title}
       </h2>
       {children ? <p className="mt-4 text-base leading-7 text-ink/68">{children}</p> : null}

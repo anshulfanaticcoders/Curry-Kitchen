@@ -1,4 +1,5 @@
 import Image from "next/image";
+import type { Metadata } from "next";
 import {
   ArrowRight,
   CalendarDays,
@@ -11,13 +12,19 @@ import {
   Truck,
 } from "lucide-react";
 import { PackageCard } from "@/components/food/package-card";
+import { JsonLd } from "@/components/seo/json-ld";
 import { HeroSection } from "@/components/sections/hero-section";
 import { TestimonialsCarousel } from "@/components/sections/testimonials-carousel";
 import { RevealItem, StaggerGroup } from "@/components/ui/animated-section";
 import { ButtonLink } from "@/components/ui/button";
 import { getPackagePlans, getTestimonials, getWeeklyMenu } from "@/lib/server/catalog";
+import { getHomeSchemas, getMarketingMetadata } from "@/lib/server/seo";
 
 export const dynamic = "force-dynamic";
+
+export function generateMetadata(): Promise<Metadata> {
+  return getMarketingMetadata("/");
+}
 
 const serviceNotes = [
   {
@@ -58,10 +65,11 @@ const orderingSteps = [
 ];
 
 export default async function Home() {
-  const [packagePlans, weeklyMenu, testimonials] = await Promise.all([
+  const [packagePlans, weeklyMenu, testimonials, schemas] = await Promise.all([
     getPackagePlans(),
     getWeeklyMenu(),
     getTestimonials(),
+    getHomeSchemas(),
   ]);
   const featured = [
     ...packagePlans.filter((plan) => plan.category === "Weekly").slice(0, 1),
@@ -73,6 +81,7 @@ export default async function Home() {
 
   return (
     <main className="overflow-hidden bg-white">
+      <JsonLd data={schemas} />
       <HeroSection />
 
       {/* 2. Promise — LIGHT (warm) */}
@@ -83,7 +92,7 @@ export default async function Home() {
               <RevealItem as="p" className="text-sm font-black uppercase tracking-[0.18em] text-masala">
                 The Curry Kitchen promise
               </RevealItem>
-              <RevealItem as="h2" className="mt-3 max-w-xl font-display text-4xl font-black leading-[1.04] lg:text-5xl">
+              <RevealItem as="h2" className="mt-3 max-w-xl font-display text-4xl font-black leading-[1.12] lg:text-5xl">
                 Homemade food for guilt-free weekday eating.
               </RevealItem>
             </div>
@@ -124,7 +133,7 @@ export default async function Home() {
             <RevealItem as="p" className="text-sm font-black uppercase tracking-[0.18em] text-saffron">
               A calmer order path
             </RevealItem>
-            <RevealItem as="h2" className="mt-3 font-display text-4xl font-black leading-[1.04] lg:text-5xl">
+            <RevealItem as="h2" className="mt-3 font-display text-4xl font-black leading-[1.12] lg:text-5xl">
               Let&apos;s keep the old-school method.
             </RevealItem>
             <RevealItem as="p" className="mt-5 text-base leading-7 text-white/68">
@@ -167,7 +176,7 @@ export default async function Home() {
               <RevealItem as="p" className="text-sm font-black uppercase tracking-[0.18em] text-masala">
                 Menu items
               </RevealItem>
-              <RevealItem as="h2" className="mt-3 max-w-2xl font-display text-4xl font-black leading-[1.04] lg:text-5xl">
+              <RevealItem as="h2" className="mt-3 max-w-2xl font-display text-4xl font-black leading-[1.12] lg:text-5xl">
                 A weekly menu that still feels old school.
               </RevealItem>
             </div>
@@ -231,7 +240,7 @@ export default async function Home() {
                 <PackageOpen size={16} />
                 Featured packages
               </RevealItem>
-              <RevealItem as="h2" className="mt-3 max-w-2xl font-display text-4xl font-black leading-[1.04] lg:text-5xl">
+              <RevealItem as="h2" className="mt-3 max-w-2xl font-display text-4xl font-black leading-[1.12] lg:text-5xl">
                 Weekly trial, monthly fixed, student and military packages.
               </RevealItem>
               <RevealItem as="p" className="mt-4 max-w-xl text-base leading-7 text-white/68">
@@ -281,7 +290,7 @@ export default async function Home() {
               <HeartHandshake size={16} />
               Our story
             </RevealItem>
-            <RevealItem as="h2" className="mt-4 max-w-2xl font-display text-4xl font-black leading-[1.05] lg:text-5xl">
+            <RevealItem as="h2" className="mt-4 max-w-2xl font-display text-4xl font-black leading-[1.12] lg:text-5xl">
               For people who miss Ghar Ka Khana.
             </RevealItem>
             <RevealItem as="p" className="mt-5 max-w-xl text-base font-medium leading-7 text-ink/68">
@@ -321,7 +330,7 @@ export default async function Home() {
               <RevealItem as="p" className="text-sm font-black uppercase tracking-[0.18em] text-saffron">
                 Ready to order
               </RevealItem>
-              <RevealItem as="h2" className="mt-3 max-w-2xl font-display text-4xl font-black leading-[1.04] lg:text-5xl">
+              <RevealItem as="h2" className="mt-3 max-w-2xl font-display text-4xl font-black leading-[1.12] lg:text-5xl">
                 Build your weekly dinner rhythm.
               </RevealItem>
               <RevealItem as="p" className="mt-4 flex items-center gap-2 text-sm font-bold text-white/70">

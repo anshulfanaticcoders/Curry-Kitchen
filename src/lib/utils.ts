@@ -16,6 +16,3 @@ export function formatCurrency(value: number) {
   }).format(value);
 }
 
-export function calculateTaxedTotal(value: number, taxRate = 0.0875) {
-  return Math.round(value * (1 + taxRate));
-}

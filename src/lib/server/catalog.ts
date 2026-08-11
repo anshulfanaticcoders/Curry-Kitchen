@@ -1,15 +1,11 @@
 import {
-  adminOrders as mockAdminOrders,
-  customers as mockCustomers,
   packagePlans as mockPackagePlans,
-  recentOrders as mockRecentOrders,
   testimonials as mockTestimonials,
-  transactions as mockTransactions,
-  upcomingDeliveries as mockUpcomingDeliveries,
   weeklyMenu as mockWeeklyMenu,
 } from "@/lib/mock-data";
 import type {
   AdminOrder,
+  AdminStudentVerification,
   Customer,
   CustomerPackageSummary,
   CustomerProfileDetails,
@@ -21,6 +17,7 @@ import type {
   PackagingRecord,
   ReviewItem,
   Transaction,
+  MenuUploadView,
   WeeklyMenuDay,
 } from "@/lib/types";
 import { getCurrentSession } from "@/lib/auth";
@@ -119,18 +116,22 @@ function mapReviewStatus(status: string): ReviewItem["status"] {
 
 function planFromRecord(plan: {
   id: string;
+  slug: string;
   name: string;
   category: { name: string };
   badge: string | null;
   price: DecimalLike;
-  taxRate: DecimalLike;
   cadence: string;
   servings: string;
   imageUrl: string;
   description: string;
   bestFor: string | null;
   accent: string;
+  updatedAt: Date;
   items: Array<{ name: string; quantity: string | null }>;
+  complimentaryItems: Array<{
+    complimentaryItem: { id: string; name: string; description: string | null };
+  }>;
   addons: Array<{
     addon: { id: string; name: string; description: string | null; price: DecimalLike };
   }>;
@@ -140,17 +141,22 @@ function planFromRecord(plan: {
 
   return {
     id: plan.id,
+    slug: plan.slug,
     name: plan.name,
     category: asPackageCategory(plan.category.name),
     badge: plan.badge ?? titleCase(plan.cadence),
     price: toNumber(plan.price),
-    taxRate: toNumber(plan.taxRate),
     cadence: titleCase(plan.cadence),
     servings: plan.servings,
     image: plan.imageUrl,
     description: plan.description,
     bestFor: plan.bestFor ?? "Everyday meals",
     includes: plan.items.map((item) => (item.quantity ? `${item.quantity} ${item.name}` : item.name)),
+    complimentaryItems: plan.complimentaryItems.map(({ complimentaryItem }) => ({
+      id: complimentaryItem.id,
+      name: complimentaryItem.name,
+      description: complimentaryItem.description ?? "",
+    })),
     addOns: plan.addons.map(({ addon }) => ({
       id: addon.id,
       name: addon.name,
@@ -158,6 +164,7 @@ function planFromRecord(plan: {
       price: toNumber(addon.price),
     })),
     accent,
+    updatedAt: plan.updatedAt.toISOString(),
   };
 }
 
@@ -172,6 +179,10 @@ export async function getPackagePlans(): Promise<PackagePlan[]> {
       include: {
         category: true,
         items: { orderBy: { sortOrder: "asc" } },
+        complimentaryItems: {
+          where: { complimentaryItem: { status: "ACTIVE" } },
+          include: { complimentaryItem: true },
+        },
         addons: {
           where: { addon: { status: "ACTIVE" } },
           include: { addon: true },
@@ -187,6 +198,34 @@ export async function getPackagePlans(): Promise<PackagePlan[]> {
     return plans.map(planFromRecord);
   } catch {
     return mockPackagePlans;
+  }
+}
+
+export async function getPackagePlanBySlug(slug: string): Promise<PackagePlan | null> {
+  if (!hasDatabaseUrl()) {
+    return mockPackagePlans.find((plan) => plan.slug === slug) ?? null;
+  }
+
+  try {
+    const plan = await db.package.findFirst({
+      where: { slug, status: "ACTIVE" },
+      include: {
+        category: true,
+        items: { orderBy: { sortOrder: "asc" } },
+        complimentaryItems: {
+          where: { complimentaryItem: { status: "ACTIVE" } },
+          include: { complimentaryItem: true },
+        },
+        addons: {
+          where: { addon: { status: "ACTIVE" } },
+          include: { addon: true },
+        },
+      },
+    });
+
+    return plan ? planFromRecord(plan) : null;
+  } catch {
+    return mockPackagePlans.find((plan) => plan.slug === slug) ?? null;
   }
 }
 
@@ -223,6 +262,42 @@ export async function getWeeklyMenu(): Promise<WeeklyMenuDay[]> {
   }
 }
 
+export async function getActiveMenuUploads(): Promise<MenuUploadView[]> {
+  if (!hasDatabaseUrl()) {
+    return [];
+  }
+
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Expired menus disappear automatically: only ranges ending today or later
+    // qualify, and the frontend shows at most four at a time.
+    const uploads = await db.menuUpload.findMany({
+      where: { endDate: { gte: today } },
+      orderBy: { startDate: "asc" },
+      take: 4,
+    });
+
+    const rangeLabel = (start: Date, end: Date) => {
+      const format = (date: Date) =>
+        new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(date);
+      return `${format(start)} – ${format(end)}`;
+    };
+
+    return uploads.map((upload) => ({
+      id: upload.id,
+      title: upload.title,
+      fileUrl: upload.fileUrl,
+      isPdf: upload.fileUrl.toLowerCase().endsWith(".pdf"),
+      dateRangeLabel: rangeLabel(upload.startDate, upload.endDate),
+      current: upload.startDate <= new Date(),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function getTestimonials(): Promise<Testimonial[]> {
   if (!hasDatabaseUrl()) {
     return mockTestimonials;
@@ -249,8 +324,7 @@ export async function getTestimonials(): Promise<Testimonial[]> {
 
 export async function getAdminReviews(): Promise<ReviewItem[]> {
   if (!hasDatabaseUrl()) {
-    const { reviewItems } = await import("@/lib/mock-data");
-    return reviewItems;
+    return [];
   }
 
   try {
@@ -273,9 +347,48 @@ export async function getAdminReviews(): Promise<ReviewItem[]> {
   }
 }
 
+export async function getAdminStudentVerifications(): Promise<AdminStudentVerification[]> {
+  if (!hasDatabaseUrl()) {
+    return [];
+  }
+
+  const session = await getCurrentSession();
+
+  if (session?.user?.role !== "ADMIN") {
+    return [];
+  }
+
+  try {
+    const verifications = await db.studentVerification.findMany({
+      include: { customer: true, order: true },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+
+    return verifications.map((verification) => ({
+      id: verification.id,
+      customerName: verification.customer?.name ?? "Unknown customer",
+      customerEmail: verification.customer?.email ?? "",
+      orderNumber: verification.order?.orderNumber ?? null,
+      verificationType:
+        verification.verificationType as AdminStudentVerification["verificationType"],
+      universityName: verification.universityName,
+      studentNumber: verification.studentNumber,
+      idCardUrl: verification.idCardUrl,
+      idCardBackUrl: verification.idCardBackUrl,
+      status: verification.status as AdminStudentVerification["status"],
+      adminNote: verification.adminNote,
+      submittedAt: formatDate(verification.createdAt),
+      reviewedAt: verification.reviewedAt ? formatDate(verification.reviewedAt) : null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function getAdminOrders(): Promise<AdminOrder[]> {
   if (!hasDatabaseUrl()) {
-    return mockAdminOrders;
+    return [];
   }
 
   try {
@@ -307,7 +420,7 @@ export async function getAdminOrders(): Promise<AdminOrder[]> {
 
 export async function getAdminCustomers(): Promise<Customer[]> {
   if (!hasDatabaseUrl()) {
-    return mockCustomers;
+    return [];
   }
 
   try {
@@ -315,14 +428,16 @@ export async function getAdminCustomers(): Promise<Customer[]> {
       include: {
         addresses: { where: { isDefault: true }, take: 1 },
         orders: true,
-        packages: { include: { package: true }, orderBy: { createdAt: "desc" }, take: 1 },
+        packages: { include: { package: true }, orderBy: { createdAt: "desc" } },
       },
       orderBy: { joinedAt: "desc" },
       take: 80,
     });
 
     return customers.map((customer) => {
-      const activePackage = customer.packages[0];
+      const activePackage =
+        customer.packages.find((candidate) => candidate.status === "ACTIVE" || candidate.status === "PAUSED") ??
+        customer.packages[0];
       const spend = customer.orders.reduce((total, order) => total + toNumber(order.total), 0);
       const status =
         activePackage?.status === "PAUSED"
@@ -342,6 +457,10 @@ export async function getAdminCustomers(): Promise<Customer[]> {
         orders: customer.orders.length,
         spend,
         area: customer.addresses[0]?.city ?? "San Diego",
+        activePackageId:
+          activePackage?.status === "ACTIVE" || activePackage?.status === "PAUSED"
+            ? activePackage.id
+            : undefined,
       };
     });
   } catch {
@@ -360,31 +479,7 @@ function formatFullDate(value: Date) {
 
 export async function getAdminPackagingRecord(customerId: string): Promise<PackagingRecord | null> {
   if (!hasDatabaseUrl()) {
-    const customer = mockCustomers.find((item) => item.id === customerId);
-
-    if (!customer) return null;
-
-    return {
-      id: customer.id,
-      name: customer.name,
-      email: customer.email,
-      phone: customer.phone,
-      address: `${customer.area}, San Diego, CA`,
-      packages: [
-        {
-          id: `demo-${customer.id}`,
-          name: customer.plan,
-          status: customer.status,
-          startDate: "Current delivery cycle",
-          deliveryProgress: "Ready for preparation",
-          nextDelivery: "See daily delivery queue",
-          deliveryWindow: "6:00 PM - 8:00 PM",
-          includes: ["See package configuration in the live database"],
-          addons: ["No add-ons recorded in demo mode"],
-          foodPreferences: "No preferences recorded in demo mode",
-        },
-      ],
-    };
+    return null;
   }
 
   try {
@@ -464,7 +559,7 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
 
 export async function getPayments(): Promise<Transaction[]> {
   if (!hasDatabaseUrl()) {
-    return mockTransactions;
+    return [];
   }
 
   try {
@@ -490,7 +585,7 @@ export async function getPayments(): Promise<Transaction[]> {
 
 export async function getCustomerOrders(): Promise<Order[]> {
   if (!hasDatabaseUrl()) {
-    return mockRecentOrders;
+    return [];
   }
 
   try {
@@ -525,7 +620,7 @@ export async function getCustomerOrders(): Promise<Order[]> {
 
 export async function getUpcomingDeliveries(): Promise<Delivery[]> {
   if (!hasDatabaseUrl()) {
-    return mockUpcomingDeliveries;
+    return [];
   }
 
   try {
@@ -572,23 +667,7 @@ const emptyCustomerPackage: CustomerPackageSummary = {
 
 export async function getCustomerPackageSummaries(): Promise<CustomerPackageSummary[]> {
   if (!hasDatabaseUrl()) {
-    const latestOrder = mockRecentOrders[0];
-
-    return latestOrder
-      ? [{
-          id: latestOrder.id,
-          plan: latestOrder.plan,
-          quantity: 1,
-          status: "Active",
-          totalDeliveryDays: 20,
-          usedDeliveryDays: 4,
-          remainingDeliveryDays: 16,
-          customerPauseUsed: false,
-          canSelfPause: true,
-          startDate: "Jul 1",
-          endDate: "Jul 28",
-        }]
-      : [];
+    return [];
   }
 
   try {
@@ -641,8 +720,7 @@ export async function getCustomerPackageSummary(): Promise<CustomerPackageSummar
 
 export async function getCustomerNotifications(): Promise<NotificationItem[]> {
   if (!hasDatabaseUrl()) {
-    const { notifications } = await import("@/lib/mock-data");
-    return notifications;
+    return [];
   }
 
   try {
@@ -675,17 +753,6 @@ export async function getCustomerNotifications(): Promise<NotificationItem[]> {
 }
 
 export async function getCustomerProfileDetails(): Promise<CustomerProfileDetails> {
-  if (!hasDatabaseUrl()) {
-    const { customerProfile } = await import("@/lib/mock-data");
-    return {
-      ...customerProfile,
-      line1: customerProfile.address,
-      city: "San Diego",
-      state: "CA",
-      postalCode: "92101",
-    };
-  }
-
   try {
     const customer = await getCurrentCustomer();
 
@@ -696,6 +763,8 @@ export async function getCustomerProfileDetails(): Promise<CustomerProfileDetail
         name: session?.user?.name ?? "Customer",
         email: session?.user?.email ?? "",
         phone: "",
+        emailReceipts: true,
+        smsUpdates: false,
         plan: "No active plan",
         renewalDate: "Not scheduled",
         address: "No default address",
@@ -724,6 +793,8 @@ export async function getCustomerProfileDetails(): Promise<CustomerProfileDetail
       name: fullCustomer?.name ?? customer.name,
       email: fullCustomer?.email ?? customer.email,
       phone: fullCustomer?.phone ?? "",
+      emailReceipts: fullCustomer?.emailReceipts ?? true,
+      smsUpdates: fullCustomer?.smsUpdates ?? false,
       plan: currentPackage?.package.name ?? "No active plan",
       renewalDate: currentPackage?.endDate ? formatDate(currentPackage.endDate) : "Not scheduled",
       address: address
@@ -746,6 +817,8 @@ export async function getCustomerProfileDetails(): Promise<CustomerProfileDetail
       name: session?.user?.name ?? "Customer",
       email: session?.user?.email ?? "",
       phone: "",
+      emailReceipts: true,
+      smsUpdates: false,
       plan: "No active plan",
       renewalDate: "Not scheduled",
       address: "No default address",
@@ -760,7 +833,7 @@ export async function getCustomerProfileDetails(): Promise<CustomerProfileDetail
 
 export async function getCustomerPayments(): Promise<Transaction[]> {
   if (!hasDatabaseUrl()) {
-    return mockTransactions;
+    return [];
   }
 
   try {

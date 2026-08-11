@@ -20,7 +20,6 @@ function isCartItem(value: unknown): value is PackageCartItemInput {
     typeof item.packageId === "string" &&
     item.packageId.length > 0 &&
     Array.isArray(item.addonIds) &&
-    item.addonIds.length > 0 &&
     item.addonIds.every((id) => typeof id === "string" && id.length > 0) &&
     typeof item.startDate === "string" &&
     /^\d{4}-\d{2}-\d{2}$/.test(item.startDate)

@@ -1,9 +1,11 @@
 "use client";
 
+import { useSession } from "next-auth/react";
 import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   useSyncExternalStore,
@@ -11,22 +13,44 @@ import {
 } from "react";
 import {
   MAX_PACKAGE_CART_ITEMS,
-  packageCartQuery,
   parsePackageCart,
   type PackageCartItemInput,
 } from "@/lib/package-cart";
 import type { PackagePlan } from "@/lib/types";
 
-const STORAGE_KEY = "currykitchen-package-cart";
+// v2: the stored cart carries an owner ("guest" or a user id) so one
+// account's cart never leaks into another account in the same browser.
+const STORAGE_KEY = "currykitchen-package-cart-v2";
 const STORAGE_EVENT = "currykitchen-package-cart-change";
 const EMPTY_CART: PackageCartItemInput[] = [];
+const GUEST_OWNER = "guest";
+
+type CartEnvelope = { owner: string; items: PackageCartItemInput[] };
+
+const LEGACY_PACKAGE_NAMES: Record<string, string[]> = {
+  "monthly-small": ["Small 4 Roti Tiffin"],
+  "monthly-regular": ["Regular 8 Roti Tiffin"],
+  "monthly-xl": ["Extra Large 12 Roti Tiffin"],
+  "weekly-trial": ["Weekly Trial Pack"],
+  "student-pack": ["Student & Military Saver Pack", "Student Saver Pack"],
+};
+
+const LEGACY_ADDON_NAMES: Record<string, string> = {
+  rice: "Rice bowl",
+  "extra-yogurt": "Extra yogurt",
+  "spice-note": "Spice note",
+  dessert: "Extra dessert",
+  salad: "Extra salad",
+  roti: "Extra roti",
+};
 
 let cachedStorageValue: string | null | undefined;
-let cachedCartItems: PackageCartItemInput[] = EMPTY_CART;
+let cachedEnvelope: CartEnvelope = { owner: GUEST_OWNER, items: EMPTY_CART };
 
 type PackageCartContextValue = {
   items: PackageCartItemInput[];
   plansById: Record<string, PackagePlan>;
+  catalogReady: boolean;
   hydrated: boolean;
   cartOpen: boolean;
   pulseKey: number;
@@ -61,20 +85,75 @@ function normalizeCart(items: PackageCartItemInput[]) {
     }));
 }
 
-function readStoredCart() {
-  if (typeof window === "undefined") return EMPTY_CART;
+function migrateCartToCatalog(items: PackageCartItemInput[], plans: PackagePlan[]) {
+  return items.flatMap((item) => {
+    const matchingPlan =
+      plans.find((plan) => plan.id === item.packageId) ??
+      plans.find((plan) => LEGACY_PACKAGE_NAMES[item.packageId]?.includes(plan.name));
+
+    if (!matchingPlan) {
+      return [];
+    }
+
+    const addonIds = Array.from(
+      new Set(
+        item.addonIds.flatMap((addonId) => {
+          const matchingAddon =
+            matchingPlan.addOns.find((addon) => addon.id === addonId) ??
+            matchingPlan.addOns.find((addon) => addon.name === LEGACY_ADDON_NAMES[addonId]);
+
+          return matchingAddon ? [matchingAddon.id] : [];
+        }),
+      ),
+    );
+
+    return [{ ...item, packageId: matchingPlan.id, addonIds }];
+  });
+}
+
+function parseEnvelope(storedValue: string | null): CartEnvelope {
+  if (!storedValue) return { owner: GUEST_OWNER, items: EMPTY_CART };
+
+  try {
+    const parsed: unknown = JSON.parse(storedValue);
+
+    if (Array.isArray(parsed)) {
+      return { owner: GUEST_OWNER, items: normalizeCart(parsePackageCart(storedValue)) };
+    }
+
+    if (parsed && typeof parsed === "object" && Array.isArray((parsed as CartEnvelope).items)) {
+      const envelope = parsed as { owner?: unknown; items: unknown[] };
+
+      return {
+        owner: typeof envelope.owner === "string" && envelope.owner ? envelope.owner : GUEST_OWNER,
+        items: normalizeCart(parsePackageCart(JSON.stringify(envelope.items))),
+      };
+    }
+  } catch {
+    // Fall through to an empty guest cart.
+  }
+
+  return { owner: GUEST_OWNER, items: EMPTY_CART };
+}
+
+function readStoredEnvelope(): CartEnvelope {
+  if (typeof window === "undefined") return { owner: GUEST_OWNER, items: EMPTY_CART };
 
   try {
     const storedValue = window.localStorage.getItem(STORAGE_KEY);
 
-    if (storedValue === cachedStorageValue) return cachedCartItems;
+    if (storedValue === cachedStorageValue) return cachedEnvelope;
 
     cachedStorageValue = storedValue;
-    cachedCartItems = normalizeCart(parsePackageCart(storedValue));
-    return cachedCartItems;
+    cachedEnvelope = parseEnvelope(storedValue);
+    return cachedEnvelope;
   } catch {
-    return cachedCartItems;
+    return cachedEnvelope;
   }
+}
+
+function readStoredCart() {
+  return readStoredEnvelope().items;
 }
 
 function getServerCartSnapshot() {
@@ -97,21 +176,26 @@ function subscribeToCart(onStoreChange: () => void) {
   };
 }
 
-function persistCart(nextItems: PackageCartItemInput[]) {
+function persistEnvelope(owner: string, nextItems: PackageCartItemInput[]) {
   const normalizedItems = normalizeCart(nextItems);
-  const serializedItems = JSON.stringify(normalizedItems);
+  const envelope: CartEnvelope = { owner, items: normalizedItems };
+  const serialized = JSON.stringify(envelope);
 
-  cachedStorageValue = serializedItems;
-  cachedCartItems = normalizedItems;
+  cachedStorageValue = serialized;
+  cachedEnvelope = envelope;
 
   try {
-    window.localStorage.setItem(STORAGE_KEY, serializedItems);
+    window.localStorage.setItem(STORAGE_KEY, serialized);
   } catch {
     // Memory remains the source of truth for this visit if storage is unavailable.
   }
 
   window.dispatchEvent(new Event(STORAGE_EVENT));
   return normalizedItems;
+}
+
+function persistCart(nextItems: PackageCartItemInput[]) {
+  return persistEnvelope(readStoredEnvelope().owner, nextItems);
 }
 
 function subscribeToHydration() {
@@ -127,8 +211,10 @@ function getServerHydrationState() {
 }
 
 export function PackageCartProvider({ children }: { children: ReactNode }) {
+  const { data: session, status: sessionStatus } = useSession();
   const items = useSyncExternalStore(subscribeToCart, readStoredCart, getServerCartSnapshot);
   const [plansById, setPlansById] = useState<Record<string, PackagePlan>>({});
+  const [catalogReady, setCatalogReady] = useState(false);
   const hydrated = useSyncExternalStore(
     subscribeToHydration,
     getClientHydrationState,
@@ -136,8 +222,36 @@ export function PackageCartProvider({ children }: { children: ReactNode }) {
   );
   const [cartOpen, setCartOpen] = useState(false);
   const [pulseKey, setPulseKey] = useState(0);
+  const sessionUserId = session?.user?.id;
+
+  // Keep the cart scoped to whoever is using the browser:
+  // - a guest cart is adopted by the account that signs in (guest -> checkout flow),
+  // - a cart owned by a DIFFERENT account is cleared on sign-in,
+  // - signing out clears the departing account's cart.
+  useEffect(() => {
+    if (sessionStatus === "loading" || typeof window === "undefined") return;
+
+    const envelope = readStoredEnvelope();
+
+    if (sessionUserId) {
+      if (envelope.owner === GUEST_OWNER) {
+        persistEnvelope(sessionUserId, envelope.items);
+      } else if (envelope.owner !== sessionUserId) {
+        persistEnvelope(sessionUserId, EMPTY_CART);
+      }
+    } else if (envelope.owner !== GUEST_OWNER) {
+      persistEnvelope(GUEST_OWNER, EMPTY_CART);
+    }
+  }, [sessionStatus, sessionUserId]);
 
   const registerPlans = useCallback((plans: PackagePlan[]) => {
+    const storedItems = readStoredCart();
+    const migratedItems = normalizeCart(migrateCartToCatalog(storedItems, plans));
+
+    if (JSON.stringify(storedItems) !== JSON.stringify(migratedItems)) {
+      persistCart(migratedItems);
+    }
+
     setPlansById((current) => {
       const next = { ...current };
 
@@ -147,6 +261,7 @@ export function PackageCartProvider({ children }: { children: ReactNode }) {
 
       return next;
     });
+    setCatalogReady(true);
   }, []);
 
   const replaceCart = useCallback((nextItems: PackageCartItemInput[]) => {
@@ -172,7 +287,7 @@ export function PackageCartProvider({ children }: { children: ReactNode }) {
   }, [items]);
 
   const checkoutHref = useMemo(
-    () => (items.length ? `/checkout?cart=${packageCartQuery(items)}` : "/packages#build-plan"),
+    () => (items.length ? "/checkout" : "/packages#build-plan"),
     [items],
   );
 
@@ -180,6 +295,7 @@ export function PackageCartProvider({ children }: { children: ReactNode }) {
     () => ({
       items,
       plansById,
+      catalogReady,
       hydrated,
       cartOpen,
       pulseKey,
@@ -195,6 +311,7 @@ export function PackageCartProvider({ children }: { children: ReactNode }) {
     [
       addItem,
       cartOpen,
+      catalogReady,
       checkoutHref,
       hydrated,
       items,

@@ -23,7 +23,7 @@ export function MenuDayCard({ item }: { item: WeeklyMenuDay }) {
         </div>
         <div className="absolute bottom-4 left-4 right-4 text-white">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-saffron">{item.date}</p>
-          <h3 className="mt-0.5 font-display text-3xl font-black leading-none">{item.day}</h3>
+          <h3 className="mt-0.5 font-display text-3xl font-black leading-[1.12]">{item.day}</h3>
         </div>
       </div>
 

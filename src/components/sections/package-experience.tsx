@@ -6,6 +6,7 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
+  Gift,
   PackagePlus,
   ShoppingBag,
   X,
@@ -31,7 +32,7 @@ import {
 import type { PackageCategory, PackagePlan } from "@/lib/types";
 import { cn, formatCurrency } from "@/lib/utils";
 
-function categoryLabel(category: PackageCategory | "All") {
+function categoryLabel(category: PackageCategory) {
   return category === "Student" ? "Student / Military" : category;
 }
 
@@ -54,32 +55,27 @@ export function PackageExperience({
     addItem,
     updateItem,
   } = usePackageCart();
-  const categories: Array<PackageCategory | "All"> = [
-    "All",
-    ...Array.from(new Set(plans.map((plan) => plan.category))),
-  ];
+  const categories: PackageCategory[] = Array.from(
+    new Set(plans.map((plan) => plan.category)),
+  );
   const validInitialCart = initialCartItems.filter((item) =>
     plans.some((plan) => plan.id === item.packageId),
   );
-  const [category, setCategory] = useState<(typeof categories)[number]>("All");
+  const [category, setCategory] = useState<PackageCategory>("Monthly");
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [editingLineId, setEditingLineId] = useState<string | undefined>();
-  const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
+  const [editingAddonIds, setEditingAddonIds] = useState<string[]>([]);
   const [startDate, setStartDate] = useState(nextEligiblePackageStartInput());
   const appliedInitialCartKey = useRef<string | null>(null);
   const handledRouteKey = useRef<string | null>(null);
 
   const visiblePlans = useMemo(
-    () => plans.filter((plan) => category === "All" || plan.category === category),
+    () => plans.filter((plan) => plan.category === category),
     [category, plans],
   );
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId);
-  const selectedAddonRecords =
-    selectedPlan?.addOns.filter((addon) => selectedAddOns.includes(addon.id)) ?? [];
-  const draftTotal = selectedPlan
-    ? selectedPlan.price + selectedAddonRecords.reduce((total, addon) => total + addon.price, 0)
-    : 0;
+  const draftTotal = selectedPlan?.price ?? 0;
   const startDateError = packageStartDateIssue(startDate);
   const minimumStartDate = nextEligiblePackageStartInput();
   const initialCartKey = validInitialCart.length ? packageCartQuery(validInitialCart) : "";
@@ -92,9 +88,15 @@ export function PackageExperience({
   useEffect(() => {
     if (!initialCartKey || appliedInitialCartKey.current === initialCartKey) return;
 
-    replaceCart(validInitialCart);
+    // Legacy links may still carry a ?cart= snapshot. The stored cart is the
+    // source of truth, so a URL snapshot is only imported into an empty cart —
+    // otherwise stale URLs would resurrect removed packages.
+    if (cartItems.length === 0) {
+      replaceCart(validInitialCart);
+    }
+
     appliedInitialCartKey.current = initialCartKey;
-  }, [initialCartKey, replaceCart, validInitialCart]);
+  }, [cartItems.length, initialCartKey, replaceCart, validInitialCart]);
 
   useEffect(() => {
     if (handledRouteKey.current === routeKey) return;
@@ -115,7 +117,7 @@ export function PackageExperience({
 
       setSelectedPlanId(plan.id);
       setEditingLineId(editItem?.lineId);
-      setSelectedAddOns(editItem?.addonIds ?? []);
+      setEditingAddonIds(editItem?.addonIds ?? []);
       setStartDate(editItem?.startDate ?? nextEligiblePackageStartInput());
       setModalOpen(true);
       handledRouteKey.current = routeKey;
@@ -145,33 +147,13 @@ export function PackageExperience({
   function openPlan(plan: PackagePlan, item?: PackageCartItemInput) {
     setSelectedPlanId(plan.id);
     setEditingLineId(item?.lineId);
-    setSelectedAddOns(item?.addonIds ?? []);
+    setEditingAddonIds(item?.addonIds ?? []);
     setStartDate(item?.startDate ?? nextEligiblePackageStartInput());
     setModalOpen(true);
   }
 
-  function toggleAddOn(id: string) {
-    setSelectedAddOns((current) =>
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
-    );
-  }
-
   function saveConfiguredPackage() {
     if (!selectedPlan) return null;
-
-    if (!selectedPlan.addOns.length) {
-      toast.error("Package is temporarily unavailable", {
-        description: "An admin needs to assign at least one active add-on to this package.",
-      });
-      return null;
-    }
-
-    if (!selectedAddOns.length) {
-      toast.error("Choose an add-on", {
-        description: "At least one add-on is required for every package.",
-      });
-      return null;
-    }
 
     if (startDateError) {
       toast.error("Choose another start date", { description: startDateError });
@@ -181,7 +163,7 @@ export function PackageExperience({
     const configuredItem: PackageCartItemInput = {
       lineId: editingLineId ?? makePackageCartLineId(),
       packageId: selectedPlan.id,
-      addonIds: selectedAddOns,
+      addonIds: editingLineId ? editingAddonIds : [],
       startDate,
     };
 
@@ -228,7 +210,25 @@ export function PackageExperience({
     const result = saveConfiguredPackage();
     if (!result) return;
 
-    router.push(`/checkout?cart=${packageCartQuery(result.nextItems)}`);
+    router.push("/checkout");
+  }
+
+  function customizePackage() {
+    if (!selectedPlan) return;
+
+    if (startDateError) {
+      toast.error("Choose another start date", { description: startDateError });
+      return;
+    }
+
+    const params = new URLSearchParams({
+      plan: selectedPlan.id,
+      startDate,
+    });
+
+    if (editingLineId) params.set("edit", editingLineId);
+
+    router.push(`/packages/customize?${params.toString()}`);
   }
 
   return (
@@ -236,7 +236,7 @@ export function PackageExperience({
       <div className="mb-8 flex flex-col gap-5 border-b border-ink/10 pb-7 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm font-black uppercase tracking-[0.18em] text-masala">Choose your tiffin</p>
-          <h2 className="mt-2 font-display text-4xl font-black leading-[1.06]">Pick a plan, then make it yours.</h2>
+          <h2 className="mt-2 font-display text-4xl font-black leading-[1.12]">Pick a plan, then make it yours.</h2>
         </div>
         <div className="flex flex-wrap gap-2">
           {categories.map((item) => (
@@ -329,53 +329,34 @@ export function PackageExperience({
                         </li>
                       ))}
                     </ul>
-                    <div className="mt-6 rounded-lg border border-saffron/24 bg-rose p-4">
-                      <p className="text-xs font-black uppercase tracking-[0.15em] text-masala">Required customization</p>
-                      <p className="mt-1.5 text-sm font-bold leading-5 text-ink/68">Choose at least one add-on before this package can be added.</p>
+                    {selectedPlan.complimentaryItems.length ? (
+                      <div className="mt-6 rounded-lg border border-saffron/30 bg-rose p-4">
+                        <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.15em] text-masala">
+                          <Gift size={15} /> Complimentary with this plan
+                        </p>
+                        <ul className="mt-3 grid gap-2">
+                          {selectedPlan.complimentaryItems.map((item) => (
+                            <li key={item.id} className="flex gap-2 text-sm font-bold text-ink/78">
+                              <Check size={16} className="mt-0.5 shrink-0 text-masala" />
+                              <span>
+                                {item.name}
+                                {item.description ? <span className="block text-xs font-semibold text-ink/55">{item.description}</span> : null}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                    <div className="mt-6 rounded-lg border border-leaf/24 bg-mint p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.15em] text-leaf">Customization is optional</p>
+                      <p className="mt-1.5 text-sm font-bold leading-5 text-ink/68">Add this plan as-is, or choose extras on the next page.</p>
                     </div>
                   </div>
 
                   <div>
-                    <div className="flex items-end justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-extrabold">Choose add-ons</p>
-                        <p className="mt-1 text-xs font-bold text-ink/48">Required · pick one or more</p>
-                      </div>
-                      <span className="text-xs font-black text-ink/48">{selectedAddOns.length} selected</span>
-                    </div>
-                    <div className="mt-4 grid gap-2">
-                      {selectedPlan.addOns.map((addOn) => {
-                        const active = selectedAddOns.includes(addOn.id);
-
-                        return (
-                          <button
-                            key={addOn.id}
-                            type="button"
-                            aria-pressed={active}
-                            onClick={() => toggleAddOn(addOn.id)}
-                            className={cn(
-                              "flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition",
-                              active
-                                ? "border-leaf bg-mint"
-                                : "border-ink/10 bg-white hover:border-saffron/55 hover:bg-rose/45",
-                            )}
-                          >
-                            <span className="flex min-w-0 items-center gap-3">
-                              <span className={cn("grid size-5 shrink-0 place-items-center rounded-full border", active ? "border-leaf bg-leaf text-white" : "border-ink/20 bg-white")}>
-                                {active ? <Check size={12} /> : null}
-                              </span>
-                              <span className="min-w-0">
-                                <span className="block text-sm font-extrabold">{addOn.name}</span>
-                                <span className="block truncate text-xs font-bold text-ink/50">{addOn.description}</span>
-                              </span>
-                            </span>
-                            <span className="shrink-0 text-sm font-black">+{formatCurrency(addOn.price)}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <label className="mt-6 grid gap-2 text-sm font-extrabold">
+                    <p className="text-sm font-extrabold">When should it start?</p>
+                    <p className="mt-1 text-xs font-bold text-ink/48">Choose your first eligible delivery date.</p>
+                    <label className="mt-5 grid gap-2 text-sm font-extrabold">
                       Package start date
                       <span className="relative">
                         <CalendarDays className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink/36" size={18} />
@@ -406,10 +387,14 @@ export function PackageExperience({
                   </div>
                   <span className="font-display text-3xl font-black">{formatCurrency(draftTotal)}</span>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <Button variant="secondary" className="w-full" onClick={selectAnotherPlan}>
                     <PackagePlus size={18} />
                     {editingLineId ? "Update cart" : "Add to cart"}
+                  </Button>
+                  <Button variant="dark" className="w-full" onClick={customizePackage}>
+                    Customize
+                    <ArrowRight size={17} />
                   </Button>
                   <Button className="w-full" onClick={proceedToPayment}>
                     <ShoppingBag size={18} />

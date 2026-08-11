@@ -1,25 +1,29 @@
 import type { Metadata } from "next";
-import { Lato, Merienda } from "next/font/google";
+import { IBM_Plex_Sans, Plus_Jakarta_Sans } from "next/font/google";
 import { AppProviders } from "@/components/providers/app-providers";
+import { getSeoSettings, getSiteOrigin } from "@/lib/server/seo";
 import "./globals.css";
 
-const display = Merienda({
+const display = Plus_Jakarta_Sans({
   variable: "--font-display",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800", "900"],
 });
 
-const body = Lato({
+const body = IBM_Plex_Sans({
   variable: "--font-body",
   subsets: ["latin"],
-  weight: ["400", "700", "900"],
+  weight: ["400", "500", "600", "700"],
 });
 
-export const metadata: Metadata = {
-  title: "Curry Kitchen - San Diego Tiffin Delivery",
-  description:
-    "Homemade Indian meal plans, weekly menus, and tiffin delivery for San Diego customers.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSeoSettings();
+  return {
+    metadataBase: new URL(getSiteOrigin()),
+    title: "Curry Kitchen - San Diego Tiffin Delivery",
+    description: settings.defaultDescription,
+    verification: settings.googleVerification ? { google: settings.googleVerification } : undefined,
+  };
+}
 
 export default function RootLayout({
   children,

@@ -1,9 +1,12 @@
 import Image from "next/image";
+import type { Metadata } from "next";
 import { ArrowRight, BookOpen, CalendarDays, Clock3 } from "lucide-react";
 import { PageHero } from "@/components/sections/page-hero";
 import { RevealItem, StaggerGroup } from "@/components/ui/animated-section";
 import { ButtonLink } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/section-heading";
+import { JsonLd } from "@/components/seo/json-ld";
+import { getMarketingMetadata, getSimplePageSchemas } from "@/lib/server/seo";
 
 const posts = [
   {
@@ -32,9 +35,15 @@ const posts = [
   },
 ];
 
-export default function BlogPage() {
+export function generateMetadata(): Promise<Metadata> {
+  return getMarketingMetadata("/blog");
+}
+
+export default async function BlogPage() {
+  const schemas = await getSimplePageSchemas("/blog");
   return (
     <main>
+      <JsonLd data={schemas} />
       <PageHero
         eyebrow="Blog"
         title="Meal planning notes from the Curry Kitchen counter."

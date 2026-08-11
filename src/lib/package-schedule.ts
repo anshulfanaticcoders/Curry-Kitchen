@@ -51,56 +51,56 @@ function addDays(value: Date, days: number) {
   return date;
 }
 
-function isWeekend(value: Date) {
-  const day = value.getUTCDay();
-  return day === 0 || day === 6;
+function isDeliveryDay(value: Date, deliveryWeekdays: number[]) {
+  return deliveryWeekdays.includes(value.getUTCDay());
 }
 
-export function nextEligiblePackageStartDate(from = new Date()) {
+export function nextEligiblePackageStartDate(from = new Date(), deliveryWeekdays = [1, 2, 3, 4, 5]) {
   let cursor = inputToDate(businessDateInput(from));
   cursor = addDays(cursor, 1);
 
-  while (isWeekend(cursor)) {
+  while (!isDeliveryDay(cursor, deliveryWeekdays)) {
     cursor = addDays(cursor, 1);
   }
 
   return cursor;
 }
 
-export function nextEligiblePackageStartInput(from = new Date()) {
-  return dateToInput(nextEligiblePackageStartDate(from));
+export function nextEligiblePackageStartInput(from = new Date(), deliveryWeekdays = [1, 2, 3, 4, 5]) {
+  return dateToInput(nextEligiblePackageStartDate(from, deliveryWeekdays));
 }
 
-export function validatePackageStartInput(value: string) {
+export function validatePackageStartInput(value: string, deliveryWeekdays = [1, 2, 3, 4, 5], now = new Date()) {
   const date = inputToDate(value);
+  const earliestDate = dateToInput(nextEligiblePackageStartDate(now, deliveryWeekdays));
 
-  if (value <= businessDateInput()) {
-    throw new Error("Start date must be tomorrow or later.");
+  if (value < earliestDate) {
+    throw new Error("Start date must be the next available delivery day or later.");
   }
 
-  if (isWeekend(date)) {
-    throw new Error("Weekend delivery is off. Choose a Monday to Friday start date.");
+  if (!isDeliveryDay(date, deliveryWeekdays)) {
+    throw new Error("Choose a configured delivery day for your package start.");
   }
 
   return date;
 }
 
-export function packageStartDateIssue(value: string) {
+export function packageStartDateIssue(value: string, deliveryWeekdays = [1, 2, 3, 4, 5]) {
   try {
-    validatePackageStartInput(value);
+    validatePackageStartInput(value, deliveryWeekdays);
     return "";
   } catch (error) {
     return error instanceof Error ? error.message : "Choose a valid package start date.";
   }
 }
 
-export function calculateDeliveryDates(totalDays: number, startDate: Date) {
+export function calculateDeliveryDates(totalDays: number, startDate: Date, deliveryWeekdays = [1, 2, 3, 4, 5]) {
   const dates: Date[] = [];
   const cursor = new Date(startDate);
   cursor.setUTCHours(18, 0, 0, 0);
 
   while (dates.length < totalDays) {
-    if (!isWeekend(cursor)) {
+    if (isDeliveryDay(cursor, deliveryWeekdays)) {
       dates.push(new Date(cursor));
     }
 

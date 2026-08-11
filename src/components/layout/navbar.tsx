@@ -21,6 +21,7 @@ import { PackageCartDrawer } from "@/components/cart/package-cart-drawer";
 import { usePackageCart } from "@/components/providers/package-cart-provider";
 import { ButtonLink, buttonStyles } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { PackagePlan } from "@/lib/types";
 
 const links = [
   { href: "/", label: "Home" },
@@ -30,6 +31,11 @@ const links = [
   { href: "/#reviews", label: "Reviews" },
   { href: "/contact", label: "Contact" },
 ];
+
+// Pages that open with a full-width dark hero, where the glassy dark header
+// treatment is legible. Light-topped pages (about, package detail, customize)
+// get the white pill instead.
+const darkHeroPaths = new Set(["/", "/menu", "/packages", "/blog", "/contact", "/faq", "/checkout"]);
 
 function initialsFromSession(name?: string | null, email?: string | null) {
   const source = name?.trim() || email?.split("@")[0] || "CK";
@@ -42,16 +48,16 @@ function initialsFromSession(name?: string | null, email?: string | null) {
     .toUpperCase();
 }
 
-export function Navbar() {
+export function Navbar({ plans }: { plans: PackagePlan[] }) {
   const pathname = usePathname();
   const { data: session, status } = useSession();
-  const { items: cartItems, openCart, pulseKey } = usePackageCart();
+  const { items: cartItems, openCart, pulseKey, registerPlans } = usePackageCart();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [pastHero, setPastHero] = useState(false);
   const profileRef = useRef<HTMLDivElement | null>(null);
-  const transparent = pathname === "/" && !pastHero && !open;
+  const transparent = darkHeroPaths.has(pathname) && !pastHero && !open;
   const user = session?.user;
   const isAdmin = user?.role === "ADMIN";
   const dashboardHref = isAdmin ? "/admin" : "/dashboard";
@@ -73,6 +79,10 @@ export function Navbar() {
       window.removeEventListener("resize", updateHeader);
     };
   }, []);
+
+  useEffect(() => {
+    registerPlans(plans);
+  }, [plans, registerPlans]);
 
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
@@ -129,7 +139,7 @@ export function Navbar() {
           <span className="grid size-8 place-items-center rounded-full bg-saffron font-black text-ink">
             {userInitials}
           </span>
-          <span className="hidden xl:block">{userLabel}</span>
+          <span className="sr-only">{userLabel}</span>
           <ChevronDown
             size={16}
             className={cn("transition", profileOpen && "rotate-180")}
@@ -191,12 +201,7 @@ export function Navbar() {
 
   return (
     <>
-      <header
-      className={cn(
-        "z-50 transition duration-500",
-        pathname === "/" ? "fixed inset-x-0 top-4" : "sticky top-0 bg-white/88 py-3 backdrop-blur-xl",
-      )}
-    >
+      <header className="fixed inset-x-0 top-4 z-50 transition duration-500">
       <div
         className={cn(
           "section-shell flex min-h-16 items-center justify-between rounded-[2rem] border px-3 py-2 pl-4 transition duration-500 md:px-4",
@@ -222,7 +227,7 @@ export function Navbar() {
 
           <nav
             className={cn(
-              "mx-8 hidden items-center gap-1 rounded-full border p-1 min-[1240px]:flex",
+              "mx-6 hidden items-center gap-1 rounded-full border p-1 min-[1240px]:flex",
               transparent ? "border-white/12 bg-white/8" : "border-ink/10 bg-ink/[0.03]",
             )}
           >

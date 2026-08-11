@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fail, ok } from "@/lib/action-result";
 import { getCurrentSession } from "@/lib/auth";
+import { getBusinessRules } from "@/lib/business-rules";
 import { db } from "@/lib/db";
 
 const profileSchema = z.object({
@@ -85,6 +86,10 @@ export async function saveCustomerProfileAction(formData: FormData) {
 export async function requestCustomerPauseAction(customerPackageId: string, reason?: string) {
   try {
     const user = await getSessionUser();
+    const rules = await getBusinessRules();
+    if (!rules.enableCheckoutPauses) {
+      return fail("Customer package pauses are not available right now.");
+    }
     const customerPackage = await db.customerPackage.findUnique({
       where: { id: customerPackageId },
       include: { customer: true },
@@ -174,5 +179,31 @@ export async function markAllNotificationsReadAction() {
     return ok({ userId: user.id }, "All notifications marked read.");
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Notifications could not be updated.");
+  }
+}
+
+export async function saveCustomerCommunicationPreferencesAction(
+  emailReceipts: boolean,
+  smsUpdates: boolean,
+) {
+  try {
+    const user = await getSessionUser();
+
+    await db.customer.upsert({
+      where: { userId: user.id },
+      create: {
+        userId: user.id,
+        name: user.name?.trim() || user.email?.split("@")[0] || "Curry Kitchen customer",
+        email: user.email ?? "",
+        emailReceipts,
+        smsUpdates,
+      },
+      update: { emailReceipts, smsUpdates },
+    });
+
+    revalidatePath("/dashboard/profile");
+    return ok({ userId: user.id }, "Communication preferences updated.");
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Preferences could not be updated.");
   }
 }

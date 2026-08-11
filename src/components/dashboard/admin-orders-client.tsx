@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Drawer, Tabs } from "@/components/dashboard/interactive";
 import { Card, Field, PageHeader, Select, Table, Td, Th } from "@/components/dashboard/primitives";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { updateOrderStatusAction } from "@/lib/actions/admin";
 import type { AdminOrder } from "@/lib/types";
@@ -163,10 +163,10 @@ export function AdminOrdersClient({ orders }: { orders: AdminOrder[] }) {
         title="Orders"
         description="Track and update every tiffin order across the delivery week."
         action={
-          <Button variant="secondary">
+          <ButtonLink href="/api/admin/orders/export" variant="secondary">
             <Filter size={18} />
-            Export
-          </Button>
+            Export CSV
+          </ButtonLink>
         }
       />
       <Tabs

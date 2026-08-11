@@ -16,7 +16,6 @@ import type {
   RevenuePoint,
   SeoEntry,
   Tag,
-  TaxRate,
   Transaction,
   WeeklyMenuDay,
 } from "./types";
@@ -24,11 +23,11 @@ import type {
 export const packagePlans: PackagePlan[] = [
   {
     id: "monthly-small",
+    slug: "monthly-small",
     name: "Small 4 Roti Tiffin",
     category: "Monthly",
     badge: "Starter favorite",
     price: 250,
-    taxRate: 0.05,
     cadence: "5 days a week",
     servings: "4 roti, daal, sabzi, salad",
     image:
@@ -36,7 +35,10 @@ export const packagePlans: PackagePlan[] = [
     description:
       "Balanced daily comfort meals for light appetites, students, and busy professionals.",
     bestFor: "Light appetite",
-    includes: ["8oz daal", "6oz sabzi", "Yogurt 5 days", "Dessert once weekly"],
+    includes: ["8oz daal", "6oz sabzi", "Dessert once weekly"],
+    complimentaryItems: [
+      { id: "raita", name: "Cucumber raita", description: "Cooling yogurt and cucumber side." },
+    ],
     addOns: [
       { id: "rice", name: "Rice bowl", description: "Replace 2 roti", price: 30 },
       { id: "extra-yogurt", name: "Extra yogurt", description: "Daily 6oz cup", price: 24 },
@@ -45,11 +47,11 @@ export const packagePlans: PackagePlan[] = [
   },
   {
     id: "monthly-regular",
+    slug: "monthly-regular",
     name: "Regular 8 Roti Tiffin",
     category: "Monthly",
     badge: "Most loved",
     price: 350,
-    taxRate: 0.05,
     cadence: "5 days a week",
     servings: "8 roti, daal, sabzi, rice option",
     image:
@@ -57,7 +59,11 @@ export const packagePlans: PackagePlan[] = [
     description:
       "The classic Curry Kitchen plan with filling portions and rotating homestyle dishes.",
     bestFor: "Daily dinner",
-    includes: ["12oz daal", "8oz sabzi", "Salad included", "Dessert once weekly"],
+    includes: ["12oz daal", "8oz sabzi", "Dessert once weekly"],
+    complimentaryItems: [
+      { id: "salad", name: "Kachumber salad", description: "Fresh chopped seasonal salad." },
+      { id: "raita", name: "Cucumber raita", description: "Cooling yogurt and cucumber side." },
+    ],
     addOns: [
       { id: "rice", name: "Rice bowl", description: "Replace 2 roti", price: 30 },
       { id: "spice-note", name: "Spice note", description: "Personal preference", price: 0 },
@@ -66,11 +72,11 @@ export const packagePlans: PackagePlan[] = [
   },
   {
     id: "monthly-xl",
+    slug: "monthly-xl",
     name: "Extra Large 12 Roti Tiffin",
     category: "Monthly",
     badge: "Family portion",
     price: 450,
-    taxRate: 0.05,
     cadence: "5 days a week",
     servings: "12 roti, larger daal and sabzi",
     image:
@@ -79,6 +85,10 @@ export const packagePlans: PackagePlan[] = [
       "Generous portions for big appetites, shared meals, or families who want dinner handled.",
     bestFor: "Shared meals",
     includes: ["12oz daal", "12oz sabzi", "Yogurt 5 days", "Basmati rice option"],
+    complimentaryItems: [
+      { id: "salad", name: "Kachumber salad", description: "Fresh chopped seasonal salad." },
+      { id: "dessert", name: "Dessert cup", description: "A rotating sweet treat." },
+    ],
     addOns: [
       { id: "rice", name: "Rice bowl", description: "Replace 2 roti", price: 30 },
       { id: "dessert", name: "Extra dessert", description: "Weekly sweet add-on", price: 18 },
@@ -87,11 +97,11 @@ export const packagePlans: PackagePlan[] = [
   },
   {
     id: "weekly-trial",
+    slug: "weekly-trial",
     name: "Weekly Trial Pack",
     category: "Weekly",
     badge: "Try first",
     price: 95,
-    taxRate: 0.05,
     cadence: "One week",
     servings: "6 meals",
     image:
@@ -100,6 +110,9 @@ export const packagePlans: PackagePlan[] = [
       "A flexible trial plan for customers who want to taste the weekly rotation first.",
     bestFor: "New customers",
     includes: ["6 fresh meals", "Rotating menu", "Delivery included", "Pause anytime"],
+    complimentaryItems: [
+      { id: "salad", name: "Kachumber salad", description: "Fresh chopped seasonal salad." },
+    ],
     addOns: [
       { id: "rice", name: "Rice bowl", description: "Add for the week", price: 10 },
       { id: "salad", name: "Extra salad", description: "Fresh daily side", price: 8 },
@@ -108,11 +121,11 @@ export const packagePlans: PackagePlan[] = [
   },
   {
     id: "student-pack",
+    slug: "student-pack",
     name: "Student & Military Saver Pack",
     category: "Student",
     badge: "Verified pricing",
     price: 220,
-    taxRate: 0.05,
     cadence: "Monthly",
     servings: "Simple daily meals",
     image:
@@ -121,6 +134,9 @@ export const packagePlans: PackagePlan[] = [
       "Affordable, steady meals for study weeks, long shifts, and shared student housing.",
     bestFor: "Students / Military",
     includes: ["Veg meals", "Weekly menu", "Simple portions", "Verification pricing"],
+    complimentaryItems: [
+      { id: "raita", name: "Cucumber raita", description: "Cooling yogurt and cucumber side." },
+    ],
     addOns: [
       { id: "rice", name: "Rice bowl", description: "Weekly add-on", price: 20 },
       { id: "roti", name: "Extra roti", description: "Two extra roti daily", price: 25 },
@@ -332,12 +348,6 @@ export const productTags: Tag[] = [
   { id: "tag-budget", name: "Budget", slug: "budget", count: 2 },
   { id: "tag-family", name: "Family", slug: "family", count: 1 },
   { id: "tag-trial", name: "Trial", slug: "trial", count: 1 },
-];
-
-export const taxRates: TaxRate[] = [
-  { id: "tax-ca", region: "California sales tax", rate: 8.75, appliesTo: "All plans", status: "Active" },
-  { id: "tax-local", region: "Local add-on tax", rate: 2.5, appliesTo: "Add-ons only", status: "Active" },
-  { id: "tax-student", region: "Student exemption", rate: 0, appliesTo: "Student plans", status: "Inactive" },
 ];
 
 export const menuItems: MenuItem[] = [

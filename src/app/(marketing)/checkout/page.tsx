@@ -1,9 +1,10 @@
 import { CreditCard, PackageCheck } from "lucide-react";
+import type { Metadata } from "next";
 import { CheckoutFlow } from "@/components/checkout/checkout-flow";
 import { PageHero } from "@/components/sections/page-hero";
 import { ButtonLink } from "@/components/ui/button";
-import { getDeliveryZoneManagerData } from "@/lib/server/admin";
-import { getPackagePlans } from "@/lib/server/catalog";
+import { getAdminSettings, getDeliveryZoneManagerData } from "@/lib/server/admin";
+import { getCustomerProfileDetails, getPackagePlans } from "@/lib/server/catalog";
 import {
   makePackageCartLineId,
   parsePackageCart,
@@ -12,16 +13,19 @@ import {
 import { nextEligiblePackageStartInput } from "@/lib/package-schedule";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Checkout", robots: { index: false, follow: false } };
 
 export default async function CheckoutPage({
   searchParams,
 }: {
   searchParams: Promise<{ package?: string; addons?: string; cart?: string }>;
 }) {
-  const [params, packagePlans, deliveryZones] = await Promise.all([
+  const [params, packagePlans, deliveryZones, customerProfile, adminSettings] = await Promise.all([
     searchParams,
     getPackagePlans(),
     getDeliveryZoneManagerData(),
+    getCustomerProfileDetails(),
+    getAdminSettings(),
   ]);
   let initialItems = parsePackageCart(params.cart);
 
@@ -32,14 +36,12 @@ export default async function CheckoutPage({
       legacyPlan?.addOns
         .filter((addon) => requestedAddonIds.includes(addon.id))
         .map((addon) => addon.id) ?? [];
-    const fallbackAddonId = legacyPlan?.addOns[0]?.id;
-
-    if (legacyPlan && (eligibleAddonIds.length || fallbackAddonId)) {
+    if (legacyPlan) {
       initialItems = [
         {
           lineId: makePackageCartLineId(),
           packageId: legacyPlan.id,
-          addonIds: eligibleAddonIds.length ? eligibleAddonIds : [fallbackAddonId as string],
+          addonIds: eligibleAddonIds,
           startDate: nextEligiblePackageStartInput(),
         } satisfies PackageCartItemInput,
       ];
@@ -84,6 +86,8 @@ export default async function CheckoutPage({
         plans={packagePlans}
         deliveryZones={deliveryZones}
         initialItems={initialItems}
+        customerProfile={customerProfile}
+        taxRate={adminSettings.taxRate}
       />
     </main>
   );

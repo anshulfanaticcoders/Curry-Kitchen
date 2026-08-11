@@ -7,21 +7,29 @@ export type PackageAddOn = {
   price: number;
 };
 
+export type ComplimentaryItem = {
+  id: string;
+  name: string;
+  description: string;
+};
+
 export type PackagePlan = {
   id: string;
+  slug: string;
   name: string;
   category: PackageCategory;
   badge: string;
   price: number;
-  taxRate: number;
   cadence: string;
   servings: string;
   image: string;
   description: string;
   bestFor: string;
   includes: string[];
+  complimentaryItems: ComplimentaryItem[];
   addOns: PackageAddOn[];
   accent: "saffron" | "leaf" | "masala";
+  updatedAt?: string;
 };
 
 export type AdminPackageRecord = PackagePlan & {
@@ -30,10 +38,15 @@ export type AdminPackageRecord = PackagePlan & {
   status: ProductStatus;
   studentOnly: boolean;
   addonIds: string[];
+  complimentaryItemIds: string[];
 };
 
 export type AdminAddonRecord = PackageAddOn & {
   imageUrl?: string;
+  status: ProductStatus;
+};
+
+export type AdminComplimentaryItemRecord = ComplimentaryItem & {
   status: ProductStatus;
 };
 
@@ -46,6 +59,66 @@ export type DeliveryZoneRecord = {
   isFreeDelivery: boolean;
   outsideZone: boolean;
   status: ProductStatus;
+};
+
+export type AdminSettings = {
+  businessName: string;
+  supportEmail: string;
+  phone: string;
+  currency: string;
+  taxRate: number;
+  serviceAreas: string;
+  deliveryWindowStart: string;
+  deliveryWindowEnd: string;
+  orderCutoff: string;
+  deliveryDays: string;
+  acceptWeeklyTrials: boolean;
+  enableCheckoutPauses: boolean;
+  orderConfirmationEmails: boolean;
+  packageReminderEmails: boolean;
+  packageReminderSms: boolean;
+  packageCompletedEmails: boolean;
+  outForDeliverySms: boolean;
+  weeklyMenuEmails: boolean;
+};
+
+export type AdminSeoRecord = {
+  id?: string;
+  targetType: "STATIC_PAGE" | "PACKAGE";
+  packageId?: string;
+  page: string;
+  path: string;
+  title: string;
+  description: string;
+  defaultTitle: string;
+  defaultDescription: string;
+  ogTitle: string;
+  ogDescription: string;
+  ogImageUrl: string;
+  ogImageAlt: string;
+  indexed: boolean;
+  includeInSitemap: boolean;
+  schemaEnabled: boolean;
+  configured: boolean;
+  status: ProductStatus;
+  updatedAt?: string;
+};
+
+export type SeoSettings = {
+  titleSuffix: string;
+  defaultDescription: string;
+  defaultSocialImage: string;
+  logoUrl: string;
+  cuisine: string;
+  priceRange: string;
+  socialProfiles: string[];
+  googleVerification: string;
+};
+
+export type AdminSeoManagerData = {
+  origin: string;
+  settings: SeoSettings;
+  records: AdminSeoRecord[];
 };
 
 export type WeeklyMenuDay = {
@@ -91,6 +164,8 @@ export type CustomerProfile = {
 };
 
 export type CustomerProfileDetails = CustomerProfile & {
+  emailReceipts: boolean;
+  smsUpdates: boolean;
   addressId?: string;
   line1: string;
   city: string;
@@ -146,14 +221,6 @@ export type Category = {
 
 export type Tag = { id: string; name: string; slug: string; count: number };
 
-export type TaxRate = {
-  id: string;
-  region: string;
-  rate: number;
-  appliesTo: string;
-  status: "Active" | "Inactive";
-};
-
 export type MenuItem = {
   id: string;
   name: string;
@@ -162,6 +229,56 @@ export type MenuItem = {
   veg: boolean;
   status: "Active" | "Draft";
   description?: string;
+};
+
+export type MenuUploadView = {
+  id: string;
+  title: string;
+  fileUrl: string;
+  isPdf: boolean;
+  dateRangeLabel: string;
+  current: boolean;
+};
+
+export type CalendarEventType =
+  | "delivery"
+  | "delivered"
+  | "pause"
+  | "package-start"
+  | "package-end";
+
+export type CalendarEvent = {
+  date: string;
+  type: CalendarEventType;
+  label: string;
+};
+
+export type CustomerCalendarData = {
+  customerId: string;
+  customerName: string;
+  deliveryWeekdays: number[];
+  packages: Array<{ name: string; status: string }>;
+  events: CalendarEvent[];
+};
+
+export type AdminMediaAsset = {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  folder: string;
+  sizeLabel: string;
+  uploadedAt: string;
+};
+
+export type AdminMenuUpload = {
+  id: string;
+  title: string;
+  fileUrl: string;
+  isPdf: boolean;
+  startDate: string;
+  endDate: string;
+  dateRangeLabel: string;
+  expired: boolean;
 };
 
 export type Coupon = {
@@ -174,6 +291,14 @@ export type Coupon = {
   limit: number;
   expires: string;
   expiresAt?: string;
+  customerId?: string | null;
+  customerName?: string | null;
+};
+
+export type AdminCustomerOption = {
+  id: string;
+  name: string;
+  email: string;
 };
 
 export type Customer = {
@@ -187,6 +312,7 @@ export type Customer = {
   orders: number;
   spend: number;
   area: string;
+  activePackageId?: string;
 };
 
 export type PackagingPackage = {
@@ -264,4 +390,20 @@ export type AdminOrder = {
 export type PlanPerformance = {
   name: string;
   value: number;
+};
+
+export type AdminStudentVerification = {
+  id: string;
+  customerName: string;
+  customerEmail: string;
+  orderNumber: string | null;
+  verificationType: "STUDENT" | "MILITARY";
+  universityName: string;
+  studentNumber: string;
+  idCardUrl: string | null;
+  idCardBackUrl: string | null;
+  status: "NOT_REQUIRED" | "PENDING" | "APPROVED" | "REJECTED";
+  adminNote: string | null;
+  submittedAt: string;
+  reviewedAt: string | null;
 };

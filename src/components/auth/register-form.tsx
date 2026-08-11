@@ -2,11 +2,15 @@
 
 import { Loader2, UserPlus } from "lucide-react";
 import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { PasswordInput } from "@/components/auth/password-input";
+import { safeCallbackUrl } from "@/components/auth/safe-callback-url";
 
 export function RegisterForm() {
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -42,47 +46,53 @@ export function RegisterForm() {
       redirect: false,
     });
 
+    const callbackUrl = safeCallbackUrl(searchParams.get("callbackUrl"));
+
     toast.success("Account created");
-    window.location.assign("/dashboard");
+    window.location.assign(callbackUrl ?? "/dashboard");
   }
 
   return (
     <form className="grid gap-4" onSubmit={handleSubmit}>
-      <label className="grid gap-2 text-sm font-extrabold">
-        Name
+      <label className="grid gap-2 text-sm font-bold text-ink/80">
+        Full name
         <input
           name="name"
           required
-          className="h-12 rounded-button border border-ink/10 bg-ivory px-4 font-medium outline-none transition focus:border-saffron"
+          autoComplete="name"
+          className="h-11 rounded-lg border border-[#e7eaf3] bg-[#f1f4fc] px-4 text-[15px] font-medium text-ink outline-none transition placeholder:text-ink/35 focus:border-saffron focus:bg-white focus:ring-4 focus:ring-saffron/10"
         />
       </label>
-      <label className="grid gap-2 text-sm font-extrabold">
-        Email
+      <label className="grid gap-2 text-sm font-bold text-ink/80">
+        Email address
         <input
           name="email"
           type="email"
           required
-          className="h-12 rounded-button border border-ink/10 bg-ivory px-4 font-medium outline-none transition focus:border-saffron"
+          autoComplete="email"
+          className="h-11 rounded-lg border border-[#e7eaf3] bg-[#f1f4fc] px-4 text-[15px] font-medium text-ink outline-none transition placeholder:text-ink/35 focus:border-saffron focus:bg-white focus:ring-4 focus:ring-saffron/10"
         />
       </label>
-      <label className="grid gap-2 text-sm font-extrabold">
+      <label className="grid gap-2 text-sm font-bold text-ink/80">
         Phone
         <input
           name="phone"
-          className="h-12 rounded-button border border-ink/10 bg-ivory px-4 font-medium outline-none transition focus:border-saffron"
+          type="tel"
+          autoComplete="tel"
+          className="h-11 rounded-lg border border-[#e7eaf3] bg-[#f1f4fc] px-4 text-[15px] font-medium text-ink outline-none transition placeholder:text-ink/35 focus:border-saffron focus:bg-white focus:ring-4 focus:ring-saffron/10"
         />
       </label>
-      <label className="grid gap-2 text-sm font-extrabold">
+      <label className="grid gap-2 text-sm font-bold text-ink/80">
         Password
-        <input
+        <PasswordInput
           name="password"
-          type="password"
           minLength={8}
           required
-          className="h-12 rounded-button border border-ink/10 bg-ivory px-4 font-medium outline-none transition focus:border-saffron"
+          autoComplete="new-password"
+          className="h-11 rounded-lg border border-[#e7eaf3] bg-[#f1f4fc] px-4 text-[15px] font-medium text-ink outline-none transition placeholder:text-ink/35 focus:border-saffron focus:bg-white focus:ring-4 focus:ring-saffron/10"
         />
       </label>
-      <Button type="submit" disabled={loading} className="mt-2 w-full">
+      <Button type="submit" disabled={loading} className="mt-2 h-11 w-full rounded-lg text-[15px] shadow-[0_12px_24px_rgba(255,122,26,0.22)]">
         {loading ? <Loader2 className="animate-spin" size={18} /> : <UserPlus size={18} />}
         {loading ? "Creating account" : "Create account"}
       </Button>

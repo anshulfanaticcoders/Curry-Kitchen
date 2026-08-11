@@ -6,7 +6,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CalendarDays, Pencil, ShoppingBag, Trash2, X } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { usePackageCart } from "@/components/providers/package-cart-provider";
-import { packageCartQuery } from "@/lib/package-cart";
 import { formatCurrency } from "@/lib/utils";
 
 function displayStartDate(value: string) {
@@ -23,6 +22,7 @@ export function PackageCartDrawer() {
     closeCart,
     items,
     plansById,
+    catalogReady,
     removeItem,
     checkoutHref,
   } = usePackageCart();
@@ -80,7 +80,7 @@ export function PackageCartDrawer() {
                     const plan = plansById[item.packageId];
                     const addons = plan?.addOns.filter((addon) => item.addonIds.includes(addon.id)) ?? [];
                     const lineTotal = (plan?.price ?? 0) + addons.reduce((sum, addon) => sum + addon.price, 0);
-                    const editHref = `/packages?cart=${packageCartQuery(items)}&edit=${encodeURIComponent(item.lineId)}#build-plan`;
+                    const editHref = `/packages?edit=${encodeURIComponent(item.lineId)}#build-plan`;
 
                     return (
                       <motion.article
@@ -114,7 +114,13 @@ export function PackageCartDrawer() {
                               <span className="shrink-0 text-sm font-black">{formatCurrency(lineTotal)}</span>
                             </div>
                             <p className="mt-2 line-clamp-2 text-xs font-bold leading-5 text-ink/55">
-                              {addons.length ? addons.map((addon) => addon.name).join(", ") : "Add-ons loading"}
+                              {addons.length
+                                ? addons.map((addon) => addon.name).join(", ")
+                                : plan
+                                  ? "No add-ons selected"
+                                  : catalogReady
+                                  ? "This saved configuration is no longer available."
+                                  : "Loading package details..."}
                             </p>
                             <p className="mt-2 flex items-center gap-1.5 text-xs font-extrabold text-leaf">
                               <CalendarDays size={14} />
@@ -152,7 +158,7 @@ export function PackageCartDrawer() {
                     </span>
                     <h3 className="mt-5 font-display text-3xl font-black">Your cart is empty</h3>
                     <p className="mt-3 text-sm font-bold leading-6 text-ink/55">
-                      Select a plan, choose its required add-ons, then it will appear here.
+                      Select a plan as-is, or customize it with optional add-ons.
                     </p>
                     <ButtonLink href="/packages#build-plan" onClick={closeCart} className="mt-6">
                       Browse packages
@@ -167,7 +173,7 @@ export function PackageCartDrawer() {
                 <div className="flex items-end justify-between gap-4">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.15em] text-ink/44">Subtotal</p>
-                    <p className="mt-1 text-sm font-bold text-ink/54">Tax and delivery calculated at checkout</p>
+                  <p className="mt-1 text-sm font-bold text-ink/54">Tax and delivery calculated at checkout</p>
                   </div>
                   <p className="font-display text-3xl font-black">{formatCurrency(subtotal)}</p>
                 </div>

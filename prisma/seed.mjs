@@ -37,6 +37,7 @@ const image = (id, width = 1200) =>
 
 async function reset() {
   await prisma.auditLog.deleteMany();
+  await prisma.seoRecord.deleteMany();
   await prisma.setting.deleteMany();
   await prisma.review.deleteMany();
   await prisma.notification.deleteMany();
@@ -47,6 +48,7 @@ async function reset() {
   await prisma.stripeEvent.deleteMany();
   await prisma.payment.deleteMany();
   await prisma.orderAddon.deleteMany();
+  await prisma.orderComplimentaryItem.deleteMany();
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
   await prisma.cartItemAddon.deleteMany();
@@ -58,7 +60,9 @@ async function reset() {
   await prisma.weeklyMenu.deleteMany();
   await prisma.menuItem.deleteMany();
   await prisma.packageAddon.deleteMany();
+  await prisma.packageComplimentaryItem.deleteMany();
   await prisma.addon.deleteMany();
+  await prisma.complimentaryItem.deleteMany();
   await prisma.packageItem.deleteMany();
   await prisma.package.deleteMany();
   await prisma.packageCategory.deleteMany();
@@ -117,7 +121,14 @@ async function main() {
     prisma.addon.create({ data: { name: "Dessert cup", slug: "dessert-cup", description: "Weekly sweet add-on.", price: "4.00" } }),
   ]);
 
-  async function createPackage({ category, name, slug, price, cadence, days, studentOnly = false, badge, imageUrl, items }) {
+  const complimentaryItems = await Promise.all([
+    prisma.complimentaryItem.create({ data: { name: "Kachumber salad", slug: "kachumber-salad", description: "Fresh chopped seasonal salad." } }),
+    prisma.complimentaryItem.create({ data: { name: "Cucumber raita", slug: "cucumber-raita", description: "Cooling yogurt and cucumber side." } }),
+    prisma.complimentaryItem.create({ data: { name: "Dessert cup", slug: "complimentary-dessert-cup", description: "A rotating sweet treat." } }),
+  ]);
+  const [salad, raita, dessert] = complimentaryItems;
+
+  async function createPackage({ category, name, slug, price, cadence, days, studentOnly = false, badge, imageUrl, items, complimentary = [] }) {
     return prisma.package.create({
       data: {
         categoryId: category.id,
@@ -140,6 +151,9 @@ async function main() {
         addons: {
           create: addons.map((addon) => ({ addonId: addon.id })),
         },
+        complimentaryItems: {
+          create: complimentary.map((item) => ({ complimentaryItemId: item.id })),
+        },
       },
     });
   }
@@ -153,7 +167,8 @@ async function main() {
     days: 20,
     badge: "Most loved",
     imageUrl: image("1626777552726-4a6b54c97e46"),
-    items: ["12oz dal", "8oz sabzi", "8 roti", "salad", "weekly dessert"],
+    items: ["12oz dal", "8oz sabzi", "8 roti", "weekly dessert"],
+    complimentary: [salad, raita],
   });
 
   await createPackage({
@@ -165,7 +180,8 @@ async function main() {
     days: 20,
     badge: "Starter favorite",
     imageUrl: image("1630409346824-4f0e7b080087"),
-    items: ["8oz dal", "6oz sabzi", "4 roti", "salad"],
+    items: ["8oz dal", "6oz sabzi", "4 roti"],
+    complimentary: [salad],
   });
 
   const trial = await createPackage({
@@ -178,6 +194,7 @@ async function main() {
     badge: "Try first",
     imageUrl: image("1604909052743-94e838986d24"),
     items: ["5 meals", "rotating menu", "delivery included"],
+    complimentary: [salad],
   });
 
   const studentPack = await createPackage({
@@ -191,6 +208,7 @@ async function main() {
     imageUrl: image("1617692855027-33b14f061079"),
     items: ["simple veg meals", "4 roti", "dal", "sabzi"],
     studentOnly: true,
+    complimentary: [raita, dessert],
   });
 
   await prisma.deliveryZone.createMany({
@@ -284,6 +302,14 @@ async function main() {
     },
   });
 
+  await prisma.orderComplimentaryItem.createMany({
+    data: [salad, raita].map((item) => ({
+      orderItemId: order.items[0].id,
+      complimentaryItemId: item.id,
+      name: item.name,
+    })),
+  });
+
   const activePackage = await prisma.customerPackage.create({
     data: {
       customerId: customer.id,
@@ -350,6 +376,14 @@ async function main() {
       unitPrice: "2.50",
       total: "2.50",
     },
+  });
+
+  await prisma.orderComplimentaryItem.createMany({
+    data: [raita, dessert].map((item) => ({
+      orderItemId: studentOrder.items[0].id,
+      complimentaryItemId: item.id,
+      name: item.name,
+    })),
   });
 
   await prisma.customerPackage.create({
@@ -424,6 +458,13 @@ async function main() {
     ],
   });
 
+  await prisma.seoRecord.createMany({
+    data: [
+      { page: "Home", path: "/", title: "Curry Kitchen | Home-style tiffin delivery", description: "Fresh, home-style tiffin meals delivered with flexible weekly and monthly plans.", indexed: true, status: RecordStatus.ACTIVE },
+      { page: "Packages", path: "/packages", title: "Tiffin meal packages | Curry Kitchen", description: "Compare flexible weekly and monthly tiffin meal packages made for busy families and students.", indexed: true, status: RecordStatus.ACTIVE },
+    ],
+  });
+
   await prisma.coupon.createMany({
     data: [
       { code: "WELCOME15", type: CouponType.PERCENT, value: "15.00", status: RecordStatus.ACTIVE, usageLimit: 500 },
@@ -444,6 +485,7 @@ async function main() {
       { key: "business", value: { name: "Curry Kitchen Inc.", currency: "USD", state: "CA", supportEmail: "currykitcheninc@gmail.com" } },
       { key: "delivery", value: { defaultWindow: "6:00 PM - 8:00 PM", outsideZoneFee: 12, deliveryDays: ["Mon", "Tue", "Wed", "Thu", "Fri"] } },
       { key: "pausePolicy", value: { customerSelfPauseLimit: 1, adminUnlimited: true } },
+      { key: "seo_settings", value: { titleSuffix: " | Curry Kitchen", defaultDescription: "Homestyle Indian tiffin meal plans and weekday dinner delivery in San Diego.", defaultSocialImage: "", logoUrl: "", cuisine: "Indian", priceRange: "$$", socialProfiles: [], googleVerification: "" } },
     ],
   });
 

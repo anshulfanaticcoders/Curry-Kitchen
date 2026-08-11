@@ -28,7 +28,7 @@ function AnimatedTitle() {
     <motion.h1
       variants={heroReveal}
       transition={{ duration: 0.95, ease: [0.16, 1, 0.3, 1], staggerChildren: 0.05, delayChildren: 0.2 }}
-      className="flex flex-nowrap whitespace-nowrap font-display text-5xl font-black leading-[1.1] tracking-tight sm:text-6xl md:text-7xl"
+      className="flex flex-nowrap whitespace-nowrap font-display text-5xl font-black leading-[1.12] tracking-tight sm:text-6xl md:text-7xl"
     >
       {curry.map((char, i) => (
         <motion.span key={`c-${i}`} variants={titleChar} className="inline-block">
@@ -40,7 +40,7 @@ function AnimatedTitle() {
         char === "i" ? (
           <span key={`k-${i}`} className="relative inline-block">
             <motion.span variants={titleChar} className="inline-block">
-              {char}
+              {"\u0131"}
             </motion.span>
             <motion.span
               aria-hidden

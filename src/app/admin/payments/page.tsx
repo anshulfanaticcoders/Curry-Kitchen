@@ -1,4 +1,5 @@
 import { Download } from "lucide-react";
+import { MarkPaymentPaidButton } from "@/components/dashboard/mark-payment-paid-button";
 import { Card, CardHeader, PageHeader, StatCard, Table, Td, Th } from "@/components/dashboard/primitives";
 import { ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -31,7 +32,7 @@ export default async function AdminPaymentsPage() {
         title="Payments"
         description="Transactions, refunds, and payouts across all plans."
         action={
-          <ButtonLink href="/admin/payments" variant="secondary">
+          <ButtonLink href="/api/admin/payments/export" variant="secondary">
             <Download size={18} />
             Export CSV
           </ButtonLink>
@@ -67,7 +68,10 @@ export default async function AdminPaymentsPage() {
                 <Td className="text-ink/60">{tx.method}</Td>
                 <Td className="font-black">{formatCurrency(tx.amount)}</Td>
                 <Td>
-                  <StatusPill tone={statusTone(tx.status)}>{tx.status}</StatusPill>
+                  <div className="flex items-center gap-2">
+                    <StatusPill tone={statusTone(tx.status)}>{tx.status}</StatusPill>
+                    {tx.status === "Pending" ? <MarkPaymentPaidButton paymentId={tx.id} /> : null}
+                  </div>
                 </Td>
                 <Td className="text-ink/55">{tx.date}</Td>
               </tr>

@@ -1,10 +1,12 @@
 "use client";
 
-import { Bell, BellOff, CreditCard, Gift, Package, Settings } from "lucide-react";
-import { useState } from "react";
+import { Bell, BellOff, CreditCard, Gift, Loader2, Package, Settings } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Card, PageHeader } from "@/components/dashboard/primitives";
 import { Button } from "@/components/ui/button";
+import { markAllNotificationsReadAction, markNotificationReadAction } from "@/lib/actions/customer";
 import type { NotificationItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -16,17 +18,42 @@ const typeIcon = {
 } as const;
 
 export function NotificationsClient({ initialItems }: { initialItems: NotificationItem[] }) {
+  const router = useRouter();
   const [items, setItems] = useState(initialItems);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
   const unread = items.filter((item) => !item.read).length;
 
   function markAllRead() {
-    setItems((list) => list.map((item) => ({ ...item, read: true })));
-    toast.success("Notifications cleared");
+    startTransition(async () => {
+      const result = await markAllNotificationsReadAction();
+
+      if (!result.ok) {
+        toast.error("Could not update notifications", { description: result.error });
+        return;
+      }
+
+      setItems((list) => list.map((item) => ({ ...item, read: true })));
+      toast.success(result.message ?? "All notifications marked read.");
+      router.refresh();
+    });
   }
 
   function markRead(id: string) {
-    setItems((list) => list.map((item) => (item.id === id ? { ...item, read: true } : item)));
-    toast.success("Marked read");
+    setPendingId(id);
+    startTransition(async () => {
+      const result = await markNotificationReadAction(id);
+      setPendingId(null);
+
+      if (!result.ok) {
+        toast.error("Could not update notification", { description: result.error });
+        return;
+      }
+
+      setItems((list) => list.map((item) => (item.id === id ? { ...item, read: true } : item)));
+      toast.success(result.message ?? "Notification marked read.");
+      router.refresh();
+    });
   }
 
   return (
@@ -35,9 +62,9 @@ export function NotificationsClient({ initialItems }: { initialItems: Notificati
         title="Notifications"
         description="Delivery updates, payments, and offers."
         action={
-          <Button variant="secondary" onClick={markAllRead}>
+          <Button variant="secondary" onClick={markAllRead} disabled={!unread || pending}>
             <BellOff size={18} />
-            Mark all read
+            {pending ? "Saving" : "Mark all read"}
           </Button>
         }
       />
@@ -59,7 +86,7 @@ export function NotificationsClient({ initialItems }: { initialItems: Notificati
 
       <Card>
         <ul>
-          {items.map((item) => {
+          {items.length ? items.map((item) => {
             const Icon = typeIcon[item.type] ?? Settings;
             return (
               <li
@@ -82,15 +109,20 @@ export function NotificationsClient({ initialItems }: { initialItems: Notificati
                 </div>
                 {!item.read ? (
                   <button
+                    type="button"
+                    disabled={pendingId === item.id}
                     onClick={() => markRead(item.id)}
-                    className="shrink-0 rounded-button border border-ink/10 px-3 py-1.5 text-xs font-extrabold text-ink/60 transition hover:border-saffron/50 hover:text-ink"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-button border border-ink/10 px-3 py-1.5 text-xs font-extrabold text-ink/60 transition hover:border-saffron/50 hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Mark read
+                    {pendingId === item.id ? <Loader2 className="animate-spin" size={14} /> : null}
+                    {pendingId === item.id ? "Saving" : "Mark read"}
                   </button>
                 ) : null}
               </li>
             );
-          })}
+          }) : (
+            <li className="p-8 text-center text-sm font-bold text-ink/50">No notifications yet.</li>
+          )}
         </ul>
       </Card>
     </div>

@@ -1,19 +1,18 @@
 "use client";
 
 import { Loader2, Pencil, Plus } from "lucide-react";
-import { type FormEvent, useTransition } from "react";
+import Link from "next/link";
+import { type FormEvent, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ConfirmActionButton } from "@/components/dashboard/confirm-action-button";
-import { Drawer, Tabs, Toggle } from "@/components/dashboard/interactive";
-import { Card, CardHeader, Field, Input, PageHeader, Select, Table, Td, Th } from "@/components/dashboard/primitives";
-import { Button } from "@/components/ui/button";
+import { Tabs, Toggle } from "@/components/dashboard/interactive";
+import { Card, CardHeader, EmptyState, Field, Input, PageHeader, Select, Table, Td, Th } from "@/components/dashboard/primitives";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
-import { deleteDeliveryZoneAction, saveDeliveryZoneAction } from "@/lib/actions/admin";
-import type { DeliveryZoneRecord } from "@/lib/types";
+import { deleteDeliveryZoneAction, saveAdminSettingsAction } from "@/lib/actions/admin";
+import type { AdminSettings, DeliveryZoneRecord } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
-
-type ActionResult = Promise<{ ok: boolean; message?: string; error?: string }>;
 
 function statusTone(status: string) {
   if (status === "Active") return "green" as const;
@@ -21,148 +20,108 @@ function statusTone(status: string) {
   return "amber" as const;
 }
 
-function statusValue(status?: string) {
-  if (status === "Active") return "ACTIVE";
-  if (status === "Archived") return "ARCHIVED";
-  return "DRAFT";
-}
-
-function useSubmitAction() {
+function useSettingsSave() {
   const router = useRouter();
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
 
-  return function submit(
-    event: FormEvent<HTMLFormElement>,
-    action: (formData: FormData) => ActionResult,
-    close?: () => void,
-  ) {
+  function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
 
     startTransition(async () => {
-      const result = await action(formData);
-
+      const result = await saveAdminSettingsAction(formData);
       if (result.ok) {
-        toast.success(result.message ?? "Saved.");
-        close?.();
+        toast.success(result.message ?? "Settings saved.");
         router.refresh();
         return;
       }
 
-      toast.error("Save failed", {
+      toast.error("Settings could not be saved", {
         description: result.error ?? "Please check the fields and try again.",
       });
     });
-  };
+  }
+
+  return { isPending, save };
 }
 
-function GeneralTab() {
+function SettingsToggle({
+  name,
+  label,
+  description,
+  defaultChecked,
+}: {
+  name: keyof Pick<
+    AdminSettings,
+    | "acceptWeeklyTrials"
+    | "enableCheckoutPauses"
+    | "orderConfirmationEmails"
+    | "packageReminderEmails"
+    | "packageReminderSms"
+    | "packageCompletedEmails"
+    | "outForDeliverySms"
+    | "weeklyMenuEmails"
+  >;
+  label: string;
+  description: string;
+  defaultChecked: boolean;
+}) {
+  const [checked, setChecked] = useState(defaultChecked);
+
   return (
-    <Card className="p-5">
-      <CardHeader title="Business details" className="border-0 p-0" />
-      <div className="mt-5 grid gap-5 md:grid-cols-2">
-        <Field label="Business name">
-          <Input defaultValue="Curry Kitchen Inc." />
-        </Field>
-        <Field label="Support email">
-          <Input defaultValue="currykitcheninc@gmail.com" />
-        </Field>
-        <Field label="Phone">
-          <Input defaultValue="(858) 599-1613" />
-        </Field>
-        <Field label="Currency">
-          <Select defaultValue="USD">
-            <option>USD</option>
-          </Select>
-        </Field>
-        <Field label="Service areas" className="md:col-span-2">
-          <Input defaultValue="San Diego, Chula Vista, La Jolla" />
-        </Field>
-      </div>
-    </Card>
+    <>
+      <input type="hidden" name={name} value={checked ? "true" : "false"} />
+      <Toggle
+        key={`${name}-${checked}`}
+        label={label}
+        description={description}
+        defaultChecked={checked}
+        onCheckedChange={setChecked}
+      />
+    </>
   );
 }
 
-function DeliveryRulesTab() {
+function GeneralTab({ settings }: { settings: AdminSettings }) {
+  const { isPending, save } = useSettingsSave();
+
   return (
-    <Card className="p-5">
-      <CardHeader title="Delivery & ordering" className="border-0 p-0" />
-      <div className="mt-5 grid gap-5 md:grid-cols-2">
-        <Field label="Delivery window start">
-          <Input type="time" defaultValue="18:00" />
-        </Field>
-        <Field label="Delivery window end">
-          <Input type="time" defaultValue="20:00" />
-        </Field>
-        <Field label="Order cut-off">
-          <Select defaultValue="Noon">
-            <option>9:00 AM</option>
-            <option>Noon</option>
-            <option>3:00 PM</option>
-          </Select>
-        </Field>
-        <Field label="Delivery days">
-          <Input defaultValue="Monday - Friday" />
-        </Field>
-      </div>
-      <div className="mt-5 grid gap-3">
-        <Toggle label="Accept weekly trials" description="Allow new customers to start with a 1-week plan." defaultChecked />
-        <Toggle label="Enable checkout pauses" description="Let customers request the one allowed self-pause." defaultChecked />
-      </div>
-    </Card>
+    <form onSubmit={save}>
+      <Card className="p-5">
+        <CardHeader title="Business details" className="border-0 p-0" />
+        <div className="mt-5 grid gap-5 md:grid-cols-2">
+          <Field label="Business name"><Input name="businessName" defaultValue={settings.businessName} required /></Field>
+          <Field label="Support email"><Input name="supportEmail" type="email" defaultValue={settings.supportEmail} required /></Field>
+          <Field label="Phone"><Input name="phone" defaultValue={settings.phone} required /></Field>
+          <Field label="Currency"><Select name="currency" defaultValue={settings.currency}><option value="USD">USD</option><option value="CAD">CAD</option><option value="INR">INR</option></Select></Field>
+          <Field label="Tax rate (%)" hint="One rate for every package at checkout."><Input name="taxRate" type="number" step="0.01" min="0" max="100" defaultValue={(settings.taxRate * 100).toFixed(2)} required /></Field>
+          <Field label="Service areas" className="md:col-span-2"><Input name="serviceAreas" defaultValue={settings.serviceAreas} required /></Field>
+        </div>
+        <div className="mt-6 flex justify-end"><Button type="submit" disabled={isPending}>{isPending ? <Loader2 className="animate-spin" size={16} /> : null}{isPending ? "Saving…" : "Save business details"}</Button></div>
+      </Card>
+    </form>
   );
 }
 
-function ZoneForm({ zone, close }: { zone?: DeliveryZoneRecord; close: () => void }) {
-  const submit = useSubmitAction();
+function DeliveryRulesTab({ settings }: { settings: AdminSettings }) {
+  const { isPending, save } = useSettingsSave();
 
   return (
-    <form className="grid gap-5" onSubmit={(event) => submit(event, saveDeliveryZoneAction, close)}>
-      {zone ? <input type="hidden" name="id" value={zone.id} /> : null}
-      <Field label="Zone name">
-        <Input name="name" defaultValue={zone?.name} placeholder="Downtown San Diego Free Zone" required />
-      </Field>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="Cities" hint="Comma separated. Leave blank for outside-zone fallback.">
-          <Input name="cities" defaultValue={zone?.cities.join(", ")} placeholder="San Diego, Chula Vista" />
-        </Field>
-        <Field label="ZIP / postal codes" hint="Comma separated.">
-          <Input name="postalCodes" defaultValue={zone?.postalCodes.join(", ")} placeholder="92101, 92093" />
-        </Field>
-      </div>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="Delivery fee">
-          <Input name="fee" type="number" step="0.01" min="0" defaultValue={zone?.fee ?? 0} required />
-        </Field>
-        <Field label="Status">
-          <Select name="status" defaultValue={statusValue(zone?.status)}>
-            <option value="ACTIVE">Active</option>
-            <option value="DRAFT">Draft</option>
-            <option value="ARCHIVED">Archived</option>
-          </Select>
-        </Field>
-      </div>
-      <div className="grid gap-3">
-        <label className="flex items-center gap-3 rounded-lg border border-ink/10 bg-ivory p-3 text-sm font-extrabold">
-          <input type="hidden" name="isFreeDelivery" value="false" />
-          <input type="checkbox" name="isFreeDelivery" value="true" defaultChecked={zone?.isFreeDelivery} className="size-4 accent-[#ff7a1a]" />
-          Free delivery in this zone
-        </label>
-        <label className="flex items-center gap-3 rounded-lg border border-ink/10 bg-ivory p-3 text-sm font-extrabold">
-          <input type="hidden" name="outsideZone" value="false" />
-          <input type="checkbox" name="outsideZone" value="true" defaultChecked={zone?.outsideZone} className="size-4 accent-[#ff7a1a]" />
-          Use as outside-zone fallback fee
-        </label>
-      </div>
-      <div className="flex justify-end gap-3 pt-2">
-        <Button type="button" variant="secondary" onClick={close}>
-          Cancel
-        </Button>
-        <Button type="submit">
-          <Loader2 className="hidden animate-spin" size={18} />
-          {zone ? "Save zone" : "Create zone"}
-        </Button>
-      </div>
+    <form onSubmit={save}>
+      <Card className="p-5">
+        <CardHeader title="Delivery & ordering" className="border-0 p-0" />
+        <div className="mt-5 grid gap-5 md:grid-cols-2">
+          <Field label="Delivery window start"><Input name="deliveryWindowStart" type="time" defaultValue={settings.deliveryWindowStart} required /></Field>
+          <Field label="Delivery window end"><Input name="deliveryWindowEnd" type="time" defaultValue={settings.deliveryWindowEnd} required /></Field>
+          <Field label="Order cut-off"><Select name="orderCutoff" defaultValue={settings.orderCutoff}><option>9:00 AM</option><option>Noon</option><option>3:00 PM</option></Select></Field>
+          <Field label="Delivery days"><Input name="deliveryDays" defaultValue={settings.deliveryDays} required /></Field>
+        </div>
+        <div className="mt-5 grid gap-3">
+          <SettingsToggle name="acceptWeeklyTrials" label="Accept weekly trials" description="Allow new customers to start with a 1-week plan." defaultChecked={settings.acceptWeeklyTrials} />
+          <SettingsToggle name="enableCheckoutPauses" label="Enable checkout pauses" description="Let customers request the one allowed self-pause." defaultChecked={settings.enableCheckoutPauses} />
+        </div>
+        <div className="mt-6 flex justify-end"><Button type="submit" disabled={isPending}>{isPending ? <Loader2 className="animate-spin" size={16} /> : null}{isPending ? "Saving…" : "Save delivery rules"}</Button></div>
+      </Card>
     </form>
   );
 }
@@ -174,18 +133,10 @@ function DeliveryZonesTab({ zones }: { zones: DeliveryZoneRecord[] }) {
         title="Delivery zones"
         description="Checkout uses city/ZIP to apply free delivery, zone fees, or the outside-zone charge."
         action={
-          <Drawer
-            title="Add delivery zone"
-            description="Create a free, paid, or outside-zone fallback area."
-            trigger={({ open }) => (
-              <Button onClick={open} className="h-10 px-4">
-                <Plus size={16} />
-                Add zone
-              </Button>
-            )}
-          >
-            {({ close }) => <ZoneForm close={close} />}
-          </Drawer>
+          <ButtonLink href="/admin/settings/zones/new" className="h-10 px-4">
+            <Plus size={16} />
+            Add zone
+          </ButtonLink>
         }
       />
       <Table>
@@ -200,7 +151,9 @@ function DeliveryZonesTab({ zones }: { zones: DeliveryZoneRecord[] }) {
           </tr>
         </thead>
         <tbody>
-          {zones.map((zone) => (
+          {zones.length === 0 ? (
+            <tr><Td colSpan={6}><EmptyState title="No delivery zones yet" description="Add a zone or an outside-zone fallback before accepting delivery orders." /></Td></tr>
+          ) : zones.map((zone) => (
             <tr key={zone.id} className="transition hover:bg-ivory/60">
               <Td>
                 <p className="font-extrabold">{zone.name}</p>
@@ -214,22 +167,13 @@ function DeliveryZonesTab({ zones }: { zones: DeliveryZoneRecord[] }) {
               </Td>
               <Td>
                 <div className="flex items-center justify-end gap-2">
-                  <Drawer
-                    title="Edit delivery zone"
-                    description={zone.name}
-                    trigger={({ open }) => (
-                      <button
-                        type="button"
-                        onClick={open}
-                        aria-label={`Edit ${zone.name}`}
-                        className="grid size-9 place-items-center rounded-button border border-ink/10 text-ink/60 transition hover:border-saffron/50 hover:text-ink"
-                      >
-                        <Pencil size={16} />
-                      </button>
-                    )}
+                  <Link
+                    href={`/admin/settings/zones/${zone.id}/edit`}
+                    aria-label={`Edit ${zone.name}`}
+                    className="grid size-9 place-items-center rounded-button border border-ink/10 text-ink/60 transition hover:border-saffron/50 hover:text-ink"
                   >
-                    {({ close }) => <ZoneForm zone={zone} close={close} />}
-                  </Drawer>
+                    <Pencil size={16} />
+                  </Link>
                   <ConfirmActionButton
                     label={`Delete ${zone.name}`}
                     title={`Archive ${zone.name}?`}
@@ -247,32 +191,37 @@ function DeliveryZonesTab({ zones }: { zones: DeliveryZoneRecord[] }) {
   );
 }
 
-function NotificationsTab() {
+function NotificationsTab({ settings }: { settings: AdminSettings }) {
+  const { isPending, save } = useSettingsSave();
+
   return (
-    <Card className="p-5">
-      <CardHeader title="Notifications" className="border-0 p-0" />
-      <div className="mt-5 grid gap-3">
-        <Toggle label="Order confirmation emails" description="Send a receipt when an order is placed." defaultChecked />
-        <Toggle label="Package completion reminder email" description="Email customers before the final few deliveries." defaultChecked />
-        <Toggle label="Package completion reminder SMS" description="Text customers before the package finishes." />
-        <Toggle label="Package completed email" description="Send a completion message with a buy-again link." defaultChecked />
-        <Toggle label="Out-for-delivery SMS" description="Text customers when their tiffin leaves the kitchen." />
-        <Toggle label="Weekly menu email" description="Email the new menu every Monday morning." defaultChecked />
-      </div>
-    </Card>
+    <form onSubmit={save}>
+      <Card className="p-5">
+        <CardHeader title="Notifications" className="border-0 p-0" />
+        <div className="mt-5 grid gap-3">
+          <SettingsToggle name="orderConfirmationEmails" label="Order confirmation emails" description="Send a receipt when an order is placed." defaultChecked={settings.orderConfirmationEmails} />
+          <SettingsToggle name="packageReminderEmails" label="Package completion reminder email" description="Email customers before the final few deliveries." defaultChecked={settings.packageReminderEmails} />
+          <SettingsToggle name="packageReminderSms" label="Package completion reminder SMS" description="Text customers before the package finishes." defaultChecked={settings.packageReminderSms} />
+          <SettingsToggle name="packageCompletedEmails" label="Package completed email" description="Send a completion message with a buy-again link." defaultChecked={settings.packageCompletedEmails} />
+          <SettingsToggle name="outForDeliverySms" label="Out-for-delivery SMS" description="Text customers when their tiffin leaves the kitchen." defaultChecked={settings.outForDeliverySms} />
+          <SettingsToggle name="weeklyMenuEmails" label="Weekly menu email" description="Email the new menu every Monday morning." defaultChecked={settings.weeklyMenuEmails} />
+        </div>
+        <div className="mt-6 flex justify-end"><Button type="submit" disabled={isPending}>{isPending ? <Loader2 className="animate-spin" size={16} /> : null}{isPending ? "Saving…" : "Save notification settings"}</Button></div>
+      </Card>
+    </form>
   );
 }
 
-export function AdminSettingsClient({ zones }: { zones: DeliveryZoneRecord[] }) {
+export function AdminSettingsClient({ zones, settings }: { zones: DeliveryZoneRecord[]; settings: AdminSettings }) {
   return (
     <div>
       <PageHeader title="Settings" description="Configure business details, delivery zones, and ordering rules." />
       <Tabs
         items={[
-          { id: "general", label: "General", content: <GeneralTab /> },
-          { id: "delivery", label: "Delivery rules", content: <DeliveryRulesTab /> },
+          { id: "general", label: "General", content: <GeneralTab settings={settings} /> },
+          { id: "delivery", label: "Delivery rules", content: <DeliveryRulesTab settings={settings} /> },
           { id: "zones", label: `Delivery zones (${zones.length})`, content: <DeliveryZonesTab zones={zones} /> },
-          { id: "notifications", label: "Notifications", content: <NotificationsTab /> },
+          { id: "notifications", label: "Notifications", content: <NotificationsTab settings={settings} /> },
         ]}
       />
     </div>

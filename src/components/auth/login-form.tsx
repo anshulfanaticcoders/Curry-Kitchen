@@ -6,28 +6,8 @@ import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-
-function safeCallbackUrl(value: string | null) {
-  if (!value) {
-    return null;
-  }
-
-  if (value.startsWith("/") && !value.startsWith("//")) {
-    return value;
-  }
-
-  try {
-    const parsed = new URL(value);
-
-    if (parsed.origin === window.location.origin) {
-      return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
-}
+import { PasswordInput } from "@/components/auth/password-input";
+import { safeCallbackUrl } from "@/components/auth/safe-callback-url";
 
 export function LoginForm() {
   const searchParams = useSearchParams();
@@ -65,28 +45,29 @@ export function LoginForm() {
   }
 
   return (
-    <form className="grid gap-4" onSubmit={handleSubmit}>
-      <label className="grid gap-2 text-sm font-extrabold">
-        Email
+    <form className="grid gap-5" onSubmit={handleSubmit}>
+      <label className="grid gap-2 text-sm font-bold text-ink/80">
+        Email address
         <input
           name="email"
           type="email"
           required
-          defaultValue="customer@currykitchen.test"
-          className="h-12 rounded-button border border-ink/10 bg-ivory px-4 font-medium outline-none transition focus:border-saffron"
+          autoComplete="email"
+          placeholder="youremail@yourdomain.com"
+          className="h-12 rounded-lg border border-[#e7eaf3] bg-[#f1f4fc] px-4 text-[15px] font-medium text-ink outline-none transition placeholder:text-ink/35 focus:border-saffron focus:bg-white focus:ring-4 focus:ring-saffron/10"
         />
       </label>
-      <label className="grid gap-2 text-sm font-extrabold">
+      <label className="grid gap-2 text-sm font-bold text-ink/80">
         Password
-        <input
+        <PasswordInput
           name="password"
-          type="password"
           required
-          defaultValue="Password123!"
-          className="h-12 rounded-button border border-ink/10 bg-ivory px-4 font-medium outline-none transition focus:border-saffron"
+          autoComplete="current-password"
+          placeholder="Enter your password"
+          className="h-12 rounded-lg border border-[#e7eaf3] bg-[#f1f4fc] px-4 text-[15px] font-medium text-ink outline-none transition placeholder:text-ink/35 focus:border-saffron focus:bg-white focus:ring-4 focus:ring-saffron/10"
         />
       </label>
-      <Button type="submit" disabled={loading} className="mt-2 w-full">
+      <Button type="submit" disabled={loading} className="mt-2 h-12 w-full rounded-lg text-[15px] shadow-[0_12px_24px_rgba(255,122,26,0.22)]">
         {loading ? <Loader2 className="animate-spin" size={18} /> : <LogIn size={18} />}
         {loading ? "Signing in" : "Sign in"}
       </Button>

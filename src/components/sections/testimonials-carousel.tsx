@@ -49,7 +49,7 @@ export function TestimonialsCarousel({ items }: { items: Testimonial[] }) {
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-saffron">Real customer words</p>
-            <h2 className="mt-3 font-display text-4xl font-black leading-[1.06] lg:text-5xl">
+            <h2 className="mt-3 font-display text-4xl font-black leading-[1.12] lg:text-5xl">
               Reviews that sell the weekly habit.
             </h2>
             <p className="mt-4 max-w-xl text-base leading-7 text-white/65">

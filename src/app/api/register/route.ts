@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { notifyAdminNewSignup } from "@/lib/email/notifications";
 import { hashPassword } from "@/lib/password";
 
 const registerSchema = z.object({
@@ -29,6 +30,13 @@ export async function POST(request: Request) {
           },
         },
       },
+    });
+
+    await notifyAdminNewSignup({
+      userId: user.id,
+      name: parsed.name,
+      email: parsed.email,
+      phone: parsed.phone,
     });
 
     return Response.json({ ok: true, userId: user.id });

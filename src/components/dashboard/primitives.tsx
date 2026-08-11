@@ -1,10 +1,16 @@
-import type { ReactNode, SelectHTMLAttributes, TdHTMLAttributes, TextareaHTMLAttributes } from "react";
-import type { InputHTMLAttributes } from "react";
+import type {
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TdHTMLAttributes,
+  TextareaHTMLAttributes,
+} from "react";
 import { cn } from "@/lib/utils";
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div className={cn("rounded-lg border border-ink/10 bg-white shadow-soft", className)}>
+    <div className={cn("rounded-2xl border border-ink/6 bg-white shadow-[0_10px_36px_rgba(7,7,7,0.05)]", className)}>
       {children}
     </div>
   );
@@ -24,7 +30,7 @@ export function CardHeader({
   return (
     <div className={cn("flex flex-wrap items-start justify-between gap-4 border-b border-ink/8 p-5", className)}>
       <div>
-        <h2 className="font-display text-xl font-black">{title}</h2>
+        <h2 className="font-display text-lg font-black tracking-tight">{title}</h2>
         {description ? <p className="mt-1 text-sm text-ink/55">{description}</p> : null}
       </div>
       {action}
@@ -44,7 +50,7 @@ export function PageHeader({
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="font-display text-3xl font-black leading-tight">{title}</h1>
+        <h1 className="font-display text-3xl font-black leading-tight tracking-tight">{title}</h1>
         {description ? <p className="mt-2 max-w-2xl text-sm leading-6 text-ink/58">{description}</p> : null}
       </div>
       {action}
@@ -73,9 +79,29 @@ export function StatCard({
         <p className="text-xs font-black uppercase tracking-[0.16em] text-ink/45">{label}</p>
         {icon ? <span className="text-saffron">{icon}</span> : null}
       </div>
-      <p className="mt-4 font-display text-4xl font-black">{value}</p>
+      <p className="mt-4 font-display text-3xl font-black tracking-tight">{value}</p>
       {delta ? <p className={cn("mt-2 text-xs font-bold", deltaTone)}>{delta}</p> : null}
     </Card>
+  );
+}
+
+export function EmptyState({
+  title,
+  description,
+  action,
+  className,
+}: {
+  title: string;
+  description: string;
+  action?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("grid justify-items-center gap-3 px-5 py-10 text-center", className)}>
+      <p className="font-display text-xl font-black">{title}</p>
+      <p className="max-w-md text-sm leading-6 text-ink/55">{description}</p>
+      {action}
+    </div>
   );
 }
 
@@ -86,7 +112,7 @@ export function Field({
   children,
 }: {
   label: string;
-  hint?: string;
+  hint?: ReactNode;
   className?: string;
   children: ReactNode;
 }) {
@@ -100,7 +126,7 @@ export function Field({
 }
 
 const fieldBase =
-  "w-full rounded-button border border-ink/12 bg-ivory px-4 font-medium text-ink outline-none transition placeholder:text-ink/35 focus:border-saffron focus:ring-2 focus:ring-saffron/25";
+  "w-full rounded-xl border border-ink/10 bg-frost px-4 font-medium text-ink outline-none transition placeholder:text-ink/35 focus:border-saffron focus:bg-white focus:ring-2 focus:ring-saffron/25";
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cn(fieldBase, "h-11", className)} {...props} />;
@@ -132,7 +158,7 @@ export function Th({ children, className }: { children?: ReactNode; className?: 
   return (
     <th
       className={cn(
-        "border-b border-ink/10 bg-ivory px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-ink/45",
+        "border-b border-ink/8 bg-frost px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-ink/40",
         className,
       )}
     >
@@ -153,20 +179,24 @@ export function IconButton({
   label,
   className,
   children,
+  type = "button",
+  ...props
 }: {
   label: string;
   className?: string;
   children: ReactNode;
-}) {
+} & ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <span
+    <button
+      type={type}
       aria-label={label}
       className={cn(
-        "inline-grid size-9 cursor-pointer place-items-center rounded-button border border-ink/10 text-ink/60 transition hover:border-saffron/50 hover:text-ink",
+        "inline-grid size-9 place-items-center rounded-button border border-ink/10 text-ink/60 transition hover:border-saffron/50 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
+      {...props}
     >
       {children}
-    </span>
+    </button>
   );
 }

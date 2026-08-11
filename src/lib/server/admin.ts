@@ -2,14 +2,22 @@ import "server-only";
 
 import type {
   AdminAddonRecord,
+  AdminComplimentaryItemRecord,
+  AdminCustomerOption,
+  AdminMediaAsset,
+  AdminMenuUpload,
   AdminPackageRecord,
+  AdminSettings,
+  AdminSeoManagerData,
+  AdminSeoRecord,
   Category,
   Coupon,
   DeliveryZoneRecord,
-  MenuItem,
 } from "@/lib/types";
 import { db } from "@/lib/db";
-import { shouldUseMockData } from "@/lib/server/data-source";
+import { DEFAULT_MEDIA_FOLDERS } from "@/lib/media";
+import { STATIC_SEO_ROUTES } from "@/lib/seo-core.mjs";
+import { DEFAULT_SEO_SETTINGS, getSeoSettings, getSiteOrigin } from "@/lib/server/seo";
 
 type DecimalLike = { toNumber: () => number } | number | string | null | undefined;
 
@@ -45,6 +53,166 @@ function asStringArray(value: unknown) {
   return Array.isArray(value) ? value.map(String) : [];
 }
 
+function toDateInputValue(date: Date) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function formatMenuDateRange(start: Date, end: Date) {
+  const format = (date: Date) =>
+    new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(date);
+  return `${format(start)} – ${format(end)}`;
+}
+
+const defaultAdminSettings: AdminSettings = {
+  businessName: "Curry Kitchen Inc.",
+  supportEmail: "currykitcheninc@gmail.com",
+  phone: "(858) 599-1613",
+  currency: "USD",
+  taxRate: 0.0875,
+  serviceAreas: "San Diego, Chula Vista, La Jolla",
+  deliveryWindowStart: "18:00",
+  deliveryWindowEnd: "20:00",
+  orderCutoff: "Noon",
+  deliveryDays: "Monday - Friday",
+  acceptWeeklyTrials: true,
+  enableCheckoutPauses: true,
+  orderConfirmationEmails: true,
+  packageReminderEmails: true,
+  packageReminderSms: false,
+  packageCompletedEmails: true,
+  outForDeliverySms: false,
+  weeklyMenuEmails: true,
+};
+
+function adminSettingsFromValue(value: unknown): AdminSettings {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return defaultAdminSettings;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return {
+    ...defaultAdminSettings,
+    ...Object.fromEntries(
+      Object.entries(defaultAdminSettings).flatMap(([key, fallback]) => {
+        const value = candidate[key];
+        return typeof value === typeof fallback ? [[key, value]] : [];
+      }),
+    ),
+  } as AdminSettings;
+}
+
+export async function getAdminSettings(): Promise<AdminSettings> {
+  try {
+    const records = await db.setting.findMany({ where: { key: "admin_settings" } });
+    return adminSettingsFromValue(records[0]?.value);
+  } catch {
+    return defaultAdminSettings;
+  }
+}
+
+export async function getAdminSeoManagerData(): Promise<AdminSeoManagerData> {
+  try {
+    const [records, packages, settings] = await Promise.all([
+      db.seoRecord.findMany({ where: { status: "ACTIVE" } }),
+      db.package.findMany({
+        where: { status: "ACTIVE" },
+        select: { id: true, name: true, slug: true, description: true },
+        orderBy: { name: "asc" },
+      }),
+      getSeoSettings(),
+    ]);
+    const byPath = new Map(records.filter((record) => record.targetType === "STATIC_PAGE").map((record) => [record.path, record]));
+    const byPackage = new Map(records.filter((record) => record.packageId).map((record) => [record.packageId!, record]));
+    const targets = [
+      ...STATIC_SEO_ROUTES.map((route) => ({
+        targetType: "STATIC_PAGE" as const,
+        page: route.page,
+        path: route.path,
+        defaultTitle: route.title,
+        defaultDescription: route.description,
+        packageId: undefined,
+        record: byPath.get(route.path),
+      })),
+      ...packages.map((plan) => ({
+        targetType: "PACKAGE" as const,
+        packageId: plan.id,
+        page: plan.name,
+        path: `/packages/${plan.slug}`,
+        defaultTitle: plan.name,
+        defaultDescription: plan.description,
+        record: byPackage.get(plan.id),
+      })),
+      // Custom pages the admin added beyond the built-in route registry.
+      ...records
+        .filter(
+          (record) =>
+            record.targetType === "STATIC_PAGE" &&
+            !STATIC_SEO_ROUTES.some((route) => route.path === record.path),
+        )
+        .map((record) => ({
+          targetType: "STATIC_PAGE" as const,
+          packageId: undefined,
+          page: record.page,
+          path: record.path,
+          defaultTitle: record.page,
+          defaultDescription: record.description ?? "",
+          record,
+        })),
+    ];
+    const mapped: AdminSeoRecord[] = targets.map((target) => ({
+      id: target.record?.id,
+      targetType: target.targetType,
+      packageId: target.packageId,
+      page: target.page,
+      path: target.path,
+      title: target.record?.title ?? "",
+      description: target.record?.description ?? "",
+      defaultTitle: target.defaultTitle,
+      defaultDescription: target.defaultDescription,
+      ogTitle: target.record?.ogTitle ?? "",
+      ogDescription: target.record?.ogDescription ?? "",
+      ogImageUrl: target.record?.ogImageUrl ?? "",
+      ogImageAlt: target.record?.ogImageAlt ?? "",
+      indexed: target.record?.indexed ?? true,
+      includeInSitemap: target.record?.includeInSitemap ?? true,
+      schemaEnabled: target.record?.schemaEnabled ?? true,
+      configured: Boolean(target.record),
+      status: target.record ? mapStatus(target.record.status) : "Active",
+      updatedAt: target.record?.updatedAt.toISOString(),
+    }));
+    return { origin: getSiteOrigin(), settings, records: mapped };
+  } catch {
+    return {
+      origin: getSiteOrigin(),
+      settings: DEFAULT_SEO_SETTINGS,
+      records: STATIC_SEO_ROUTES.map((route) => ({
+        targetType: "STATIC_PAGE",
+        page: route.page,
+        path: route.path,
+        title: "",
+        description: "",
+        defaultTitle: route.title,
+        defaultDescription: route.description,
+        ogTitle: "",
+        ogDescription: "",
+        ogImageUrl: "",
+        ogImageAlt: "",
+        indexed: true,
+        includeInSitemap: true,
+        schemaEnabled: true,
+        configured: false,
+        status: "Active",
+      })),
+    };
+  }
+}
+
+export async function getAdminSeoRecords(): Promise<AdminSeoRecord[]> {
+  return (await getAdminSeoManagerData()).records;
+}
+
 function formatDate(value?: Date | null) {
   if (!value) return "No expiry";
 
@@ -55,51 +223,8 @@ function formatDate(value?: Date | null) {
   }).format(value);
 }
 
-const fallbackDeliveryZones: DeliveryZoneRecord[] = [
-  {
-    id: "fallback-san-diego-free",
-    name: "Downtown San Diego Free Zone",
-    cities: ["San Diego"],
-    postalCodes: ["92101", "92103", "92104", "92105", "92108"],
-    fee: 0,
-    isFreeDelivery: true,
-    outsideZone: false,
-    status: "Active",
-  },
-  {
-    id: "fallback-chula-vista",
-    name: "Chula Vista Zone",
-    cities: ["Chula Vista"],
-    postalCodes: ["91910", "91911"],
-    fee: 5,
-    isFreeDelivery: false,
-    outsideZone: false,
-    status: "Active",
-  },
-  {
-    id: "fallback-la-jolla",
-    name: "La Jolla Zone",
-    cities: ["La Jolla"],
-    postalCodes: ["92037", "92093"],
-    fee: 6,
-    isFreeDelivery: false,
-    outsideZone: false,
-    status: "Active",
-  },
-  {
-    id: "fallback-outside-zone",
-    name: "Outside Service Zone",
-    cities: [],
-    postalCodes: [],
-    fee: 12,
-    isFreeDelivery: false,
-    outsideZone: true,
-    status: "Active",
-  },
-];
-
 export async function getAdminPackageManagerData() {
-  const [categories, addons, packages] = await Promise.all([
+  const [categories, addons, complimentaryItems, packages] = await Promise.all([
     db.packageCategory.findMany({
       where: { status: { not: "ARCHIVED" } },
       include: { _count: { select: { packages: true } } },
@@ -109,12 +234,20 @@ export async function getAdminPackageManagerData() {
       where: { status: { not: "ARCHIVED" } },
       orderBy: { name: "asc" },
     }),
+    db.complimentaryItem.findMany({
+      where: { status: { not: "ARCHIVED" } },
+      orderBy: { name: "asc" },
+    }),
     db.package.findMany({
       where: { status: { not: "ARCHIVED" } },
       include: {
         category: true,
         items: { orderBy: { sortOrder: "asc" } },
         addons: { include: { addon: true } },
+        complimentaryItems: {
+          where: { complimentaryItem: { status: { not: "ARCHIVED" } } },
+          include: { complimentaryItem: true },
+        },
       },
       orderBy: [{ cadence: "asc" }, { price: "asc" }],
     }),
@@ -137,8 +270,15 @@ export async function getAdminPackageManagerData() {
       imageUrl: addon.imageUrl ?? undefined,
       status: mapStatus(addon.status),
     })),
+    complimentaryItems: complimentaryItems.map<AdminComplimentaryItemRecord>((item) => ({
+      id: item.id,
+      name: item.name,
+      description: item.description ?? "",
+      status: mapStatus(item.status),
+    })),
     packages: packages.map<AdminPackageRecord>((plan) => ({
       id: plan.id,
+      slug: plan.slug,
       categoryId: plan.categoryId,
       name: plan.name,
       category:
@@ -147,7 +287,6 @@ export async function getAdminPackageManagerData() {
           : "Monthly",
       badge: plan.badge ?? titleCase(plan.cadence),
       price: toNumber(plan.price),
-      taxRate: toNumber(plan.taxRate),
       cadence: titleCase(plan.cadence),
       deliveryDayCount: plan.deliveryDayCount,
       servings: plan.servings,
@@ -164,6 +303,12 @@ export async function getAdminPackageManagerData() {
         price: toNumber(addon.price),
       })),
       addonIds: plan.addons.map(({ addonId }) => addonId),
+      complimentaryItems: plan.complimentaryItems.map(({ complimentaryItem }) => ({
+        id: complimentaryItem.id,
+        name: complimentaryItem.name,
+        description: complimentaryItem.description ?? "",
+      })),
+      complimentaryItemIds: plan.complimentaryItems.map(({ complimentaryItemId }) => complimentaryItemId),
       accent:
         plan.accent === "leaf" || plan.accent === "masala" ? plan.accent : "saffron",
       status: mapStatus(plan.status),
@@ -173,19 +318,11 @@ export async function getAdminPackageManagerData() {
 }
 
 export async function getDeliveryZoneManagerData(): Promise<DeliveryZoneRecord[]> {
-  if (shouldUseMockData()) {
-    return fallbackDeliveryZones;
-  }
-
   try {
     const zones = await db.deliveryZone.findMany({
       where: { status: { not: "ARCHIVED" } },
       orderBy: [{ outsideZone: "asc" }, { createdAt: "asc" }],
     });
-
-    if (!zones.length) {
-      return fallbackDeliveryZones;
-    }
 
     return zones.map((zone) => ({
       id: zone.id,
@@ -198,23 +335,16 @@ export async function getDeliveryZoneManagerData(): Promise<DeliveryZoneRecord[]
       status: mapStatus(zone.status),
     }));
   } catch {
-    return fallbackDeliveryZones;
+    return [];
   }
 }
 
 export async function getAdminCategoryManagerData() {
-  const [categories, packages] = await Promise.all([
-    db.packageCategory.findMany({
-      where: { status: { not: "ARCHIVED" } },
-      include: { _count: { select: { packages: true } } },
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    }),
-    db.package.findMany({
-      where: { status: { not: "ARCHIVED" } },
-      include: { category: true },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+  const categories = await db.packageCategory.findMany({
+    where: { status: { not: "ARCHIVED" } },
+    include: { _count: { select: { packages: true } } },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+  });
 
   return {
     categories: categories.map<Category>((category) => ({
@@ -225,54 +355,65 @@ export async function getAdminCategoryManagerData() {
       description: category.description ?? "",
       status: mapStatus(category.status),
     })),
-    taxRows: packages.map((plan) => ({
-      id: plan.id,
-      name: plan.name,
-      category: plan.category.name,
-      taxRate: toNumber(plan.taxRate),
-      status: mapStatus(plan.status),
-    })),
   };
 }
 
 export async function getAdminMenuManagerData() {
-  const [items, weeklyMenu] = await Promise.all([
-    db.menuItem.findMany({
-      where: { status: { not: "ARCHIVED" } },
-      orderBy: [{ type: "asc" }, { name: "asc" }],
-    }),
-    db.weeklyMenu.findFirst({
-      where: { status: "ACTIVE" },
-      include: { days: { orderBy: { dayOfWeek: "asc" } } },
-      orderBy: { weekStart: "desc" },
-    }),
-  ]);
+  const uploads = await db.menuUpload.findMany({ orderBy: { startDate: "asc" } });
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   return {
-    items: items.map<MenuItem>((item) => ({
-      id: item.id,
-      name: item.name,
-      type: item.type as MenuItem["type"],
-      spice: item.spice as MenuItem["spice"],
-      veg: item.vegetarian,
-      status: item.status === "ACTIVE" ? "Active" : "Draft",
-      description: item.description ?? "",
+    uploads: uploads.map<AdminMenuUpload>((upload) => ({
+      id: upload.id,
+      title: upload.title,
+      fileUrl: upload.fileUrl,
+      isPdf: upload.fileUrl.toLowerCase().endsWith(".pdf"),
+      startDate: toDateInputValue(upload.startDate),
+      endDate: toDateInputValue(upload.endDate),
+      dateRangeLabel: formatMenuDateRange(upload.startDate, upload.endDate),
+      expired: upload.endDate < today,
     })),
-    weeklyMenu:
-      weeklyMenu?.days.map((day) => ({
-        day: new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(day.date),
-        date: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(day.date),
-        daal: day.daal,
-        sabzi: day.sabzi,
-        rice: day.rice,
-        dessert: day.dessert ?? undefined,
-      })) ?? [],
+  };
+}
+
+export async function getAdminMediaLibrary(): Promise<{
+  assets: AdminMediaAsset[];
+  folders: string[];
+}> {
+  const [assets, folderSetting] = await Promise.all([
+    db.mediaAsset.findMany({ orderBy: { createdAt: "desc" } }),
+    db.setting.findUnique({ where: { key: "media_folders" } }),
+  ]);
+
+  const storedFolders = Array.isArray(folderSetting?.value)
+    ? folderSetting.value.map(String)
+    : DEFAULT_MEDIA_FOLDERS;
+  const folders = Array.from(
+    new Set(["general", ...storedFolders, ...assets.map((asset) => asset.folder)]),
+  ).sort();
+
+  return {
+    folders,
+    assets: assets.map((asset) => ({
+      id: asset.id,
+      fileName: asset.fileName,
+      fileUrl: asset.fileUrl,
+      folder: asset.folder,
+      sizeLabel: `${Math.max(1, Math.round(asset.size / 1024))} KB`,
+      uploadedAt: new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }).format(asset.createdAt),
+    })),
   };
 }
 
 export async function getAdminCouponManagerData(): Promise<Coupon[]> {
   const coupons = await db.coupon.findMany({
     where: { status: { not: "ARCHIVED" } },
+    include: { customer: { select: { id: true, name: true, email: true } } },
     orderBy: { createdAt: "desc" },
   });
 
@@ -291,6 +432,23 @@ export async function getAdminCouponManagerData(): Promise<Coupon[]> {
     limit: coupon.usageLimit ?? 0,
     expires: formatDate(coupon.expiresAt),
     expiresAt: coupon.expiresAt?.toISOString().slice(0, 10),
+    customerId: coupon.customerId,
+    customerName: coupon.customer?.name ?? null,
+  }));
+}
+
+export async function getAdminCustomerOptions(): Promise<AdminCustomerOption[]> {
+  const customers = await db.customer.findMany({
+    where: { status: "ACTIVE" },
+    select: { id: true, name: true, email: true },
+    orderBy: { name: "asc" },
+    take: 500,
+  });
+
+  return customers.map((customer) => ({
+    id: customer.id,
+    name: customer.name,
+    email: customer.email,
   }));
 }
 

@@ -1,9 +1,13 @@
 import { ArrowRight, HelpCircle, MapPin, ReceiptText, Truck } from "lucide-react";
+import type { Metadata } from "next";
 import { FaqAccordion } from "@/components/sections/faq-accordion";
+import { JsonLd } from "@/components/seo/json-ld";
 import { PageHero } from "@/components/sections/page-hero";
 import { RevealItem, StaggerGroup } from "@/components/ui/animated-section";
 import { ButtonLink } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/section-heading";
+import { buildFaqSchema } from "@/lib/seo-core.mjs";
+import { getMarketingMetadata, schemasEnabled } from "@/lib/server/seo";
 
 const faqGroups = [
   {
@@ -71,9 +75,16 @@ const faqGroups = [
   },
 ];
 
-export default function FaqPage() {
+export function generateMetadata(): Promise<Metadata> {
+  return getMarketingMetadata("/faq");
+}
+
+export default async function FaqPage() {
+  const faqItems = faqGroups.flatMap((group) => group.questions);
+  const schemas = await schemasEnabled("/faq") ? [buildFaqSchema(faqItems)] : [];
   return (
     <main>
+      <JsonLd data={schemas} />
       <PageHero
         eyebrow="FAQ"
         title="Clear answers before dinner is on the way."
