@@ -36,14 +36,14 @@ export default async function AdminOverviewPage() {
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const revenue = adminOrders.reduce((total, order) => total + order.total, 0);
   const active = customers.filter((customer) => customer.status === "Active").length;
-  const deliveries = adminOrders.filter((order) => order.status === "Pending").length;
+  const awaitingPayment = adminOrders.filter((order) => order.status === "Pending payment").length;
   const repeatRate = customers.length
     ? Math.round((customers.filter((customer) => customer.orders > 1).length / customers.length) * 100)
     : 0;
   const stats = [
     { label: "Revenue", value: formatCurrency(revenue), delta: `${adminOrders.length} tracked orders`, tone: "good" as const },
     { label: "Active plans", value: String(active), delta: `${customers.length} customers`, tone: "neutral" as const },
-    { label: "Open deliveries", value: String(deliveries), delta: "need status updates", tone: "watch" as const },
+    { label: "Awaiting payment", value: String(awaitingPayment), delta: "Zelle to confirm", tone: "watch" as const },
     { label: "Repeat customers", value: `${repeatRate}%`, delta: "2+ orders", tone: "good" as const },
   ];
   const revenueData = Array.from(

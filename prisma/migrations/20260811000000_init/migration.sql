@@ -487,7 +487,7 @@ CREATE TABLE `package_delivery_days` (
     `deliveryDate` DATETIME(3) NOT NULL,
     `status` ENUM('PENDING_PAYMENT', 'PAID', 'ACCEPTED', 'DECLINED', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'PAUSED', 'CANCELLED') NOT NULL DEFAULT 'PREPARING',
     `menuSummary` VARCHAR(191) NULL,
-    `deliveryWindow` VARCHAR(191) NOT NULL DEFAULT '6:00 PM - 8:00 PM',
+    `deliveryWindow` VARCHAR(191) NOT NULL DEFAULT '8:00 AM - 11:00 AM',
 
     INDEX `package_delivery_days_customerPackageId_idx`(`customerPackageId`),
     INDEX `package_delivery_days_deliveryDate_idx`(`deliveryDate`),

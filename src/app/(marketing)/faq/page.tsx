@@ -48,7 +48,7 @@ const faqGroups = [
       {
         question: "What time does food arrive?",
         answer:
-          "Most dinner deliveries are scheduled Monday through Friday between 6:00 PM and 8:00 PM.",
+          "Deliveries arrive Monday through Friday, every morning.",
       },
     ],
   },

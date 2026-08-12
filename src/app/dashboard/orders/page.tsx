@@ -7,7 +7,7 @@ import { formatCurrency } from "@/lib/utils";
 
 function statusTone(status: string) {
   if (status === "Accepted") return "green" as const;
-  if (status === "Declined") return "red" as const;
+  if (status === "Cancelled") return "red" as const;
   return "amber" as const;
 }
 
@@ -45,7 +45,6 @@ export default async function CustomerOrdersPage() {
               <Th>Order</Th>
               <Th>Plan</Th>
               <Th>Date</Th>
-              <Th>Window</Th>
               <Th>Status</Th>
               <Th>Total</Th>
               <Th className="text-right">Actions</Th>
@@ -58,7 +57,6 @@ export default async function CustomerOrdersPage() {
                   <Td className="font-extrabold">{order.id}</Td>
                   <Td className="text-ink/70">{order.plan}</Td>
                   <Td className="text-ink/55">{order.date}</Td>
-                  <Td className="text-ink/55">{order.deliveryWindow}</Td>
                   <Td>
                     <StatusPill tone={statusTone(order.status)}>{order.status}</StatusPill>
                   </Td>
@@ -74,7 +72,7 @@ export default async function CustomerOrdersPage() {
               ))
             ) : (
               <tr>
-                <Td colSpan={7} className="py-8 text-center text-sm font-bold text-ink/45">
+                <Td colSpan={6} className="py-8 text-center text-sm font-bold text-ink/45">
                   No orders yet. Start with a package and your history will appear here.
                 </Td>
               </tr>

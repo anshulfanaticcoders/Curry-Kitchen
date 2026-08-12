@@ -152,7 +152,7 @@ export function HeroSection() {
         <div className="section-shell grid grid-cols-[1fr_1fr_1fr_auto] overflow-hidden rounded-full border border-white/16 bg-white/12 p-2 text-white shadow-[0_24px_80px_rgba(0,0,0,0.38)] backdrop-blur-xl">
           {[
             { icon: MapPin, label: "Delivery area", value: "San Diego" },
-            { icon: Clock, label: "Dinner window", value: "6:00 PM - 8:00 PM" },
+            { icon: Clock, label: "Delivery", value: "Every morning" },
             { icon: Truck, label: "Weekly rhythm", value: "Monday to Friday" },
           ].map((item) => (
             <div key={item.label} className="flex items-center gap-4 border-r border-white/12 px-5 py-3 last:border-r-0">

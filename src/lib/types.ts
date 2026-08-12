@@ -134,11 +134,10 @@ export type WeeklyMenuDay = {
   image: string;
 };
 
-export type OrderStatus = "Preparing" | "Out for delivery" | "Delivered" | "Paused";
 
-// Orders themselves are only ever pending review, accepted, or declined;
-// per-day delivery tracking keeps the richer OrderStatus labels.
-export type OrderDecision = "Pending" | "Accepted" | "Declined";
+// Paid orders are accepted automatically; the only other states are waiting
+// on payment (Zelle) or cancelled by an admin.
+export type OrderDecision = "Pending payment" | "Accepted" | "Cancelled";
 
 export type Order = {
   id: string;
@@ -146,15 +145,13 @@ export type Order = {
   date: string;
   total: number;
   status: OrderDecision;
-  deliveryWindow: string;
 };
 
 export type Delivery = {
   id: string;
   day: string;
+  date: string;
   meal: string;
-  status: OrderStatus;
-  eta: string;
 };
 
 export type CustomerProfile = {
@@ -181,7 +178,7 @@ export type CustomerPackageSummary = {
   id?: string;
   plan: string;
   quantity: number;
-  status: "Active" | "Paused" | "Pending payment" | "Needs student approval" | "Expired" | "No active plan";
+  status: "Active" | "Paused" | "Pending payment" | "Needs student approval" | "Cancelled" | "Expired" | "No active plan";
   totalDeliveryDays: number;
   usedDeliveryDays: number;
   remainingDeliveryDays: number;
@@ -246,7 +243,6 @@ export type MenuUploadView = {
 
 export type CalendarEventType =
   | "delivery"
-  | "delivered"
   | "pause"
   | "package-start"
   | "package-end";
@@ -261,7 +257,14 @@ export type CustomerCalendarData = {
   customerId: string;
   customerName: string;
   deliveryWeekdays: number[];
-  packages: Array<{ name: string; status: string }>;
+  packages: Array<{
+    name: string;
+    status: string;
+    startDate: string | null;
+    endDate: string | null;
+    remainingDays: number;
+    resumeBy: string | null;
+  }>;
   events: CalendarEvent[];
 };
 
@@ -326,7 +329,6 @@ export type PackagingPackage = {
   startDate: string;
   deliveryProgress: string;
   nextDelivery: string;
-  deliveryWindow: string;
   includes: string[];
   addons: string[];
   foodPreferences: string;
@@ -388,7 +390,6 @@ export type AdminOrder = {
   payment: "Paid" | "Pending" | "Refunded";
   status: OrderDecision;
   date: string;
-  window: string;
 };
 
 export type PlanPerformance = {

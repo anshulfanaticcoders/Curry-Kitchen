@@ -66,14 +66,13 @@ export async function getCustomerCalendarData(
     }
 
     for (const day of customerPackage.deliveryDays) {
-      const delivered = day.status === "DELIVERED";
       const paused = day.status === "PAUSED" || day.status === "CANCELLED";
       events.push({
         date: toDateKey(day.deliveryDate),
-        type: delivered ? "delivered" : paused ? "pause" : "delivery",
+        type: paused ? "pause" : "delivery",
         label: paused
           ? `${planName} — delivery paused`
-          : `${planName} — ${delivered ? "delivered" : `delivery ${day.deliveryWindow}`}`,
+          : `${planName} — morning delivery`,
       });
     }
 
@@ -97,14 +96,35 @@ export async function getCustomerCalendarData(
     }
   }
 
+  const formatFullDate = (date: Date) =>
+    new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
+  const now = new Date();
+
   return {
     customerId: customer.id,
     customerName: customer.name,
     deliveryWeekdays: rules.deliveryWeekdays,
-    packages: customer.packages.map((customerPackage) => ({
-      name: customerPackage.package.name,
-      status: packageStatusLabel(customerPackage.status),
-    })),
+    packages: customer.packages.map((customerPackage) => {
+      const elapsedDays = customerPackage.deliveryDays.filter(
+        (day) => day.status !== "CANCELLED" && day.deliveryDate < now,
+      ).length;
+      const usedDays = Math.max(customerPackage.usedDeliveryDays, elapsedDays);
+      const activePause = customerPackage.pauseRequests.find(
+        (pause) => pause.status === "ACTIVE",
+      );
+
+      return {
+        name: customerPackage.package.name,
+        status: packageStatusLabel(customerPackage.status),
+        startDate: customerPackage.startDate ? formatFullDate(customerPackage.startDate) : null,
+        endDate: customerPackage.endDate ? formatFullDate(customerPackage.endDate) : null,
+        remainingDays: Math.max(customerPackage.totalDeliveryDays - usedDays, 0),
+        resumeBy:
+          customerPackage.status === "PAUSED" && activePause
+            ? formatFullDate(activePause.endDate)
+            : null,
+      };
+    }),
     events,
   };
 }

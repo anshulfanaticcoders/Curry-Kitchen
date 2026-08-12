@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Pause, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/dashboard/primitives";
 import type { CalendarEvent, CalendarEventType, CustomerCalendarData } from "@/lib/types";
@@ -8,12 +8,11 @@ import { cn } from "@/lib/utils";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const EVENT_STYLES: Record<CalendarEventType, { dot: string; chip: string; label: string }> = {
-  delivery: { dot: "bg-saffron", chip: "bg-rose text-masala", label: "Delivery scheduled" },
-  delivered: { dot: "bg-leaf", chip: "bg-mint text-leaf", label: "Delivered" },
-  pause: { dot: "bg-amber-400", chip: "bg-amber-50 text-amber-700", label: "Paused" },
-  "package-start": { dot: "bg-ink", chip: "bg-ink text-white", label: "Package starts" },
-  "package-end": { dot: "bg-masala", chip: "bg-rose text-masala", label: "Package ends" },
+const EVENT_CHIPS: Record<CalendarEventType, string> = {
+  delivery: "bg-rose text-masala",
+  pause: "bg-amber-50 text-amber-700",
+  "package-start": "bg-basil-soft text-basil",
+  "package-end": "bg-chili-soft text-chili",
 };
 
 function toDateKey(date: Date) {
@@ -66,6 +65,7 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
   const selectedDate = new Date(`${selectedKey}T00:00:00`);
   const selectedIsOffDay =
     !data.deliveryWeekdays.includes(selectedDate.getDay()) && selectedEvents.length === 0;
+  const activePlan = data.packages.find((plan) => plan.status === "Active") ?? data.packages[0];
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
@@ -102,6 +102,24 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
           </div>
         </div>
 
+        {activePlan?.status === "Paused" ? (
+          <p className="mt-3 rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-800">
+            {activePlan.name} · Paused — {activePlan.remainingDays} delivery{" "}
+            {activePlan.remainingDays === 1 ? "day" : "days"} saved
+            {activePlan.resumeBy ? ` · Resume by ${activePlan.resumeBy}` : ""}
+          </p>
+        ) : activePlan?.startDate ? (
+          <p className="mt-3 rounded-xl bg-frost px-4 py-2.5 text-sm font-bold text-ink/65">
+            {activePlan.name} · Starts <span className="text-basil">{activePlan.startDate}</span>
+            {activePlan.endDate ? (
+              <>
+                {" "}· Ends <span className="text-chili">{activePlan.endDate}</span>
+              </>
+            ) : null}
+            {" "}· {activePlan.remainingDays} delivery {activePlan.remainingDays === 1 ? "day" : "days"} left
+          </p>
+        ) : null}
+
         <div className="mt-6 grid grid-cols-7 gap-1.5">
           {WEEKDAY_LABELS.map((label) => (
             <p key={label} className="pb-2 text-center text-[11px] font-black uppercase tracking-[0.12em] text-ink/40">
@@ -115,8 +133,24 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
             const isToday = cell.key === toDateKey(today);
             const isSelected = cell.key === selectedKey;
             const isOffDay = !data.deliveryWeekdays.includes(cell.date.getDay());
+            const isStart = events.some((event) => event.type === "package-start");
+            const isEnd = events.some((event) => event.type === "package-end");
             const hasPause = events.some((event) => event.type === "pause");
-            const uniqueTypes = Array.from(new Set(events.map((event) => event.type))).slice(0, 3);
+            const hasDelivery = events.some((event) => event.type === "delivery");
+
+            // Fill colors carry meaning: green start, red end, saffron delivery,
+            // amber pause, faded red cross for off days.
+            const fill = isStart
+              ? "border-basil bg-basil text-white"
+              : isEnd
+                ? "border-chili bg-chili text-white"
+                : hasPause
+                  ? "border-amber-200 bg-amber-100 text-amber-800"
+                  : hasDelivery
+                    ? "border-saffron bg-saffron text-white"
+                    : isOffDay
+                      ? "border-transparent bg-chili-soft/60 text-chili/45"
+                      : "border-ink/8 bg-white text-ink/75 hover:border-saffron/45";
 
             return (
               <button
@@ -125,29 +159,17 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
                 onClick={() => setSelectedKey(cell.key)}
                 className={cn(
                   "relative grid aspect-square place-items-center rounded-xl border text-sm font-extrabold transition",
-                  isSelected
-                    ? "border-saffron bg-saffron text-white shadow-[0_10px_24px_rgba(255,122,26,0.35)]"
-                    : hasPause
-                      ? "border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300"
-                      : isOffDay
-                        ? "border-transparent bg-frost text-ink/35 hover:border-ink/10"
-                        : "border-ink/8 bg-white text-ink/75 hover:border-saffron/45",
-                  isToday && !isSelected ? "ring-2 ring-saffron/45" : "",
+                  fill,
+                  isSelected ? "ring-2 ring-ink ring-offset-2" : "",
+                  isToday && !isSelected ? "ring-2 ring-saffron/45 ring-offset-1" : "",
                 )}
               >
                 {cell.date.getDate()}
-                {uniqueTypes.length ? (
-                  <span className="absolute bottom-1.5 flex gap-1">
-                    {uniqueTypes.map((type) => (
-                      <span
-                        key={type}
-                        className={cn(
-                          "size-1.5 rounded-full",
-                          isSelected ? "bg-white" : EVENT_STYLES[type].dot,
-                        )}
-                      />
-                    ))}
-                  </span>
+                {isOffDay && !isStart && !isEnd && !hasDelivery && !hasPause ? (
+                  <X size={11} className="absolute bottom-1.5 text-chili/50" strokeWidth={3} />
+                ) : null}
+                {hasPause ? (
+                  <Pause size={11} className="absolute bottom-1.5 text-amber-700" strokeWidth={3} />
                 ) : null}
               </button>
             );
@@ -155,16 +177,18 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
         </div>
 
         <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-ink/8 pt-5">
-          {(Object.keys(EVENT_STYLES) as CalendarEventType[]).map((type) => (
-            <span key={type} className="inline-flex items-center gap-2 text-xs font-bold text-ink/55">
-              <span className={cn("size-2 rounded-full", EVENT_STYLES[type].dot)} />
-              {EVENT_STYLES[type].label}
+          {[
+            { swatch: "bg-basil", label: "Package starts" },
+            { swatch: "bg-chili", label: "Package ends" },
+            { swatch: "bg-saffron", label: "Delivery day" },
+            { swatch: "bg-amber-300", label: "Paused" },
+            { swatch: "bg-chili-soft border border-chili/30", label: "Off day (no delivery)" },
+          ].map((item) => (
+            <span key={item.label} className="inline-flex items-center gap-2 text-xs font-bold text-ink/55">
+              <span className={cn("size-2.5 rounded-full", item.swatch)} />
+              {item.label}
             </span>
           ))}
-          <span className="inline-flex items-center gap-2 text-xs font-bold text-ink/55">
-            <span className="size-2 rounded-full bg-ink/15" />
-            Off day (no delivery)
-          </span>
         </div>
       </Card>
 
@@ -184,18 +208,17 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
                 <div
                   key={`${event.date}-${index}`}
                   className={cn(
-                    "flex items-start gap-3 rounded-xl px-4 py-3 text-sm font-bold",
-                    EVENT_STYLES[event.type].chip,
+                    "rounded-xl px-4 py-3 text-sm font-bold",
+                    EVENT_CHIPS[event.type],
                   )}
                 >
-                  <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", EVENT_STYLES[event.type].dot)} />
                   {event.label}
                 </div>
               ))
             ) : (
               <div className="flex items-center gap-3 rounded-xl bg-frost px-4 py-3 text-sm font-bold text-ink/50">
                 <CalendarDays size={16} />
-                {selectedIsOffDay ? "Off day — no deliveries scheduled." : "Nothing scheduled on this day."}
+                {selectedIsOffDay ? "Off day — no deliveries." : "Nothing scheduled on this day."}
               </div>
             )}
           </div>
@@ -204,11 +227,23 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
         {data.packages.length ? (
           <Card className="p-6">
             <p className="text-[11px] font-black uppercase tracking-[0.14em] text-ink/40">Plans on this calendar</p>
-            <div className="mt-3 grid gap-2">
+            <div className="mt-3 grid gap-3">
               {data.packages.map((plan, index) => (
-                <div key={`${plan.name}-${index}`} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-extrabold">{plan.name}</span>
-                  <span className="rounded-full bg-frost px-3 py-1 text-xs font-black text-ink/55">{plan.status}</span>
+                <div key={`${plan.name}-${index}`} className="grid gap-1 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-extrabold">{plan.name}</span>
+                    <span className="rounded-full bg-frost px-3 py-1 text-xs font-black text-ink/55">{plan.status}</span>
+                  </div>
+                  {plan.startDate ? (
+                    <p className="text-xs font-bold text-ink/50">
+                      <span className="text-basil">{plan.startDate}</span>
+                      {plan.endDate ? (
+                        <>
+                          {" "}→ <span className="text-chili">{plan.endDate}</span>
+                        </>
+                      ) : null}
+                    </p>
+                  ) : null}
                 </div>
               ))}
             </div>

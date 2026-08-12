@@ -108,8 +108,8 @@ export default async function ContactPage() {
             <Clock className="text-masala" size={28} />
             <h2 className="mt-5 font-display text-3xl font-black">Delivery rhythm</h2>
             <p className="mt-3 text-sm font-medium leading-6 text-ink/64">
-              Monday to Friday dinner delivery, usually between 6:00 PM and 8:00 PM. Customers
-              confirm city and ZIP during checkout.
+              Monday to Friday delivery, every morning. Customers confirm city and ZIP during
+              checkout.
             </p>
             <ButtonLink href="/faq" variant="dark" className="mt-6">
               Read FAQ

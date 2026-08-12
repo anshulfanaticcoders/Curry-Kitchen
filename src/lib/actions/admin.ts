@@ -5,10 +5,14 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fail, ok } from "@/lib/action-result";
 import { getCurrentSession } from "@/lib/auth";
+import { getBusinessRules } from "@/lib/business-rules";
 import { complimentaryItemIdsFromFormData } from "@/lib/complimentary-items";
 import { db } from "@/lib/db";
 import { sendVerificationDecisionEmail } from "@/lib/email/notifications";
+import { sendTransactionalEmail } from "@/lib/email/send";
+import { createOrderCancelledEmail } from "@/lib/email/templates";
 import { calculateDeliveryDates, nextEligiblePackageStartDate } from "@/lib/package-schedule";
+import { pausePackage, resumePackage } from "@/lib/server/package-pause";
 import { markOrderPaidAndActivate } from "@/lib/server/checkout";
 import { STATIC_SEO_ROUTES, normalizeSeoInput, validateHttpsImageUrl, validateHttpsUrl } from "@/lib/seo-core.mjs";
 
@@ -1082,55 +1086,74 @@ export async function deleteCouponAction(couponId: string) {
   }
 }
 
-export async function decideOrderAction(orderId: string, decision: "ACCEPTED" | "DECLINED") {
+// Paid orders are accepted automatically, so the only admin decision left is
+// cancelling an order — which stops its packages and notifies the customer
+// with the admin's reason.
+export async function cancelOrderAction(orderId: string, reason?: string) {
   try {
     const admin = await requireAdmin();
-    const parsed = z.enum(["ACCEPTED", "DECLINED"]).parse(decision);
+    const trimmedReason = reason?.trim() || "";
     const order = await db.order.findFirst({
       where: { OR: [{ id: orderId }, { orderNumber: orderId }] },
-      select: { id: true },
+      include: { customer: true },
     });
 
     if (!order) {
       throw new Error("Order was not found.");
     }
 
+    if (order.status === "DECLINED" || order.status === "CANCELLED") {
+      return ok({ id: order.id, status: order.status }, "Order is already cancelled.");
+    }
+
     await db.$transaction(async (tx) => {
       await tx.order.update({
         where: { id: order.id },
-        data: { status: parsed },
+        data: { status: "DECLINED" },
       });
 
-      // Declining an order stops its packages and scheduled deliveries.
-      if (parsed === "DECLINED") {
-        await tx.customerPackage.updateMany({
-          where: { orderId: order.id },
-          data: { status: "CANCELLED" },
-        });
-        await tx.packageDeliveryDay.updateMany({
-          where: { customerPackage: { orderId: order.id } },
-          data: { status: "CANCELLED" },
-        });
-      }
+      await tx.customerPackage.updateMany({
+        where: { orderId: order.id },
+        data: { status: "CANCELLED" },
+      });
+      await tx.packageDeliveryDay.updateMany({
+        where: { customerPackage: { orderId: order.id } },
+        data: { status: "CANCELLED" },
+      });
+      await tx.studentVerification.updateMany({
+        where: { orderId: order.id, status: "PENDING" },
+        data: { status: "REJECTED", adminNote: trimmedReason || "Order cancelled.", reviewedAt: new Date() },
+      });
     });
 
     await db.auditLog.create({
       data: {
         userId: admin.id,
-        action: parsed === "ACCEPTED" ? "order.accepted" : "order.declined",
+        action: "order.cancelled",
         entity: "order",
         entityId: order.id,
       },
     });
 
+    const customerEmail = order.customer?.email ?? order.guestEmail;
+
+    if (customerEmail) {
+      await sendTransactionalEmail({
+        to: customerEmail,
+        email: createOrderCancelledEmail({
+          customerName: order.customer?.name ?? order.guestName ?? "there",
+          orderNumber: order.orderNumber,
+          reason: trimmedReason,
+        }),
+        idempotencyKey: `order-cancelled/${order.id}`,
+      });
+    }
+
     revalidatePath("/admin/orders");
     revalidatePath("/admin");
-    return ok(
-      { id: order.id, status: parsed },
-      parsed === "ACCEPTED" ? "Order accepted." : "Order declined.",
-    );
+    return ok({ id: order.id, status: "DECLINED" }, "Order cancelled and customer notified.");
   } catch (error) {
-    return fail(error instanceof Error ? error.message : "Order could not be updated.");
+    return fail(error instanceof Error ? error.message : "Order could not be cancelled.");
   }
 }
 
@@ -1181,6 +1204,7 @@ export async function approveStudentVerificationAction(verificationId: string) {
     });
 
     if (verification.orderId) {
+      const rules = await getBusinessRules();
       const pendingPackages = await db.customerPackage.findMany({
         where: { orderId: verification.orderId, status: "PENDING_STUDENT_VERIFICATION" },
         include: { deliveryDays: true, package: true },
@@ -1191,10 +1215,11 @@ export async function approveStudentVerificationAction(verificationId: string) {
           const startDate =
             customerPackage.startDate && customerPackage.startDate > new Date()
               ? customerPackage.startDate
-              : nextEligiblePackageStartDate();
+              : nextEligiblePackageStartDate(new Date(), rules.deliveryWeekdays);
           const deliveryDates = calculateDeliveryDates(
             customerPackage.totalDeliveryDays,
             startDate,
+            rules.deliveryWeekdays,
           );
 
           await tx.customerPackage.update({
@@ -1213,6 +1238,7 @@ export async function approveStudentVerificationAction(verificationId: string) {
                 deliveryDate,
                 status: "PREPARING",
                 menuSummary: customerPackage.package.name,
+                deliveryWindow: rules.deliveryWindow,
               })),
             });
           }
@@ -1272,26 +1298,18 @@ export async function adminPausePackageAction(customerPackageId: string, reason?
   try {
     const admin = await requireAdmin();
 
-    await db.$transaction([
-      db.customerPackage.update({
-        where: { id: customerPackageId },
-        data: { status: "PAUSED" },
-      }),
-      db.pauseRequest.create({
-        data: {
-          customerPackageId,
-          requestedByUserId: admin.id,
-          status: "ACTIVE",
-          startDate: new Date(),
-          endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          reason,
-          adminNote: "Paused by admin.",
-        },
-      }),
-    ]);
+    const { remainingDays, resumeBy } = await pausePackage({
+      customerPackageId,
+      requestedByUserId: admin.id,
+      reason,
+      adminNote: "Paused by admin.",
+    });
 
     revalidatePath("/admin/customers");
-    return ok({ id: customerPackageId }, "Package paused.");
+    return ok(
+      { id: customerPackageId },
+      `Package paused with ${remainingDays} delivery days saved until ${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(resumeBy)}.`,
+    );
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Package could not be paused.");
   }
@@ -1301,19 +1319,15 @@ export async function adminResumePackageAction(customerPackageId: string) {
   try {
     await requireAdmin();
 
-    await db.$transaction([
-      db.customerPackage.update({
-        where: { id: customerPackageId },
-        data: { status: "ACTIVE" },
-      }),
-      db.pauseRequest.updateMany({
-        where: { customerPackageId, status: "ACTIVE" },
-        data: { status: "ENDED", endDate: new Date() },
-      }),
-    ]);
+    const { remainingDays } = await resumePackage(customerPackageId);
 
     revalidatePath("/admin/customers");
-    return ok({ id: customerPackageId }, "Package resumed.");
+    return ok(
+      { id: customerPackageId },
+      remainingDays
+        ? `Package resumed — ${remainingDays} delivery days rescheduled from the next delivery day.`
+        : "Package had no delivery days left, so it has ended.",
+    );
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Package could not be resumed.");
   }

@@ -300,3 +300,54 @@ export function createVerificationRejectedEmail(
     }),
   };
 }
+
+type PauseExpiryReminderInput = {
+  customerName: string;
+  planName: string;
+  remainingDays: number;
+  resumeBy: Date;
+};
+
+export function createPauseExpiryReminderEmail(
+  input: PauseExpiryReminderInput,
+): TransactionalEmail {
+  const resumeBy = formatDate(input.resumeBy);
+  const dashboardUrl = route("/dashboard");
+  const daysLabel = `${input.remainingDays} delivery ${input.remainingDays === 1 ? "day" : "days"}`;
+
+  return {
+    subject: `Your ${input.planName} pause ends ${resumeBy}`,
+    text: `Hi ${input.customerName},\n\nYour ${input.planName} is still paused with ${daysLabel} saved.\nResume by ${resumeBy} to use them — after that the package ends.\n\nResume from your dashboard: ${dashboardUrl}`,
+    html: emailLayout({
+      heading: "Your saved delivery days are waiting",
+      intro: `Hi ${input.customerName}, your ${input.planName} is still paused with ${daysLabel} saved.`,
+      content: `<p>Resume by <strong>${escapeHtml(resumeBy)}</strong> to use them — after that the package ends.</p>`,
+      cta: { label: "Resume my package", url: dashboardUrl },
+    }),
+  };
+}
+
+type OrderCancelledInput = {
+  customerName: string;
+  orderNumber: string;
+  reason?: string;
+};
+
+export function createOrderCancelledEmail(input: OrderCancelledInput): TransactionalEmail {
+  const ordersUrl = route("/dashboard/orders");
+  const reasonText = input.reason ? `\nReason: ${input.reason}` : "";
+  const reasonHtml = input.reason
+    ? `<p><strong>Reason:</strong> ${escapeHtml(input.reason)}</p>`
+    : "";
+
+  return {
+    subject: `Your Curry Kitchen order ${input.orderNumber} was cancelled`,
+    text: `Hi ${input.customerName},\n\nYour order ${input.orderNumber} has been cancelled.${reasonText}\n\nIf you already paid, we will arrange your refund. Reply to this email with any questions.\n\nView your orders: ${ordersUrl}`,
+    html: emailLayout({
+      heading: "Your order was cancelled",
+      intro: `Hi ${input.customerName}, your order ${escapeHtml(input.orderNumber)} has been cancelled.`,
+      content: `${reasonHtml}<p>If you already paid, we will arrange your refund. Reply to this email with any questions.</p>`,
+      cta: { label: "View your orders", url: ordersUrl },
+    }),
+  };
+}

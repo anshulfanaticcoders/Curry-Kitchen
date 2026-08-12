@@ -639,7 +639,7 @@ model PackageDeliveryDay {
   deliveryDate      DateTime
   status            OrderStatus @default(PREPARING)
   menuSummary       String?
-  deliveryWindow    String      @default("6:00 PM - 8:00 PM")
+  deliveryWindow    String      @default("8:00 AM - 11:00 AM")
 
   customerPackage CustomerPackage @relation(fields: [customerPackageId], references: [id], onDelete: Cascade)
 

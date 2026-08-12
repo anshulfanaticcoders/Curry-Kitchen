@@ -92,18 +92,12 @@ function formatDay(value: Date) {
 }
 
 function mapOrderStatus(status: string): Order["status"] {
-  if (status === "DECLINED" || status === "CANCELLED") return "Declined";
-  if (status === "PENDING_PAYMENT" || status === "PAID") return "Pending";
-  // ACCEPTED plus legacy fulfilment statuses all mean the order was taken on.
+  if (status === "DECLINED" || status === "CANCELLED") return "Cancelled";
+  if (status === "PENDING_PAYMENT") return "Pending payment";
+  // PAID, ACCEPTED, and legacy fulfilment statuses all mean the order is on.
   return "Accepted";
 }
 
-function mapDeliveryStatus(status: string): Delivery["status"] {
-  if (status === "DELIVERED") return "Delivered";
-  if (status === "OUT_FOR_DELIVERY") return "Out for delivery";
-  if (status === "PAUSED" || status === "CANCELLED") return "Paused";
-  return "Preparing";
-}
 
 function mapPaymentStatus(status: string): Transaction["status"] {
   if (status === "PAID") return "Paid";
@@ -116,6 +110,7 @@ function mapCustomerPackageStatus(status: string): CustomerPackageSummary["statu
   if (status === "PAUSED") return "Paused";
   if (status === "PENDING_PAYMENT") return "Pending payment";
   if (status === "PENDING_STUDENT_VERIFICATION") return "Needs student approval";
+  if (status === "CANCELLED") return "Cancelled";
   return "Expired";
 }
 
@@ -430,7 +425,6 @@ export async function getAdminOrders(): Promise<AdminOrder[]> {
       payment: mapPaymentStatus(order.payments[0]?.status ?? "PENDING"),
       status: mapOrderStatus(order.status),
       date: formatDate(order.createdAt),
-      window: "6:00 PM - 8:00 PM",
     }));
   } catch {
     return [];
@@ -525,9 +519,7 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
               },
             },
             deliveryDays: {
-              where: { deliveryDate: { gte: new Date() } },
               orderBy: { deliveryDate: "asc" },
-              take: 1,
             },
           },
         },
@@ -549,7 +541,13 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
             .join(", ")
         : "No delivery address on file",
       packages: customer.packages.map((customerPackage) => {
-        const nextDelivery = customerPackage.deliveryDays[0];
+        const now = new Date();
+        const activeDays = customerPackage.deliveryDays.filter(
+          (day) => day.status !== "CANCELLED",
+        );
+        const nextDelivery = activeDays.find((day) => day.deliveryDate >= now);
+        const elapsedDays = activeDays.filter((day) => day.deliveryDate < now).length;
+        const usedDays = Math.max(customerPackage.usedDeliveryDays, elapsedDays);
 
         return {
           id: customerPackage.id,
@@ -558,11 +556,10 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
           startDate: customerPackage.startDate
             ? formatFullDate(customerPackage.startDate)
             : "Not scheduled",
-          deliveryProgress: `${customerPackage.usedDeliveryDays} of ${customerPackage.totalDeliveryDays} delivery days used`,
+          deliveryProgress: `${usedDays} of ${customerPackage.totalDeliveryDays} delivery days used`,
           nextDelivery: nextDelivery
             ? formatFullDate(nextDelivery.deliveryDate)
             : "No upcoming delivery scheduled",
-          deliveryWindow: nextDelivery?.deliveryWindow ?? "6:00 PM - 8:00 PM",
           includes: customerPackage.package.items.map((item) =>
             item.quantity ? `${item.quantity} ${item.name}` : item.name,
           ),
@@ -630,7 +627,6 @@ export async function getCustomerOrders(): Promise<Order[]> {
       date: formatDate(order.createdAt),
       total: toNumber(order.total),
       status: mapOrderStatus(order.status),
-      deliveryWindow: "6:00 PM - 8:00 PM",
     }));
   } catch {
     return [];
@@ -652,7 +648,8 @@ export async function getUpcomingDeliveries(): Promise<Delivery[]> {
     const deliveries = await db.packageDeliveryDay.findMany({
       where: {
         deliveryDate: { gte: new Date() },
-        customerPackage: { customerId: customer.id },
+        status: { notIn: ["CANCELLED", "PAUSED"] },
+        customerPackage: { customerId: customer.id, status: "ACTIVE" },
       },
       include: { customerPackage: { include: { package: true } } },
       orderBy: { deliveryDate: "asc" },
@@ -662,9 +659,8 @@ export async function getUpcomingDeliveries(): Promise<Delivery[]> {
     return deliveries.map((delivery) => ({
       id: delivery.id,
       day: formatDay(delivery.deliveryDate),
+      date: formatDate(delivery.deliveryDate),
       meal: delivery.menuSummary ?? delivery.customerPackage.package.name,
-      status: mapDeliveryStatus(delivery.status),
-      eta: delivery.deliveryWindow,
     }));
   } catch {
     return [];
@@ -704,10 +700,13 @@ export async function getCustomerPackageSummaries(): Promise<CustomerPackageSumm
     });
 
     return packages.map((customerPackage) => {
-      const deliveredDays = customerPackage.deliveryDays.filter(
-        (day) => day.status === "DELIVERED",
+      // Deliveries happen every morning, so a delivery day is "used" once its
+      // date has passed — no per-day status tracking.
+      const now = new Date();
+      const elapsedDays = customerPackage.deliveryDays.filter(
+        (day) => day.status !== "CANCELLED" && day.deliveryDate < now,
       ).length;
-      const usedDeliveryDays = Math.max(customerPackage.usedDeliveryDays, deliveredDays);
+      const usedDeliveryDays = Math.max(customerPackage.usedDeliveryDays, elapsedDays);
       const remainingDeliveryDays = Math.max(
         customerPackage.totalDeliveryDays - usedDeliveryDays,
         0,

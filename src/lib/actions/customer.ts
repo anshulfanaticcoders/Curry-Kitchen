@@ -6,6 +6,7 @@ import { fail, ok } from "@/lib/action-result";
 import { getCurrentSession } from "@/lib/auth";
 import { getBusinessRules } from "@/lib/business-rules";
 import { db } from "@/lib/db";
+import { pausePackage, resumePackage } from "@/lib/server/package-pause";
 
 const profileSchema = z.object({
   name: z.string().min(2),
@@ -107,39 +108,81 @@ export async function requestCustomerPauseAction(customerPackageId: string, reas
       return fail("This package has already used its one customer pause.");
     }
 
+    const { remainingDays, resumeBy } = await pausePackage({
+      customerPackageId,
+      requestedByUserId: user.id,
+      reason,
+    });
+
+    const resumeByLabel = new Intl.DateTimeFormat("en-US", {
+      month: "long",
+      day: "numeric",
+    }).format(resumeBy);
+
     await db.$transaction([
       db.customerPackage.update({
         where: { id: customerPackageId },
-        data: {
-          status: "PAUSED",
-          customerPauseUsed: true,
-        },
-      }),
-      db.pauseRequest.create({
-        data: {
-          customerPackageId,
-          requestedByUserId: user.id,
-          status: "ACTIVE",
-          startDate: new Date(),
-          endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          reason,
-        },
+        data: { customerPauseUsed: true },
       }),
       db.notification.create({
         data: {
           userId: user.id,
           type: "SYSTEM",
           title: "Package paused",
-          body: "Your package is paused for this week. Admin can resume or extend it if needed.",
+          body: `Your ${remainingDays} remaining delivery days are saved. Resume by ${resumeByLabel} or they expire.`,
         },
       }),
     ]);
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/orders");
-    return ok({ id: customerPackageId }, "Package paused.");
+    revalidatePath("/dashboard/calendar");
+    return ok(
+      { id: customerPackageId },
+      `Package paused. Resume by ${resumeByLabel} to use your remaining ${remainingDays} delivery days.`,
+    );
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Package could not be paused.");
+  }
+}
+
+export async function resumeCustomerPackageAction(customerPackageId: string) {
+  try {
+    const user = await getSessionUser();
+    const customerPackage = await db.customerPackage.findUnique({
+      where: { id: customerPackageId },
+      include: { customer: true },
+    });
+
+    if (!customerPackage) {
+      return fail("Package was not found.");
+    }
+
+    if (customerPackage.customer?.userId !== user.id) {
+      return fail("You can only resume your own package.");
+    }
+
+    const { remainingDays } = await resumePackage(customerPackageId);
+
+    if (!remainingDays) {
+      return fail("This package has no delivery days left, so it has ended.");
+    }
+
+    await db.notification.create({
+      data: {
+        userId: user.id,
+        type: "SYSTEM",
+        title: "Package resumed",
+        body: `Deliveries restart on the next delivery day — ${remainingDays} delivery days to go.`,
+      },
+    });
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/orders");
+    revalidatePath("/dashboard/calendar");
+    return ok({ id: customerPackageId }, "Package resumed. Deliveries restart on the next delivery day.");
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Package could not be resumed.");
   }
 }
 

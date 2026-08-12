@@ -262,7 +262,6 @@ export const recentOrders: Order[] = [
     date: "Jun 21, 2026",
     total: 368,
     status: "Accepted",
-    deliveryWindow: "6:00 PM - 8:00 PM",
   },
   {
     id: "CK-1041",
@@ -270,7 +269,6 @@ export const recentOrders: Order[] = [
     date: "Jun 14, 2026",
     total: 100,
     status: "Accepted",
-    deliveryWindow: "6:00 PM - 8:00 PM",
   },
   {
     id: "CK-1033",
@@ -278,31 +276,27 @@ export const recentOrders: Order[] = [
     date: "Jun 07, 2026",
     total: 231,
     status: "Accepted",
-    deliveryWindow: "5:00 PM - 7:00 PM",
   },
 ];
 
 export const upcomingDeliveries: Delivery[] = [
   {
     id: "DEL-2201",
-    day: "Today",
+    day: "Monday",
+    date: "Jun 22",
     meal: "Dal makhani with aloo gobi",
-    status: "Preparing",
-    eta: "7:15 PM",
   },
   {
     id: "DEL-2202",
     day: "Tuesday",
+    date: "Jun 23",
     meal: "Yellow dal with matar paneer",
-    status: "Preparing",
-    eta: "7:00 PM",
   },
   {
     id: "DEL-2203",
     day: "Wednesday",
+    date: "Jun 24",
     meal: "Moong dal with bhindi masala",
-    status: "Preparing",
-    eta: "7:20 PM",
   },
 ];
 
@@ -395,7 +389,7 @@ export const reviewItems: ReviewItem[] = [
 ];
 
 export const notifications: NotificationItem[] = [
-  { id: "nt-1", title: "Out for delivery", body: "Your Monday tiffin is on the way, arriving ~7:15 PM.", time: "10 min ago", type: "order", read: false },
+  { id: "nt-1", title: "Delivery on the way", body: "Your Monday tiffin arrives this morning.", time: "10 min ago", type: "order", read: false },
   { id: "nt-2", title: "Payment received", body: "We charged $368 to Visa ending 4242 for your June plan.", time: "2 hours ago", type: "payment", read: false },
   { id: "nt-3", title: "New weekly menu", body: "Next week's menu is live. Peek before Monday.", time: "Yesterday", type: "system", read: true },
   { id: "nt-4", title: "Offer unlocked", body: "Use STUDENT20 for 20% off your next renewal.", time: "2 days ago", type: "offer", read: true },
@@ -409,9 +403,9 @@ export const seoEntries: SeoEntry[] = [
 ];
 
 export const adminOrders: AdminOrder[] = [
-  { id: "CK-1048", customer: "Priya Sharma", plan: "Regular 8 Roti Tiffin", items: 5, total: 368, payment: "Paid", status: "Pending", date: "Jun 21, 2026", window: "6:00 – 8:00 PM" },
-  { id: "CK-1047", customer: "Simran Kaur", plan: "Regular 8 Roti Tiffin", items: 5, total: 350, payment: "Paid", status: "Accepted", date: "Jun 21, 2026", window: "6:00 – 8:00 PM" },
-  { id: "CK-1046", customer: "Aman Gill", plan: "Student & Military Saver Pack", items: 5, total: 220, payment: "Paid", status: "Accepted", date: "Jun 20, 2026", window: "5:00 – 7:00 PM" },
-  { id: "CK-1041", customer: "Neha Patel", plan: "Weekly Trial Pack", items: 6, total: 100, payment: "Refunded", status: "Declined", date: "Jun 14, 2026", window: "6:00 – 8:00 PM" },
-  { id: "CK-1040", customer: "Rohan Mehta", plan: "Extra Large 12 Roti Tiffin", items: 5, total: 450, payment: "Pending", status: "Pending", date: "Jun 13, 2026", window: "6:00 – 8:00 PM" },
+  { id: "CK-1048", customer: "Priya Sharma", plan: "Regular 8 Roti Tiffin", items: 5, total: 368, payment: "Paid", status: "Accepted", date: "Jun 21, 2026" },
+  { id: "CK-1047", customer: "Simran Kaur", plan: "Regular 8 Roti Tiffin", items: 5, total: 350, payment: "Paid", status: "Accepted", date: "Jun 21, 2026" },
+  { id: "CK-1046", customer: "Aman Gill", plan: "Student & Military Saver Pack", items: 5, total: 220, payment: "Paid", status: "Accepted", date: "Jun 20, 2026" },
+  { id: "CK-1041", customer: "Neha Patel", plan: "Weekly Trial Pack", items: 6, total: 100, payment: "Refunded", status: "Cancelled", date: "Jun 14, 2026" },
+  { id: "CK-1040", customer: "Rohan Mehta", plan: "Extra Large 12 Roti Tiffin", items: 5, total: 450, payment: "Pending", status: "Pending payment", date: "Jun 13, 2026" },
 ];

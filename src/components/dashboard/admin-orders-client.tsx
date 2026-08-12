@@ -1,20 +1,20 @@
 "use client";
 
-import { Check, Filter, Loader2, X } from "lucide-react";
+import { Filter, Loader2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Drawer, Tabs } from "@/components/dashboard/interactive";
 import { Card, PageHeader, Table, Td, Th } from "@/components/dashboard/primitives";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
-import { decideOrderAction } from "@/lib/actions/admin";
+import { cancelOrderAction } from "@/lib/actions/admin";
 import type { AdminOrder } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 
 function statusTone(status: string) {
   if (status === "Accepted") return "green" as const;
-  if (status === "Declined") return "red" as const;
+  if (status === "Cancelled") return "red" as const;
   return "amber" as const;
 }
 
@@ -27,19 +27,21 @@ function paymentTone(payment: string) {
 function OrderDetails({ order, close }: { order: AdminOrder; close: () => void }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [showCancel, setShowCancel] = useState(false);
+  const [reason, setReason] = useState("");
 
-  function decide(decision: "ACCEPTED" | "DECLINED") {
+  function cancelOrder() {
     startTransition(async () => {
-      const result = await decideOrderAction(order.id, decision);
+      const result = await cancelOrderAction(order.id, reason);
 
       if (result.ok) {
-        toast.success(result.message ?? "Order updated.");
+        toast.success(result.message ?? "Order cancelled.");
         close();
         router.refresh();
         return;
       }
 
-      toast.error("Order update failed", {
+      toast.error("Order could not be cancelled", {
         description: result.error ?? "Please try again.",
       });
     });
@@ -51,10 +53,8 @@ function OrderDetails({ order, close }: { order: AdminOrder; close: () => void }
         {[
           ["Plan", order.plan],
           ["Items", `${order.items} meals`],
-          ["Delivery window", order.window],
-          ["Date", order.date],
+          ["Order date", order.date],
           ["Payment", order.payment],
-          ["Status", order.status],
         ].map(([label, value]) => (
           <div key={label} className="rounded-lg border border-ink/10 bg-ivory p-4">
             <p className="text-xs font-black uppercase tracking-[0.14em] text-ink/45">{label}</p>
@@ -62,28 +62,55 @@ function OrderDetails({ order, close }: { order: AdminOrder; close: () => void }
           </div>
         ))}
       </div>
+      <div className="rounded-lg border border-ink/10 bg-ivory p-4">
+        <p className="text-xs font-black uppercase tracking-[0.14em] text-ink/45">Status</p>
+        <div className="mt-2">
+          <StatusPill tone={statusTone(order.status)}>{order.status}</StatusPill>
+        </div>
+        <p className="mt-2 text-sm font-medium text-ink/55">
+          {order.status === "Accepted"
+            ? "Paid orders are accepted automatically. Cancel only if the kitchen cannot fulfil it."
+            : order.status === "Pending payment"
+              ? "Waiting on the customer's Zelle payment. Confirm it from the Payments page."
+              : "This order is cancelled. Its packages and deliveries are stopped."}
+        </p>
+      </div>
       <div className="dark-band rounded-lg p-5 text-white">
         <div className="flex items-center justify-between">
           <span className="text-sm font-black uppercase tracking-[0.16em] text-saffron">Total</span>
           <span className="font-display text-3xl font-black">{formatCurrency(order.total)}</span>
         </div>
       </div>
-      {order.status === "Declined" ? (
-        <p className="rounded-lg bg-rose px-4 py-3 text-sm font-bold text-masala">
-          This order was declined. Its packages and deliveries are cancelled.
-        </p>
-      ) : (
-        <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={() => decide("DECLINED")} disabled={pending}>
-            {pending ? <Loader2 className="animate-spin" size={17} /> : <X size={17} />}
-            Decline
-          </Button>
-          <Button onClick={() => decide("ACCEPTED")} disabled={pending || order.status === "Accepted"}>
-            {pending ? <Loader2 className="animate-spin" size={17} /> : <Check size={17} />}
-            {order.status === "Accepted" ? "Accepted" : "Accept order"}
-          </Button>
-        </div>
-      )}
+      {order.status !== "Cancelled" &&
+        (showCancel ? (
+          <div className="grid gap-3 rounded-lg border border-ink/10 bg-ivory p-4">
+            <label className="grid gap-2 text-sm font-extrabold">
+              Reason for cancelling (sent to the customer)
+              <textarea
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                placeholder="e.g. We cannot deliver to your area this month."
+                className="min-h-24 rounded-button border border-ink/10 bg-white px-4 py-3 text-sm font-medium outline-none transition focus:border-saffron"
+              />
+            </label>
+            <div className="flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowCancel(false)} disabled={pending}>
+                Keep order
+              </Button>
+              <Button onClick={cancelOrder} disabled={pending}>
+                {pending ? <Loader2 className="animate-spin" size={17} /> : <X size={17} />}
+                Cancel order
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex justify-end">
+            <Button variant="secondary" onClick={() => setShowCancel(true)}>
+              <X size={17} />
+              Cancel order…
+            </Button>
+          </div>
+        ))}
     </div>
   );
 }
@@ -147,14 +174,14 @@ function OrderTable({ orders }: { orders: AdminOrder[] }) {
   );
 }
 
-const statuses = ["Pending", "Accepted", "Declined"] as const;
+const statuses = ["Accepted", "Pending payment", "Cancelled"] as const;
 
 export function AdminOrdersClient({ orders }: { orders: AdminOrder[] }) {
   return (
     <div>
       <PageHeader
         title="Orders"
-        description="Review new orders and accept or decline them."
+        description="Paid orders are accepted automatically. Cancel an order only when the kitchen cannot fulfil it."
         action={
           <ButtonLink href="/api/admin/orders/export" variant="secondary">
             <Filter size={18} />

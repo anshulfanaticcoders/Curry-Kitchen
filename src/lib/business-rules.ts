@@ -14,7 +14,7 @@ const defaultRules: BusinessRules = {
   acceptWeeklyTrials: true,
   enableCheckoutPauses: true,
   deliveryWeekdays: [1, 2, 3, 4, 5],
-  deliveryWindow: "6:00 PM - 8:00 PM",
+  deliveryWindow: "8:00 AM - 11:00 AM",
   orderCutoff: "Noon",
 };
 
@@ -50,8 +50,8 @@ function formatTime(value: string) {
 
 export function businessRulesFromValue(value: unknown): BusinessRules {
   const candidate = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-  const start = timeLabel(candidate.deliveryWindowStart, "18:00");
-  const end = timeLabel(candidate.deliveryWindowEnd, "20:00");
+  const start = timeLabel(candidate.deliveryWindowStart, "08:00");
+  const end = timeLabel(candidate.deliveryWindowEnd, "11:00");
   return {
     acceptWeeklyTrials: typeof candidate.acceptWeeklyTrials === "boolean" ? candidate.acceptWeeklyTrials : defaultRules.acceptWeeklyTrials,
     enableCheckoutPauses: typeof candidate.enableCheckoutPauses === "boolean" ? candidate.enableCheckoutPauses : defaultRules.enableCheckoutPauses,

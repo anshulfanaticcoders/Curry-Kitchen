@@ -141,9 +141,9 @@ export async function markOrderPaidAndActivate(orderId: string, stripePaymentId?
     return;
   }
 
-  // Stripe retries webhooks; a second delivery must not re-activate packages
-  // or send duplicate confirmation emails.
-  if (order.status === "PAID") {
+  // Stripe retries webhooks; a second delivery must not re-activate packages,
+  // send duplicate confirmation emails, or resurrect a cancelled order.
+  if (order.status !== "PENDING_PAYMENT") {
     return;
   }
 
@@ -153,9 +153,12 @@ export async function markOrderPaidAndActivate(orderId: string, stripePaymentId?
       data: { status: "PAID", stripePaymentId },
     });
 
+    // Paid orders are accepted automatically — the kitchen delivers every
+    // morning between the package start and end dates. Admins only step in
+    // to cancel an order.
     await tx.order.update({
       where: { id: order.id },
-      data: { status: "PAID" },
+      data: { status: "ACCEPTED" },
     });
 
     for (const customerPackage of order.customerPackages) {

@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { sendTransactionalEmail } from "@/lib/email/send";
 import {
+  createPauseExpiryReminderEmail,
   createRenewalReminderEmail,
   createSubscriptionEndedEmail,
 } from "@/lib/email/templates";
@@ -97,5 +98,84 @@ export async function GET(request: Request) {
     }
   }
 
-  return Response.json({ remindersSent, expired });
+  // Paused packages: remaining delivery days stay valid for 30 days from the
+  // pause. Remind ~5 days before the window closes, expire once it has passed.
+  let pauseRemindersSent = 0;
+  let pausesExpired = 0;
+  const pauseReminderCutoff = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+
+  const pausedPackages = await db.customerPackage.findMany({
+    where: { status: "PAUSED" },
+    include: {
+      customer: true,
+      package: true,
+      pauseRequests: { where: { status: "ACTIVE" }, orderBy: { createdAt: "desc" }, take: 1 },
+    },
+  });
+
+  for (const customerPackage of pausedPackages) {
+    const pause = customerPackage.pauseRequests[0];
+    if (!pause) continue;
+
+    const remainingDays = Math.max(
+      customerPackage.totalDeliveryDays - customerPackage.usedDeliveryDays,
+      0,
+    );
+
+    if (pause.endDate < now) {
+      // Window closed: flip first so a retried run never emails twice.
+      await db.$transaction([
+        db.customerPackage.update({
+          where: { id: customerPackage.id },
+          data: { status: "EXPIRED" },
+        }),
+        db.pauseRequest.update({
+          where: { id: pause.id },
+          data: { status: "ENDED" },
+        }),
+      ]);
+      pausesExpired += 1;
+
+      if (settings.packageCompletedEmails && customerPackage.customer?.email) {
+        await sendTransactionalEmail({
+          to: customerPackage.customer.email,
+          email: createSubscriptionEndedEmail({
+            customerName: customerPackage.customer.name,
+            planName: customerPackage.package.name,
+            endDate: pause.endDate,
+          }),
+          idempotencyKey: `pause-expired/${customerPackage.id}/${pause.id}`,
+        });
+      }
+      continue;
+    }
+
+    if (
+      settings.packageReminderEmails &&
+      customerPackage.customer?.email &&
+      pause.endDate <= pauseReminderCutoff &&
+      !customerPackage.reminderEmailSentAt
+    ) {
+      const { sent } = await sendTransactionalEmail({
+        to: customerPackage.customer.email,
+        email: createPauseExpiryReminderEmail({
+          customerName: customerPackage.customer.name,
+          planName: customerPackage.package.name,
+          remainingDays,
+          resumeBy: pause.endDate,
+        }),
+        idempotencyKey: `pause-reminder/${customerPackage.id}/${pause.id}`,
+      });
+
+      if (sent) {
+        await db.customerPackage.update({
+          where: { id: customerPackage.id },
+          data: { reminderEmailSentAt: new Date() },
+        });
+        pauseRemindersSent += 1;
+      }
+    }
+  }
+
+  return Response.json({ remindersSent, expired, pauseRemindersSent, pausesExpired });
 }

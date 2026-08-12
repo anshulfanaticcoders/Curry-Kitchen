@@ -13,8 +13,8 @@ import {
 import { formatCurrency } from "@/lib/utils";
 
 function statusTone(status: string) {
-  if (status === "Delivered" || status === "Active") return "green" as const;
-  if (status === "Paused") return "red" as const;
+  if (status === "Accepted" || status === "Active") return "green" as const;
+  if (status === "Paused" || status === "Cancelled") return "red" as const;
   return "amber" as const;
 }
 
@@ -40,10 +40,6 @@ export default async function CustomerOverviewPage() {
     (total, item) => total + item.totalDeliveryDays,
     0,
   );
-  const deliveriesThisWeek = upcomingDeliveries.filter((delivery) => {
-    const day = delivery.day.toLowerCase();
-    return ["monday", "tuesday", "wednesday", "thursday", "friday"].includes(day);
-  }).length;
 
   return (
     <div>
@@ -72,8 +68,13 @@ export default async function CustomerOverviewPage() {
           tone="good"
           icon={<CalendarDays size={20} />}
         />
-        <StatCard label="Next delivery" value={upcomingDeliveries[0]?.eta ?? "Not scheduled"} delta={upcomingDeliveries[0]?.day ?? "Buy a plan"} icon={<Truck size={20} />} />
-        <StatCard label="Orders" value={String(recentOrders.length)} delta={`${deliveriesThisWeek} deliveries this week`} icon={<Clock size={20} />} />
+        <StatCard
+          label="Next delivery"
+          value={upcomingDeliveries[0]?.date ?? "Not scheduled"}
+          delta={upcomingDeliveries[0] ? `${upcomingDeliveries[0].day} morning` : "Buy a plan"}
+          icon={<Truck size={20} />}
+        />
+        <StatCard label="Orders" value={String(recentOrders.length)} delta="Delivered every morning" icon={<Clock size={20} />} />
       </div>
 
       <Card className="mt-6">
@@ -156,7 +157,7 @@ export default async function CustomerOverviewPage() {
                     <p className="font-extrabold">{delivery.day}</p>
                     <p className="truncate text-sm text-ink/60">{delivery.meal}</p>
                   </div>
-                  <span className="ml-auto text-sm font-black text-masala">{delivery.eta}</span>
+                  <span className="ml-auto text-sm font-black text-masala">{delivery.date}</span>
                 </div>
               ))
             ) : (

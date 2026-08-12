@@ -11,7 +11,7 @@ import { getAdminPackagingRecord } from "@/lib/server/catalog";
 export const dynamic = "force-dynamic";
 
 function statusTone(status: string) {
-  if (status === "Active" || status === "Delivered") return "green" as const;
+  if (status === "Active") return "green" as const;
   if (status === "Paused" || status === "Cancelled") return "red" as const;
   return "amber" as const;
 }
@@ -75,7 +75,7 @@ export default async function PackingRecordPage({
                       <CalendarDays size={15} /> Next delivery
                     </p>
                     <p className="mt-2 font-display text-xl font-black">{customerPackage.nextDelivery}</p>
-                    <p className="mt-1 text-sm font-bold text-ink/55">{customerPackage.deliveryWindow}</p>
+                    <p className="mt-1 text-sm font-bold text-ink/55">Morning delivery</p>
                   </div>
                   <div className="rounded-lg border border-ink/10 bg-ivory p-4">
                     <p className="text-xs font-black uppercase tracking-[0.14em] text-ink/45">Food preferences</p>

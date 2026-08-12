@@ -22,6 +22,10 @@
   --color-cream: #f5f4f0;
   --color-frost: #fafafa;
   --color-charcoal: #1b1b1b;
+  --color-basil: #1e8e4e;
+  --color-basil-soft: #e6f5ec;
+  --color-chili: #d92d20;
+  --color-chili-soft: #fdecea;
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
   --shadow-soft: 0 24px 80px rgba(7, 7, 7, 0.12);
