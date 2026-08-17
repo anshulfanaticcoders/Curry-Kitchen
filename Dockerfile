@@ -34,7 +34,7 @@ COPY --from=builder /app/.next/static ./.next/static
 # Prisma CLI + schema so the entrypoint can run `migrate deploy` on boot
 COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/prisma ./prisma
-RUN npm install -g prisma@7.8.0
+RUN npm install -g prisma@7.8.0 @prisma/config
 
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
