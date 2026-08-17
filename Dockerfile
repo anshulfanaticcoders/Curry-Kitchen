@@ -30,6 +30,7 @@ COPY --from=builder /app/.next/static ./.next/static
 
 COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/prisma ./prisma
+COPY --from=deps /app/node_modules ./node_modules
 
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
@@ -37,8 +38,6 @@ RUN chmod +x docker-entrypoint.sh
 RUN addgroup -S nodejs && adduser -S nextjs -G nodejs \
   && mkdir -p /app/uploads \
   && chown -R nextjs:nodejs /app/uploads /app/.next
-
-RUN npm install -g prisma@7.8.0 @prisma/config
 
 USER nextjs
 
