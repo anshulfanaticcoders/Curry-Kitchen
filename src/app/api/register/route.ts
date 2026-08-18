@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { getBusinessRules } from "@/lib/business-rules";
 import { db } from "@/lib/db";
 import { notifyAdminNewSignup } from "@/lib/email/notifications";
 import { hashPassword } from "@/lib/password";
@@ -13,6 +14,15 @@ const registerSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const rules = await getBusinessRules();
+
+    if (rules.maintenanceMode) {
+      return Response.json(
+        { ok: false, error: "Registration is temporarily unavailable while the site is under maintenance." },
+        { status: 503 },
+      );
+    }
+
     const parsed = registerSchema.parse(await request.json());
     const passwordHash = await hashPassword(parsed.password);
 

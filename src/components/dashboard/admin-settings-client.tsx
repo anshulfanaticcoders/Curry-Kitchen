@@ -53,6 +53,7 @@ function SettingsToggle({
 }: {
   name: keyof Pick<
     AdminSettings,
+    | "maintenanceMode"
     | "acceptWeeklyTrials"
     | "enableCheckoutPauses"
     | "orderConfirmationEmails"
@@ -86,20 +87,40 @@ function GeneralTab({ settings }: { settings: AdminSettings }) {
   const { isPending, save } = useSettingsSave();
 
   return (
-    <form onSubmit={save}>
-      <Card className="p-5">
-        <CardHeader title="Business details" className="border-0 p-0" />
-        <div className="mt-5 grid gap-5 md:grid-cols-2">
-          <Field label="Business name"><Input name="businessName" defaultValue={settings.businessName} required /></Field>
-          <Field label="Support email"><Input name="supportEmail" type="email" defaultValue={settings.supportEmail} required /></Field>
-          <Field label="Phone"><Input name="phone" defaultValue={settings.phone} required /></Field>
-          <Field label="Currency"><Select name="currency" defaultValue={settings.currency}><option value="USD">USD</option><option value="CAD">CAD</option><option value="INR">INR</option></Select></Field>
-          <Field label="Tax rate (%)" hint="One rate for every package at checkout."><Input name="taxRate" type="number" step="0.01" min="0" max="100" defaultValue={(settings.taxRate * 100).toFixed(2)} required /></Field>
-          <Field label="Service areas" className="md:col-span-2"><Input name="serviceAreas" defaultValue={settings.serviceAreas} required /></Field>
-        </div>
-        <div className="mt-6 flex justify-end"><Button type="submit" disabled={isPending}>{isPending ? <Loader2 className="animate-spin" size={16} /> : null}{isPending ? "Saving…" : "Save business details"}</Button></div>
-      </Card>
-    </form>
+    <>
+      <form onSubmit={save}>
+        <Card className="mb-5 border-masala/20 bg-rose/55 p-5">
+          <CardHeader
+            title="Site availability"
+            description="Pause the public site during updates. The admin panel and sign-in page remain available."
+            className="border-0 p-0"
+          />
+          <div className="mt-5">
+            <SettingsToggle
+              name="maintenanceMode"
+              label="Maintenance mode"
+              description="Show a maintenance screen to visitors and customers, and prevent new checkout or registration requests."
+              defaultChecked={settings.maintenanceMode}
+            />
+          </div>
+          <div className="mt-6 flex justify-end"><Button type="submit" disabled={isPending}>{isPending ? <Loader2 className="animate-spin" size={16} /> : null}{isPending ? "Saving…" : "Save site availability"}</Button></div>
+        </Card>
+      </form>
+      <form onSubmit={save}>
+        <Card className="p-5">
+          <CardHeader title="Business details" className="border-0 p-0" />
+          <div className="mt-5 grid gap-5 md:grid-cols-2">
+            <Field label="Business name"><Input name="businessName" defaultValue={settings.businessName} required /></Field>
+            <Field label="Support email"><Input name="supportEmail" type="email" defaultValue={settings.supportEmail} required /></Field>
+            <Field label="Phone"><Input name="phone" defaultValue={settings.phone} required /></Field>
+            <Field label="Currency"><Select name="currency" defaultValue={settings.currency}><option value="USD">USD</option><option value="CAD">CAD</option><option value="INR">INR</option></Select></Field>
+            <Field label="Tax rate (%)" hint="One rate for every package at checkout."><Input name="taxRate" type="number" step="0.01" min="0" max="100" defaultValue={(settings.taxRate * 100).toFixed(2)} required /></Field>
+            <Field label="Service areas" className="md:col-span-2"><Input name="serviceAreas" defaultValue={settings.serviceAreas} required /></Field>
+          </div>
+          <div className="mt-6 flex justify-end"><Button type="submit" disabled={isPending}>{isPending ? <Loader2 className="animate-spin" size={16} /> : null}{isPending ? "Saving…" : "Save business details"}</Button></div>
+        </Card>
+      </form>
+    </>
   );
 }
 

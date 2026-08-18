@@ -220,6 +220,15 @@ export async function createCheckoutOrder(rawInput: unknown) {
   const created = await db.$transaction(async (tx) => {
     const settings = await tx.setting.findUnique({ where: { key: "admin_settings" } });
     const rules = businessRulesFromValue(settings?.value);
+
+    if (rules.maintenanceMode) {
+      throw new CheckoutError(
+        "Ordering is temporarily unavailable while Curry Kitchen is under maintenance.",
+        503,
+        "MAINTENANCE_MODE",
+      );
+    }
+
     const packageIds = Array.from(new Set(input.items.map((item) => item.packageId)));
     const plans = await tx.package.findMany({
       where: { id: { in: packageIds }, status: "ACTIVE" },

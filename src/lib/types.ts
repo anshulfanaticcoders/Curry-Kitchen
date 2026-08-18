@@ -62,6 +62,7 @@ export type DeliveryZoneRecord = {
 };
 
 export type AdminSettings = {
+  maintenanceMode: boolean;
   businessName: string;
   supportEmail: string;
   phone: string;

@@ -3,6 +3,7 @@ import "server-only";
 import { db } from "@/lib/db";
 
 export type BusinessRules = {
+  maintenanceMode: boolean;
   acceptWeeklyTrials: boolean;
   enableCheckoutPauses: boolean;
   deliveryWeekdays: number[];
@@ -11,6 +12,7 @@ export type BusinessRules = {
 };
 
 const defaultRules: BusinessRules = {
+  maintenanceMode: false,
   acceptWeeklyTrials: true,
   enableCheckoutPauses: true,
   deliveryWeekdays: [1, 2, 3, 4, 5],
@@ -53,6 +55,10 @@ export function businessRulesFromValue(value: unknown): BusinessRules {
   const start = timeLabel(candidate.deliveryWindowStart, "08:00");
   const end = timeLabel(candidate.deliveryWindowEnd, "11:00");
   return {
+    maintenanceMode:
+      typeof candidate.maintenanceMode === "boolean"
+        ? candidate.maintenanceMode
+        : defaultRules.maintenanceMode,
     acceptWeeklyTrials: typeof candidate.acceptWeeklyTrials === "boolean" ? candidate.acceptWeeklyTrials : defaultRules.acceptWeeklyTrials,
     enableCheckoutPauses: typeof candidate.enableCheckoutPauses === "boolean" ? candidate.enableCheckoutPauses : defaultRules.enableCheckoutPauses,
     deliveryWeekdays: deliveryWeekdaysFromText(candidate.deliveryDays),

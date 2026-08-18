@@ -30,6 +30,7 @@ const optionalFormBoolean = z.preprocess(
 );
 
 const adminSettingsSchema = z.object({
+  maintenanceMode: optionalFormBoolean,
   businessName: z.string().min(2).optional(),
   supportEmail: z.string().email().optional(),
   phone: z.string().min(7).optional(),
@@ -258,6 +259,9 @@ export async function saveAdminSettingsAction(formData: FormData) {
     });
 
     revalidatePath("/admin/settings");
+    revalidatePath("/", "layout");
+    revalidatePath("/dashboard", "layout");
+    revalidatePath("/register");
     return ok(value, "Settings saved.");
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Settings could not be saved.");

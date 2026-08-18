@@ -66,6 +66,7 @@ function formatMenuDateRange(start: Date, end: Date) {
 }
 
 const defaultAdminSettings: AdminSettings = {
+  maintenanceMode: false,
   businessName: "Curry Kitchen Inc.",
   supportEmail: "currykitcheninc@gmail.com",
   phone: "(858) 599-1613",
