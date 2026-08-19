@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { StatusPill } from "@/components/ui/status-pill";
 import type { PackagePlan } from "@/lib/types";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -60,11 +59,11 @@ export function PackageCard({
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/76 via-black/16 to-transparent" />
         <div className="absolute inset-x-0 top-0 h-1 bg-saffron" />
-        <div className="absolute left-4 top-4">
-          <StatusPill tone={plan.accent === "leaf" ? "green" : plan.accent === "masala" ? "red" : "amber"}>
+        {plan.badge ? (
+          <span className="absolute left-4 top-4 rounded-full bg-saffron px-3.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-ink shadow-soft">
             {plan.badge}
-          </StatusPill>
-        </div>
+          </span>
+        ) : null}
         <div className="absolute bottom-4 left-4 right-4 text-white">
           <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-white/72">
             {categoryLabel(plan.category)}
