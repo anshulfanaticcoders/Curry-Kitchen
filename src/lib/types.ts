@@ -1,18 +1,5 @@
 export type PackageCategory = "Monthly" | "Weekly" | "Student";
 
-export type PackageAddOn = {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-};
-
-export type ComplimentaryItem = {
-  id: string;
-  name: string;
-  description: string;
-};
-
 export type PackagePlan = {
   id: string;
   slug: string;
@@ -26,8 +13,6 @@ export type PackagePlan = {
   description: string;
   bestFor: string;
   includes: string[];
-  complimentaryItems: ComplimentaryItem[];
-  addOns: PackageAddOn[];
   accent: "saffron" | "leaf" | "masala";
   updatedAt?: string;
 };
@@ -37,16 +22,15 @@ export type AdminPackageRecord = PackagePlan & {
   deliveryDayCount: number;
   status: ProductStatus;
   studentOnly: boolean;
-  addonIds: string[];
-  complimentaryItemIds: string[];
 };
 
-export type AdminAddonRecord = PackageAddOn & {
-  imageUrl?: string;
-  status: ProductStatus;
-};
-
-export type AdminComplimentaryItemRecord = ComplimentaryItem & {
+export type AdminCustomPackageItemRecord = {
+  id: string;
+  name: string;
+  unitLabel: string;
+  pricePerUnit: number;
+  required: boolean;
+  sortOrder: number;
   status: ProductStatus;
 };
 
@@ -73,6 +57,7 @@ export type AdminSettings = {
   deliveryWindowEnd: string;
   orderCutoff: string;
   deliveryDays: string;
+  customMonthlyDays: number;
   acceptWeeklyTrials: boolean;
   enableCheckoutPauses: boolean;
   orderConfirmationEmails: boolean;
@@ -331,7 +316,6 @@ export type PackagingPackage = {
   deliveryProgress: string;
   nextDelivery: string;
   includes: string[];
-  addons: string[];
   foodPreferences: string;
 };
 

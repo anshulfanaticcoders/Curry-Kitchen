@@ -45,7 +45,7 @@ const serviceNotes = [
   {
     icon: ShieldCheck,
     title: "Plan clarity",
-    copy: "Price, portions, add-ons, and delivery clear before checkout.",
+    copy: "Price, portions, and delivery clear before checkout.",
   },
 ];
 
@@ -56,7 +56,7 @@ const orderingSteps = [
   },
   {
     title: "Keep the old-school method",
-    copy: "Rice, roti, spice notes, and add-ons stay simple before checkout.",
+    copy: "Rice, roti, and spice notes stay simple before checkout.",
   },
   {
     title: "Know what is coming",
@@ -244,7 +244,7 @@ export default async function Home() {
                 Weekly trial, monthly fixed, student and military packages.
               </RevealItem>
               <RevealItem as="p" className="mt-4 max-w-xl text-base leading-7 text-white/68">
-                Clear portions, transparent pricing, and add-ons customers understand in seconds.
+                Clear portions and transparent pricing customers understand in seconds.
               </RevealItem>
             </div>
             <RevealItem>

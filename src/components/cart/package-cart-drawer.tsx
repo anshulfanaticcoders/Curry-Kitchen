@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CalendarDays, Pencil, ShoppingBag, Trash2, X } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { usePackageCart } from "@/components/providers/package-cart-provider";
+import { cartLineEditHref, resolveCartLine } from "@/lib/cart-lines";
 import { formatCurrency } from "@/lib/utils";
 
 function displayStartDate(value: string) {
@@ -22,16 +23,18 @@ export function PackageCartDrawer() {
     closeCart,
     items,
     plansById,
+    customItems,
+    customConfig,
+    customItemsLoaded,
     catalogReady,
     removeItem,
     checkoutHref,
   } = usePackageCart();
-  const subtotal = items.reduce((total, item) => {
-    const plan = plansById[item.packageId];
-    const addons = plan?.addOns.filter((addon) => item.addonIds.includes(addon.id)) ?? [];
-
-    return total + (plan?.price ?? 0) + addons.reduce((sum, addon) => sum + addon.price, 0);
-  }, 0);
+  const plans = Object.values(plansById);
+  const resolvedLines = items.map((item) =>
+    resolveCartLine(item, plans, customItems, customConfig),
+  );
+  const subtotal = resolvedLines.reduce((total, line) => total + line.subtotal, 0);
 
   return (
     <AnimatePresence>
@@ -76,11 +79,10 @@ export function PackageCartDrawer() {
             <div className="min-h-0 flex-1 overflow-y-auto">
               {items.length ? (
                 <div className="divide-y divide-ink/10">
-                  {items.map((item, index) => {
-                    const plan = plansById[item.packageId];
-                    const addons = plan?.addOns.filter((addon) => item.addonIds.includes(addon.id)) ?? [];
-                    const lineTotal = (plan?.price ?? 0) + addons.reduce((sum, addon) => sum + addon.price, 0);
-                    const editHref = `/packages?edit=${encodeURIComponent(item.lineId)}#build-plan`;
+                  {resolvedLines.map((line, index) => {
+                    const { item, plan } = line;
+                    const lineTotal = line.subtotal;
+                    const editHref = cartLineEditHref(item);
 
                     return (
                       <motion.article
@@ -92,7 +94,7 @@ export function PackageCartDrawer() {
                         className="p-5"
                       >
                         <div className="flex gap-4">
-                          {plan ? (
+                          {plan?.image ? (
                             <div className="relative size-16 shrink-0 overflow-hidden rounded-button bg-ink">
                               <Image src={plan.image} alt="" fill className="object-cover" sizes="64px" />
                             </div>
@@ -108,16 +110,16 @@ export function PackageCartDrawer() {
                                   Package {index + 1}
                                 </p>
                                 <h3 className="mt-1 truncate font-display text-xl font-black">
-                                  {plan?.name ?? "Package configuration"}
+                                  {line.name}
                                 </h3>
                               </div>
                               <span className="shrink-0 text-sm font-black">{formatCurrency(lineTotal)}</span>
                             </div>
                             <p className="mt-2 line-clamp-2 text-xs font-bold leading-5 text-ink/55">
-                              {addons.length
-                                ? addons.map((addon) => addon.name).join(", ")
-                                : plan
-                                  ? "No add-ons selected"
+                              {line.valid
+                                ? line.detail
+                                : item.kind === "custom" && !customItemsLoaded
+                                  ? "Loading package details..."
                                   : catalogReady
                                   ? "This saved configuration is no longer available."
                                   : "Loading package details..."}
@@ -158,7 +160,7 @@ export function PackageCartDrawer() {
                     </span>
                     <h3 className="mt-5 font-display text-3xl font-black">Your cart is empty</h3>
                     <p className="mt-3 text-sm font-bold leading-6 text-ink/55">
-                      Select a plan as-is, or customize it with optional add-ons.
+                      Choose a weekly, monthly, or student plan — or build your own.
                     </p>
                     <ButtonLink href="/packages#build-plan" onClick={closeCart} className="mt-6">
                       Browse packages

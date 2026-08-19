@@ -67,7 +67,7 @@ export function PackingLabel({
         <div>
           <p className="font-display text-3xl font-black">{customerName}</p>
           <p className="mt-2 text-sm font-bold text-ink/55">
-            This single customer code opens the latest delivery address, active package details, included items, and add-ons.
+            This single customer code opens the latest delivery address, active package details, and included items.
           </p>
           <p className="mt-4 font-mono text-sm font-black tracking-[0.14em] text-masala">{labelCode}</p>
           <Button type="button" variant="secondary" onClick={() => window.print()} className="mt-5">

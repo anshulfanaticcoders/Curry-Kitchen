@@ -4,6 +4,7 @@ const DEFAULT_DESCRIPTION =
 export const STATIC_SEO_ROUTES = Object.freeze([
   { path: "/", page: "Home", title: "San Diego tiffin delivery", description: DEFAULT_DESCRIPTION, schemaKind: "home" },
   { path: "/packages", page: "Packages", title: "Tiffin meal plans", description: "Compare flexible weekly, monthly, student, and military tiffin plans for San Diego delivery.", schemaKind: "packages" },
+  { path: "/packages/build", page: "Build your own", title: "Build your own tiffin", description: "Price your own Indian tiffin per portion. Choose exactly how much roti, rice, dal, sabzi, raita, and salad you want in every delivery.", schemaKind: "packages" },
   { path: "/menu", page: "Menu", title: "Weekly Indian tiffin menu", description: "See this week's rotating homestyle Indian dinner menu, including daal, sabzi, rice, roti, sides, and dessert.", schemaKind: "menu" },
   { path: "/about", page: "About", title: "About Curry Kitchen", description: "Learn how Curry Kitchen prepares dependable homestyle Indian meals for delivery across San Diego.", schemaKind: "about" },
   { path: "/faq", page: "FAQ", title: "Tiffin delivery questions", description: "Get answers about Curry Kitchen meal plans, delivery, menu rotation, pauses, and student or military pricing.", schemaKind: "faq" },
@@ -18,7 +19,6 @@ const BLOCKED_SITEMAP_PATHS = [
   "/dashboard",
   "/login",
   "/register",
-  "/packages/customize",
 ];
 
 function cleanPath(path) {

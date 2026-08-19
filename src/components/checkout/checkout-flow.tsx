@@ -27,6 +27,8 @@ import { usePackageCart } from "@/components/providers/package-cart-provider";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { type PackageCartItemInput } from "@/lib/package-cart";
+import { cartLineEditHref, resolveCartLine } from "@/lib/cart-lines";
+import type { CustomPackageItemOption } from "@/lib/custom-package";
 import { packageStartDateIssue } from "@/lib/package-schedule";
 import type { CustomerProfileDetails, DeliveryZoneRecord, PackagePlan } from "@/lib/types";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -127,12 +129,18 @@ function customerFormValues(profile: CustomerProfileDetails) {
 
 export function CheckoutFlow({
   plans,
+  customItems,
+  customMonthlyDays,
+  deliveryWeekdayCount,
   deliveryZones,
   initialItems,
   customerProfile,
   taxRate,
 }: {
   plans: PackagePlan[];
+  customItems: CustomPackageItemOption[];
+  customMonthlyDays: number;
+  deliveryWeekdayCount: number;
   deliveryZones: DeliveryZoneRecord[];
   initialItems: PackageCartItemInput[];
   customerProfile: CustomerProfileDetails;
@@ -144,9 +152,14 @@ export function CheckoutFlow({
     items: savedCartItems,
     hydrated: cartHydrated,
     registerPlans,
+    registerCustomItems,
     replaceCart,
     removeItem,
   } = usePackageCart();
+  const customConfig = useMemo(
+    () => ({ customMonthlyDays, deliveryWeekdayCount }),
+    [customMonthlyDays, deliveryWeekdayCount],
+  );
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -186,6 +199,10 @@ export function CheckoutFlow({
   }, [plans, registerPlans]);
 
   useEffect(() => {
+    registerCustomItems(customItems, customConfig);
+  }, [customConfig, customItems, registerCustomItems]);
+
+  useEffect(() => {
     if (!cartHydrated || initialCartApplied.current) return;
 
     // Only import a legacy ?cart= URL snapshot into an empty stored cart —
@@ -198,23 +215,18 @@ export function CheckoutFlow({
     initialCartApplied.current = true;
   }, [cartHydrated, initialItems, replaceCart, savedCartItems.length]);
 
+  // Custom lines carry no packageId, so resolving by plan lookup alone would
+  // silently drop them here and show the customer an empty $0 order.
   const resolvedItems = useMemo(
     () =>
       cartItems.flatMap((item) => {
-        const plan = plans.find((candidate) => candidate.id === item.packageId);
+        const line = resolveCartLine(item, plans, customItems, customConfig);
 
-        if (!plan) return [];
+        if (!line.valid) return [];
 
-        const addons = plan.addOns.filter((addon) => item.addonIds.includes(addon.id));
-        const addonTotal = addons.reduce((total, addon) => total + addon.price, 0);
-        const subtotal = plan.price + addonTotal;
-        const valid =
-          addons.length === new Set(item.addonIds).size &&
-          !packageStartDateIssue(item.startDate);
-
-        return [{ item, plan, addons, addonTotal, subtotal, valid }];
+        return [{ ...line, valid: !packageStartDateIssue(item.startDate) }];
       }),
-    [cartItems, plans],
+    [cartItems, customConfig, customItems, plans],
   );
 
   const subtotal = resolvedItems.reduce((total, line) => total + line.subtotal, 0);
@@ -248,7 +260,7 @@ export function CheckoutFlow({
     : 0;
   const deliveryFee = deliveryFeePerPackage * resolvedItems.length;
   const total = subtotal - discountAmount + taxAmount + deliveryFee;
-  const requiresStudent = resolvedItems.some((line) => line.plan.category === "Student");
+  const requiresStudent = resolvedItems.some((line) => line.isStudent);
   const deliveryErrors = {
     firstName: customer.firstName.trim() ? "" : "Enter your first name.",
     lastName: customer.lastName.trim() ? "" : "Enter your last name.",
@@ -420,7 +432,7 @@ export function CheckoutFlow({
 
     if (!cartReady) {
       toast.error("Cart needs attention", {
-        description: "Each package needs valid optional add-ons and a valid start date.",
+        description: "Each package needs a valid start date.",
       });
       return;
     }
@@ -441,11 +453,20 @@ export function CheckoutFlow({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: cartItems.map(({ packageId, addonIds, startDate }) => ({
-            packageId,
-            addonIds,
-            startDate,
-          })),
+          items: cartItems.map((item) =>
+            item.kind === "custom"
+              ? {
+                  kind: "custom" as const,
+                  cadence: item.cadence,
+                  items: item.items,
+                  startDate: item.startDate,
+                }
+              : {
+                  kind: "plan" as const,
+                  packageId: item.packageId,
+                  startDate: item.startDate,
+                },
+          ),
           customer: {
             name: `${customer.firstName.trim()} ${customer.lastName.trim()}`.trim(),
             email: customer.email.trim(),
@@ -615,8 +636,8 @@ export function CheckoutFlow({
 
             {resolvedItems.length ? (
               <div className="mt-6 divide-y divide-ink/10 overflow-hidden rounded-lg border border-ink/10 bg-ivory">
-                {resolvedItems.map(({ item, plan, addons, subtotal: lineSubtotal, valid }, index) => {
-                  const editHref = `/packages?edit=${encodeURIComponent(item.lineId)}#build-plan`;
+                {resolvedItems.map(({ item, plan, name, detail, subtotal: lineSubtotal, valid }, index) => {
+                  const editHref = cartLineEditHref(item);
 
                   return (
                     <article key={item.lineId} className="p-5">
@@ -627,12 +648,12 @@ export function CheckoutFlow({
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <StatusPill tone={valid ? "green" : "red"}>{valid ? "Ready" : "Needs attention"}</StatusPill>
-                            <StatusPill tone="amber">{categoryLabel(plan.category)}</StatusPill>
+                            <StatusPill tone="amber">
+                              {plan ? categoryLabel(plan.category) : "Custom"}
+                            </StatusPill>
                           </div>
-                          <h3 className="mt-3 font-display text-2xl font-black">{plan.name}</h3>
-                          <p className="mt-2 text-sm font-bold text-ink/58">
-                            {addons.length ? addons.map((addon) => addon.name).join(", ") : "No add-ons selected"}
-                          </p>
+                          <h3 className="mt-3 font-display text-2xl font-black">{name}</h3>
+                          <p className="mt-2 text-sm font-bold text-ink/58">{detail}</p>
                           <p className="mt-2 flex items-center gap-2 text-sm font-extrabold text-leaf">
                             <CalendarDays size={16} />
                             Starts {displayStartDate(item.startDate)}
@@ -647,7 +668,7 @@ export function CheckoutFlow({
                             </ButtonLink>
                             <button
                               type="button"
-                              aria-label={`Remove ${plan.name}`}
+                              aria-label={`Remove ${name}`}
                               onClick={() => removeLine(item.lineId)}
                               className="grid size-9 place-items-center rounded-button border border-ink/10 bg-white text-masala transition hover:border-masala/35 hover:bg-rose"
                             >
@@ -675,7 +696,7 @@ export function CheckoutFlow({
                 if (!cartReady) {
                   toast.error("Cart needs attention", {
                     description:
-                      "Each package needs valid add-ons and a valid start date. Use Edit to fix the flagged packages.",
+                      "Each package needs a valid start date. Use Edit to fix the flagged packages.",
                   });
                   return;
                 }
@@ -1072,13 +1093,13 @@ export function CheckoutFlow({
         </div>
 
         <div className="relative mt-7 max-h-72 divide-y divide-white/10 overflow-y-auto border-y border-white/10">
-          {resolvedItems.map(({ item, plan, addons, subtotal: lineSubtotal }) => (
+          {resolvedItems.map(({ item, name, detail, subtotal: lineSubtotal }) => (
             <div key={item.lineId} className="py-4">
               <div className="flex justify-between gap-4 text-sm font-extrabold">
-                <span>{plan.name}</span>
+                <span>{name}</span>
                 <span>{formatCurrency(lineSubtotal)}</span>
               </div>
-              <p className="mt-1 text-xs font-bold text-ivory/55">{addons.map((addon) => addon.name).join(", ")}</p>
+              <p className="mt-1 text-xs font-bold text-ivory/55">{detail}</p>
               <p className="mt-1 text-xs font-bold text-saffron">Starts {displayStartDate(item.startDate)}</p>
             </div>
           ))}

@@ -94,14 +94,6 @@ export default async function PackingRecordPage({
                       )) : <li className="text-ink/45">No package items recorded.</li>}
                     </ul>
                   </div>
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-ink/45">Required add-ons</p>
-                    <ul className="mt-3 grid gap-2 text-sm font-bold text-ink/75">
-                      {customerPackage.addons.length ? customerPackage.addons.map((addon) => (
-                        <li key={addon} className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-saffron" />{addon}</li>
-                      )) : <li className="text-ink/45">No add-ons selected.</li>}
-                    </ul>
-                  </div>
                 </div>
               </div>
             </Card>

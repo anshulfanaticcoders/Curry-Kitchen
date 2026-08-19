@@ -15,15 +15,15 @@ const posts = [
     readTime: "4 min read",
     image: "https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=900&q=80",
     excerpt:
-      "A practical guide to matching appetite, schedule, and add-ons before starting a monthly package.",
+      "A practical guide to matching appetite, portions, and schedule before starting a monthly package.",
   },
   {
-    title: "Why delivery fees should follow packages, not add-ons",
+    title: "Why delivery fees should follow packages, not portions",
     category: "Checkout clarity",
     readTime: "3 min read",
     image: "https://images.unsplash.com/photo-1526367790999-0150786686a2?auto=format&fit=crop&w=900&q=80",
     excerpt:
-      "Rice, roti, and sabzi add-ons belong to the same meal delivery. The checkout should keep that math transparent.",
+      "Rice, roti, and sabzi belong to the same meal delivery. The checkout should keep that math transparent.",
   },
   {
     title: "Student tiffin plans without weekday dinner stress",

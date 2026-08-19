@@ -22,7 +22,7 @@ const faqGroups = [
       {
         question: "Can I add rice, roti, or sabzi to a plan?",
         answer:
-          "Yes. Eligible add-ons appear with each package. Add-ons customize the same meal delivery and do not create a separate delivery charge.",
+          "Yes. Build your own package and set the exact portions you want of roti, rice, dal, sabzi, raita, and salad. You are charged per unit, then by the number of delivery days.",
       },
       {
         question: "Can I buy without creating an account?",
@@ -38,7 +38,7 @@ const faqGroups = [
       {
         question: "How is delivery calculated?",
         answer:
-          "Delivery is charged per meal package only. One package with multiple add-ons receives one package delivery charge; two packages receive two package delivery charges.",
+          "Delivery is charged per meal package only. One package receives one package delivery charge; two packages receive two package delivery charges.",
       },
       {
         question: "How do I check if my ZIP code is covered?",
@@ -113,7 +113,7 @@ export default async function FaqPage() {
           </>
         }
       >
-        The most common questions about Curry Kitchen plans, add-ons, delivery, pauses, and
+        The most common questions about Curry Kitchen plans, custom packages, delivery, pauses, and
         student verification.
       </PageHero>
 

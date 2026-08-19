@@ -47,22 +47,13 @@ async function reset() {
   await prisma.customerPackage.deleteMany();
   await prisma.stripeEvent.deleteMany();
   await prisma.payment.deleteMany();
-  await prisma.orderAddon.deleteMany();
-  await prisma.orderComplimentaryItem.deleteMany();
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
-  await prisma.cartItemAddon.deleteMany();
-  await prisma.cartItem.deleteMany();
-  await prisma.cart.deleteMany();
   await prisma.coupon.deleteMany();
   await prisma.deliveryZone.deleteMany();
   await prisma.weeklyMenuDay.deleteMany();
   await prisma.weeklyMenu.deleteMany();
-  await prisma.menuItem.deleteMany();
-  await prisma.packageAddon.deleteMany();
-  await prisma.packageComplimentaryItem.deleteMany();
-  await prisma.addon.deleteMany();
-  await prisma.complimentaryItem.deleteMany();
+  await prisma.customPackageItem.deleteMany();
   await prisma.packageItem.deleteMany();
   await prisma.package.deleteMany();
   await prisma.packageCategory.deleteMany();
@@ -114,21 +105,18 @@ async function main() {
   ]);
   const [monthly, weekly, student] = categories;
 
-  const addons = await Promise.all([
-    prisma.addon.create({ data: { name: "Rice bowl", slug: "rice-bowl", description: "Add steamed basmati rice.", price: "3.50" } }),
-    prisma.addon.create({ data: { name: "Extra roti", slug: "extra-roti", description: "Two soft rotis.", price: "2.50" } }),
-    prisma.addon.create({ data: { name: "Extra sabzi", slug: "extra-sabzi", description: "8oz seasonal sabzi.", price: "5.00" } }),
-    prisma.addon.create({ data: { name: "Dessert cup", slug: "dessert-cup", description: "Weekly sweet add-on.", price: "4.00" } }),
-  ]);
+  const customPackageItems = [
+    { name: "Roti", slug: "roti", unitLabel: "roti", pricePerUnit: "0.60", required: true, sortOrder: 1 },
+    { name: "Rice", slug: "rice", unitLabel: "oz", pricePerUnit: "0.20", required: false, sortOrder: 2 },
+    { name: "Sabzi", slug: "sabzi", unitLabel: "oz", pricePerUnit: "0.90", required: true, sortOrder: 3 },
+    { name: "Dal", slug: "dal", unitLabel: "oz", pricePerUnit: "0.80", required: true, sortOrder: 4 },
+    { name: "Raita", slug: "raita", unitLabel: "oz", pricePerUnit: "0.20", required: false, sortOrder: 5 },
+    { name: "Salad", slug: "salad", unitLabel: "serving", pricePerUnit: "0.10", required: false, sortOrder: 6 },
+  ];
 
-  const complimentaryItems = await Promise.all([
-    prisma.complimentaryItem.create({ data: { name: "Kachumber salad", slug: "kachumber-salad", description: "Fresh chopped seasonal salad." } }),
-    prisma.complimentaryItem.create({ data: { name: "Cucumber raita", slug: "cucumber-raita", description: "Cooling yogurt and cucumber side." } }),
-    prisma.complimentaryItem.create({ data: { name: "Dessert cup", slug: "complimentary-dessert-cup", description: "A rotating sweet treat." } }),
-  ]);
-  const [salad, raita, dessert] = complimentaryItems;
+  await prisma.customPackageItem.createMany({ data: customPackageItems });
 
-  async function createPackage({ category, name, slug, price, cadence, days, studentOnly = false, badge, imageUrl, items, complimentary = [] }) {
+  async function createPackage({ category, name, slug, price, cadence, days, studentOnly = false, badge, imageUrl, items }) {
     return prisma.package.create({
       data: {
         categoryId: category.id,
@@ -148,12 +136,6 @@ async function main() {
         items: {
           create: items.map((item, index) => ({ name: item, sortOrder: index + 1 })),
         },
-        addons: {
-          create: addons.map((addon) => ({ addonId: addon.id })),
-        },
-        complimentaryItems: {
-          create: complimentary.map((item) => ({ complimentaryItemId: item.id })),
-        },
       },
     });
   }
@@ -168,7 +150,6 @@ async function main() {
     badge: "Most loved",
     imageUrl: image("1626777552726-4a6b54c97e46"),
     items: ["12oz dal", "8oz sabzi", "8 roti", "weekly dessert"],
-    complimentary: [salad, raita],
   });
 
   await createPackage({
@@ -181,7 +162,6 @@ async function main() {
     badge: "Starter favorite",
     imageUrl: image("1630409346824-4f0e7b080087"),
     items: ["8oz dal", "6oz sabzi", "4 roti"],
-    complimentary: [salad],
   });
 
   const trial = await createPackage({
@@ -194,7 +174,6 @@ async function main() {
     badge: "Try first",
     imageUrl: image("1604909052743-94e838986d24"),
     items: ["5 meals", "rotating menu", "delivery included"],
-    complimentary: [salad],
   });
 
   const studentPack = await createPackage({
@@ -208,7 +187,6 @@ async function main() {
     imageUrl: image("1617692855027-33b14f061079"),
     items: ["simple veg meals", "4 roti", "dal", "sabzi"],
     studentOnly: true,
-    complimentary: [raita, dessert],
   });
 
   await prisma.deliveryZone.createMany({
@@ -291,25 +269,6 @@ async function main() {
     include: { items: true },
   });
 
-  await prisma.orderAddon.create({
-    data: {
-      orderId: order.id,
-      orderItemId: order.items[0].id,
-      addonId: addons[0].id,
-      quantity: 1,
-      unitPrice: "3.50",
-      total: "3.50",
-    },
-  });
-
-  await prisma.orderComplimentaryItem.createMany({
-    data: [salad, raita].map((item) => ({
-      orderItemId: order.items[0].id,
-      complimentaryItemId: item.id,
-      name: item.name,
-    })),
-  });
-
   const activePackage = await prisma.customerPackage.create({
     data: {
       customerId: customer.id,
@@ -367,25 +326,6 @@ async function main() {
     include: { items: true },
   });
 
-  await prisma.orderAddon.create({
-    data: {
-      orderId: studentOrder.id,
-      orderItemId: studentOrder.items[0].id,
-      addonId: addons[1].id,
-      quantity: 1,
-      unitPrice: "2.50",
-      total: "2.50",
-    },
-  });
-
-  await prisma.orderComplimentaryItem.createMany({
-    data: [raita, dessert].map((item) => ({
-      orderItemId: studentOrder.items[0].id,
-      complimentaryItemId: item.id,
-      name: item.name,
-    })),
-  });
-
   await prisma.customerPackage.create({
     data: {
       customerId: studentCustomer.id,
@@ -435,18 +375,6 @@ async function main() {
         })),
       },
     },
-  });
-
-  await prisma.menuItem.createMany({
-    data: [
-      ["Dal makhani", "Daal", "Medium"],
-      ["Yellow tadka dal", "Daal", "Homestyle"],
-      ["Aloo gobi", "Sabzi", "Medium"],
-      ["Matar paneer", "Sabzi", "Homestyle"],
-      ["Jeera rice", "Rice", "Mild"],
-      ["Soft roti", "Roti", "Mild"],
-      ["Gulab jamun", "Dessert", "Mild"],
-    ].map(([name, type, spice]) => ({ name, type, spice })),
   });
 
   await prisma.review.createMany({

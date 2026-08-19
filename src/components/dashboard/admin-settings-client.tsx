@@ -136,6 +136,7 @@ function DeliveryRulesTab({ settings }: { settings: AdminSettings }) {
           <Field label="Delivery window end"><Input name="deliveryWindowEnd" type="time" defaultValue={settings.deliveryWindowEnd} required /></Field>
           <Field label="Order cut-off"><Select name="orderCutoff" defaultValue={settings.orderCutoff}><option>9:00 AM</option><option>Noon</option><option>3:00 PM</option></Select></Field>
           <Field label="Delivery days"><Input name="deliveryDays" defaultValue={settings.deliveryDays} required /></Field>
+          <Field label="Custom package: monthly delivery days" hint="Days billed for a custom monthly plan. Weekly follows the delivery days above."><Input name="customMonthlyDays" type="number" min="1" max="60" step="1" defaultValue={settings.customMonthlyDays} required /></Field>
         </div>
         <div className="mt-5 grid gap-3">
           <SettingsToggle name="acceptWeeklyTrials" label="Accept weekly trials" description="Allow new customers to start with a 1-week plan." defaultChecked={settings.acceptWeeklyTrials} />

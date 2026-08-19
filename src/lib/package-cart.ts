@@ -1,83 +1,131 @@
-export type PackageCartItemInput = {
+export type PackageCustomItemInput = {
+  itemId: string;
+  quantity: number;
+};
+
+export type PlanCartLine = {
+  kind: "plan";
   lineId: string;
   packageId: string;
-  addonIds: string[];
   startDate: string;
 };
 
+export type CustomCartLine = {
+  kind: "custom";
+  lineId: string;
+  cadence: "WEEKLY" | "MONTHLY";
+  items: PackageCustomItemInput[];
+  startDate: string;
+};
+
+export type PackageCartItemInput = PlanCartLine | CustomCartLine;
+
 export const MAX_PACKAGE_CART_ITEMS = 10;
+export const MAX_CUSTOM_ITEM_QUANTITY = 99;
 
-function isCartItem(value: unknown): value is PackageCartItemInput {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
+function isDateString(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
 
-  const item = value as Partial<PackageCartItemInput>;
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+function isCustomItem(value: unknown): value is PackageCustomItemInput {
+  if (!value || typeof value !== "object") return false;
+
+  const item = value as Partial<PackageCustomItemInput>;
 
   return (
-    typeof item.lineId === "string" &&
-    item.lineId.length > 0 &&
-    typeof item.packageId === "string" &&
-    item.packageId.length > 0 &&
-    Array.isArray(item.addonIds) &&
-    item.addonIds.every((id) => typeof id === "string" && id.length > 0) &&
-    typeof item.startDate === "string" &&
-    /^\d{4}-\d{2}-\d{2}$/.test(item.startDate)
+    isNonEmptyString(item.itemId) &&
+    typeof item.quantity === "number" &&
+    Number.isInteger(item.quantity) &&
+    item.quantity >= 0 &&
+    item.quantity <= MAX_CUSTOM_ITEM_QUANTITY
   );
 }
 
-export function parsePackageCart(value?: string | null): PackageCartItemInput[] {
-  if (!value) {
-    return [];
+function isCartItem(value: unknown): value is PackageCartItemInput {
+  if (!value || typeof value !== "object") return false;
+
+  const item = value as Record<string, unknown>;
+
+  if (!isNonEmptyString(item.lineId) || !isDateString(item.startDate)) return false;
+
+
+  if (item.kind === "plan") {
+    return isNonEmptyString(item.packageId);
   }
 
-  try {
-    const parsed: unknown = JSON.parse(value);
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    const seenLineIds = new Set<string>();
-
-    return parsed
-      .filter(isCartItem)
-      .filter((item) => {
-        if (seenLineIds.has(item.lineId)) return false;
-
-        seenLineIds.add(item.lineId);
-        return true;
-      })
-      .slice(0, MAX_PACKAGE_CART_ITEMS)
-      .map(({ lineId, packageId, addonIds, startDate }) => ({
-        lineId,
-        packageId,
-        addonIds,
-        startDate,
-      }));
-  } catch {
-    return [];
+  if (item.kind === "custom") {
+    return (
+      (item.cadence === "WEEKLY" || item.cadence === "MONTHLY") &&
+      Array.isArray(item.items) &&
+      item.items.every(isCustomItem)
+    );
   }
+
+  return false;
 }
 
-export function packageCartQuery(items: PackageCartItemInput[]) {
+// Strips a parsed line down to exactly the fields we persist. Every field a
+// cart line carries has to be listed here, or it is silently dropped on the
+// next round-trip through localStorage or the ?cart= query.
+function normalizeLine(item: PackageCartItemInput): PackageCartItemInput {
+  if (item.kind === "custom") {
+    const seenItemIds = new Set<string>();
+
+    return {
+      kind: "custom",
+      lineId: item.lineId,
+      cadence: item.cadence,
+      startDate: item.startDate,
+      items: item.items.filter((entry) => {
+        if (seenItemIds.has(entry.itemId)) return false;
+
+        seenItemIds.add(entry.itemId);
+        return entry.quantity > 0;
+      }),
+    };
+  }
+
+  return {
+    kind: "plan",
+    lineId: item.lineId,
+    packageId: item.packageId,
+    startDate: item.startDate,
+  };
+}
+
+function dedupeLines(items: PackageCartItemInput[]) {
   const seenLineIds = new Set<string>();
-  const payload = items
+
+  return items
     .filter((item) => {
       if (seenLineIds.has(item.lineId)) return false;
 
       seenLineIds.add(item.lineId);
       return true;
     })
-    .slice(0, MAX_PACKAGE_CART_ITEMS)
-    .map((item) => ({
-      lineId: item.lineId,
-      packageId: item.packageId,
-      addonIds: Array.from(new Set(item.addonIds)),
-      startDate: item.startDate,
-    }));
+    .slice(0, MAX_PACKAGE_CART_ITEMS);
+}
 
-  return encodeURIComponent(JSON.stringify(payload));
+export function parsePackageCart(value?: string | null): PackageCartItemInput[] {
+  if (!value) return [];
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+
+    if (!Array.isArray(parsed)) return [];
+
+    return dedupeLines(parsed.filter(isCartItem)).map(normalizeLine);
+  } catch {
+    return [];
+  }
+}
+
+export function packageCartQuery(items: PackageCartItemInput[]) {
+  return encodeURIComponent(JSON.stringify(dedupeLines(items).map(normalizeLine)));
 }
 
 export function makePackageCartLineId() {

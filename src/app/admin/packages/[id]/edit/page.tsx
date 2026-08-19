@@ -11,7 +11,7 @@ export default async function EditPackagePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { packages, categories, addons, complimentaryItems } = await getAdminPackageManagerData();
+  const { packages, categories } = await getAdminPackageManagerData();
   const plan = packages.find((candidate) => candidate.id === id);
 
   if (!plan) notFound();
@@ -22,7 +22,7 @@ export default async function EditPackagePage({
       backLabel="Back to packages"
       title={`Edit ${plan.name}`}
     >
-      <PackageForm plan={plan} categories={categories} addons={addons} complimentaryItems={complimentaryItems} />
+      <PackageForm plan={plan} categories={categories} />
     </AdminFormShell>
   );
 }

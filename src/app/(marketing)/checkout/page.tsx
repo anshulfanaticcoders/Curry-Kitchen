@@ -4,12 +4,17 @@ import { CheckoutFlow } from "@/components/checkout/checkout-flow";
 import { PageHero } from "@/components/sections/page-hero";
 import { ButtonLink } from "@/components/ui/button";
 import { getAdminSettings, getDeliveryZoneManagerData } from "@/lib/server/admin";
-import { getCustomerProfileDetails, getPackagePlans } from "@/lib/server/catalog";
+import {
+  getCustomPackageItems,
+  getCustomerProfileDetails,
+  getPackagePlans,
+} from "@/lib/server/catalog";
 import {
   makePackageCartLineId,
   parsePackageCart,
   type PackageCartItemInput,
 } from "@/lib/package-cart";
+import { deliveryWeekdaysFromText } from "@/lib/business-rules";
 import { nextEligiblePackageStartInput } from "@/lib/package-schedule";
 
 export const dynamic = "force-dynamic";
@@ -18,30 +23,29 @@ export const metadata: Metadata = { title: "Checkout", robots: { index: false, f
 export default async function CheckoutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ package?: string; addons?: string; cart?: string }>;
+  searchParams: Promise<{ package?: string; cart?: string }>;
 }) {
-  const [params, packagePlans, deliveryZones, customerProfile, adminSettings] = await Promise.all([
-    searchParams,
-    getPackagePlans(),
-    getDeliveryZoneManagerData(),
-    getCustomerProfileDetails(),
-    getAdminSettings(),
-  ]);
+  const [params, packagePlans, customPackageItems, deliveryZones, customerProfile, adminSettings] =
+    await Promise.all([
+      searchParams,
+      getPackagePlans(),
+      getCustomPackageItems(),
+      getDeliveryZoneManagerData(),
+      getCustomerProfileDetails(),
+      getAdminSettings(),
+    ]);
+  const deliveryWeekdayCount = deliveryWeekdaysFromText(adminSettings.deliveryDays).length;
   let initialItems = parsePackageCart(params.cart);
 
   if (!initialItems.length && params.package) {
     const legacyPlan = packagePlans.find((plan) => plan.id === params.package);
-    const requestedAddonIds = params.addons?.split(",").filter(Boolean) ?? [];
-    const eligibleAddonIds =
-      legacyPlan?.addOns
-        .filter((addon) => requestedAddonIds.includes(addon.id))
-        .map((addon) => addon.id) ?? [];
+
     if (legacyPlan) {
       initialItems = [
         {
+          kind: "plan",
           lineId: makePackageCartLineId(),
           packageId: legacyPlan.id,
-          addonIds: eligibleAddonIds,
           startDate: nextEligiblePackageStartInput(),
         } satisfies PackageCartItemInput,
       ];
@@ -84,6 +88,9 @@ export default async function CheckoutPage({
       </PageHero>
       <CheckoutFlow
         plans={packagePlans}
+        customItems={customPackageItems}
+        customMonthlyDays={adminSettings.customMonthlyDays}
+        deliveryWeekdayCount={deliveryWeekdayCount}
         deliveryZones={deliveryZones}
         initialItems={initialItems}
         customerProfile={customerProfile}

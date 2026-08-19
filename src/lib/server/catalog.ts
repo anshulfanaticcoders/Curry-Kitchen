@@ -1,8 +1,10 @@
 import {
+  customPackageItems as mockCustomPackageItems,
   packagePlans as mockPackagePlans,
   testimonials as mockTestimonials,
   weeklyMenu as mockWeeklyMenu,
 } from "@/lib/mock-data";
+import type { CustomPackageItemOption } from "@/lib/custom-package";
 import type {
   AdminOrder,
   AdminStudentVerification,
@@ -135,12 +137,6 @@ function planFromRecord(plan: {
   accent: string;
   updatedAt: Date;
   items: Array<{ name: string; quantity: string | null }>;
-  complimentaryItems: Array<{
-    complimentaryItem: { id: string; name: string; description: string | null };
-  }>;
-  addons: Array<{
-    addon: { id: string; name: string; description: string | null; price: DecimalLike };
-  }>;
 }): PackagePlan {
   const accent =
     plan.accent === "leaf" || plan.accent === "masala" ? plan.accent : "saffron";
@@ -158,20 +154,37 @@ function planFromRecord(plan: {
     description: plan.description,
     bestFor: plan.bestFor ?? "Everyday meals",
     includes: plan.items.map((item) => (item.quantity ? `${item.quantity} ${item.name}` : item.name)),
-    complimentaryItems: plan.complimentaryItems.map(({ complimentaryItem }) => ({
-      id: complimentaryItem.id,
-      name: complimentaryItem.name,
-      description: complimentaryItem.description ?? "",
-    })),
-    addOns: plan.addons.map(({ addon }) => ({
-      id: addon.id,
-      name: addon.name,
-      description: addon.description ?? "Optional add-on",
-      price: toNumber(addon.price),
-    })),
     accent,
     updatedAt: plan.updatedAt.toISOString(),
   };
+}
+
+export async function getCustomPackageItems(): Promise<CustomPackageItemOption[]> {
+  if (!hasDatabaseUrl()) {
+    return allowMockContent ? mockCustomPackageItems : [];
+  }
+
+  try {
+    const items = await db.customPackageItem.findMany({
+      where: { status: "ACTIVE" },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    });
+
+    if (!items.length) {
+      return allowMockContent ? mockCustomPackageItems : [];
+    }
+
+    return items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      unitLabel: item.unitLabel,
+      pricePerUnit: toNumber(item.pricePerUnit),
+      required: item.required,
+      sortOrder: item.sortOrder,
+    }));
+  } catch {
+    return allowMockContent ? mockCustomPackageItems : [];
+  }
 }
 
 export async function getPackagePlans(): Promise<PackagePlan[]> {
@@ -185,14 +198,6 @@ export async function getPackagePlans(): Promise<PackagePlan[]> {
       include: {
         category: true,
         items: { orderBy: { sortOrder: "asc" } },
-        complimentaryItems: {
-          where: { complimentaryItem: { status: "ACTIVE" } },
-          include: { complimentaryItem: true },
-        },
-        addons: {
-          where: { addon: { status: "ACTIVE" } },
-          include: { addon: true },
-        },
       },
       orderBy: [{ studentOnly: "asc" }, { price: "asc" }],
     });
@@ -221,14 +226,6 @@ export async function getPackagePlanBySlug(slug: string): Promise<PackagePlan | 
       include: {
         category: true,
         items: { orderBy: { sortOrder: "asc" } },
-        complimentaryItems: {
-          where: { complimentaryItem: { status: "ACTIVE" } },
-          include: { complimentaryItem: true },
-        },
-        addons: {
-          where: { addon: { status: "ACTIVE" } },
-          include: { addon: true },
-        },
       },
     });
 
@@ -513,11 +510,6 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
               },
             },
             order: { select: { foodPreferences: true } },
-            orderItem: {
-              include: {
-                addons: { include: { addon: true } },
-              },
-            },
             deliveryDays: {
               orderBy: { deliveryDate: "asc" },
             },
@@ -563,7 +555,6 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
           includes: customerPackage.package.items.map((item) =>
             item.quantity ? `${item.quantity} ${item.name}` : item.name,
           ),
-          addons: customerPackage.orderItem?.addons.map(({ addon }) => addon.name) ?? [],
           foodPreferences: customerPackage.order.foodPreferences?.trim() || "No special food preferences",
         };
       }),

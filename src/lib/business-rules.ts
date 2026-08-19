@@ -9,6 +9,7 @@ export type BusinessRules = {
   deliveryWeekdays: number[];
   deliveryWindow: string;
   orderCutoff: string;
+  customMonthlyDays: number;
 };
 
 const defaultRules: BusinessRules = {
@@ -18,6 +19,7 @@ const defaultRules: BusinessRules = {
   deliveryWeekdays: [1, 2, 3, 4, 5],
   deliveryWindow: "8:00 AM - 11:00 AM",
   orderCutoff: "Noon",
+  customMonthlyDays: 21,
 };
 
 const dayLookup: Record<string, number> = {
@@ -64,6 +66,12 @@ export function businessRulesFromValue(value: unknown): BusinessRules {
     deliveryWeekdays: deliveryWeekdaysFromText(candidate.deliveryDays),
     deliveryWindow: `${formatTime(start)} - ${formatTime(end)}`,
     orderCutoff: typeof candidate.orderCutoff === "string" ? candidate.orderCutoff : defaultRules.orderCutoff,
+    customMonthlyDays:
+      typeof candidate.customMonthlyDays === "number" &&
+      Number.isInteger(candidate.customMonthlyDays) &&
+      candidate.customMonthlyDays > 0
+        ? candidate.customMonthlyDays
+        : defaultRules.customMonthlyDays,
   };
 }
 

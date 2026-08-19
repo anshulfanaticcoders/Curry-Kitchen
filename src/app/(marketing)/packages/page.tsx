@@ -64,7 +64,7 @@ export default async function PackagesPage({
           </>
         }
       >
-        Compare portions, cadence, add-ons, and estimated totals without the clutter of a generic
+        Compare portions, cadence, and estimated totals without the clutter of a generic
         ecommerce product page.
       </PageHero>
 

@@ -36,13 +36,6 @@ export const packagePlans: PackagePlan[] = [
       "Balanced daily comfort meals for light appetites, students, and busy professionals.",
     bestFor: "Light appetite",
     includes: ["8oz daal", "6oz sabzi", "Dessert once weekly"],
-    complimentaryItems: [
-      { id: "raita", name: "Cucumber raita", description: "Cooling yogurt and cucumber side." },
-    ],
-    addOns: [
-      { id: "rice", name: "Rice bowl", description: "Replace 2 roti", price: 30 },
-      { id: "extra-yogurt", name: "Extra yogurt", description: "Daily 6oz cup", price: 24 },
-    ],
     accent: "leaf",
   },
   {
@@ -60,14 +53,6 @@ export const packagePlans: PackagePlan[] = [
       "The classic Curry Kitchen plan with filling portions and rotating homestyle dishes.",
     bestFor: "Daily dinner",
     includes: ["12oz daal", "8oz sabzi", "Dessert once weekly"],
-    complimentaryItems: [
-      { id: "salad", name: "Kachumber salad", description: "Fresh chopped seasonal salad." },
-      { id: "raita", name: "Cucumber raita", description: "Cooling yogurt and cucumber side." },
-    ],
-    addOns: [
-      { id: "rice", name: "Rice bowl", description: "Replace 2 roti", price: 30 },
-      { id: "spice-note", name: "Spice note", description: "Personal preference", price: 0 },
-    ],
     accent: "saffron",
   },
   {
@@ -85,14 +70,6 @@ export const packagePlans: PackagePlan[] = [
       "Generous portions for big appetites, shared meals, or families who want dinner handled.",
     bestFor: "Shared meals",
     includes: ["12oz daal", "12oz sabzi", "Yogurt 5 days", "Basmati rice option"],
-    complimentaryItems: [
-      { id: "salad", name: "Kachumber salad", description: "Fresh chopped seasonal salad." },
-      { id: "dessert", name: "Dessert cup", description: "A rotating sweet treat." },
-    ],
-    addOns: [
-      { id: "rice", name: "Rice bowl", description: "Replace 2 roti", price: 30 },
-      { id: "dessert", name: "Extra dessert", description: "Weekly sweet add-on", price: 18 },
-    ],
     accent: "masala",
   },
   {
@@ -110,13 +87,6 @@ export const packagePlans: PackagePlan[] = [
       "A flexible trial plan for customers who want to taste the weekly rotation first.",
     bestFor: "New customers",
     includes: ["6 fresh meals", "Rotating menu", "Delivery included", "Pause anytime"],
-    complimentaryItems: [
-      { id: "salad", name: "Kachumber salad", description: "Fresh chopped seasonal salad." },
-    ],
-    addOns: [
-      { id: "rice", name: "Rice bowl", description: "Add for the week", price: 10 },
-      { id: "salad", name: "Extra salad", description: "Fresh daily side", price: 8 },
-    ],
     accent: "leaf",
   },
   {
@@ -134,13 +104,6 @@ export const packagePlans: PackagePlan[] = [
       "Affordable, steady meals for study weeks, long shifts, and shared student housing.",
     bestFor: "Students / Military",
     includes: ["Veg meals", "Weekly menu", "Simple portions", "Verification pricing"],
-    complimentaryItems: [
-      { id: "raita", name: "Cucumber raita", description: "Cooling yogurt and cucumber side." },
-    ],
-    addOns: [
-      { id: "rice", name: "Rice bowl", description: "Weekly add-on", price: 20 },
-      { id: "roti", name: "Extra roti", description: "Two extra roti daily", price: 25 },
-    ],
     accent: "saffron",
   },
 ];
@@ -333,7 +296,6 @@ export const productCategories: Category[] = [
   { id: "cat-monthly", name: "Monthly", slug: "monthly", count: 3, description: "Full-month tiffin plans billed every 4 weeks." },
   { id: "cat-weekly", name: "Weekly", slug: "weekly", count: 1, description: "Short trial plans for new customers." },
   { id: "cat-student", name: "Student", slug: "student", count: 1, description: "Budget plans with student pricing." },
-  { id: "cat-addons", name: "Add-ons", slug: "add-ons", count: 6, description: "Rice bowls, extra roti, yogurt, and dessert upgrades." },
 ];
 
 export const productTags: Tag[] = [
@@ -408,4 +370,13 @@ export const adminOrders: AdminOrder[] = [
   { id: "CK-1046", customer: "Aman Gill", plan: "Student & Military Saver Pack", items: 5, total: 220, payment: "Paid", status: "Accepted", date: "Jun 20, 2026" },
   { id: "CK-1041", customer: "Neha Patel", plan: "Weekly Trial Pack", items: 6, total: 100, payment: "Refunded", status: "Cancelled", date: "Jun 14, 2026" },
   { id: "CK-1040", customer: "Rohan Mehta", plan: "Extra Large 12 Roti Tiffin", items: 5, total: 450, payment: "Pending", status: "Pending payment", date: "Jun 13, 2026" },
+];
+
+export const customPackageItems = [
+  { id: "custom-roti", name: "Roti", unitLabel: "roti", pricePerUnit: 0.6, required: true, sortOrder: 1 },
+  { id: "custom-rice", name: "Rice", unitLabel: "oz", pricePerUnit: 0.2, required: false, sortOrder: 2 },
+  { id: "custom-sabzi", name: "Sabzi", unitLabel: "oz", pricePerUnit: 0.9, required: true, sortOrder: 3 },
+  { id: "custom-dal", name: "Dal", unitLabel: "oz", pricePerUnit: 0.8, required: true, sortOrder: 4 },
+  { id: "custom-raita", name: "Raita", unitLabel: "oz", pricePerUnit: 0.2, required: false, sortOrder: 5 },
+  { id: "custom-salad", name: "Salad", unitLabel: "serving", pricePerUnit: 0.1, required: false, sortOrder: 6 },
 ];

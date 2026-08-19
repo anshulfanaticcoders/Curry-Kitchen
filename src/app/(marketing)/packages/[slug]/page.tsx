@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowLeft, ArrowRight, CheckCircle2, Gift, PackagePlus } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, PackagePlus } from "lucide-react";
 import { notFound } from "next/navigation";
 import { JsonLd } from "@/components/seo/json-ld";
 import { ButtonLink } from "@/components/ui/button";
@@ -59,28 +59,18 @@ export default async function PackageDetailPage({ params }: Props) {
             </div>
             <div className="mt-7 flex flex-wrap gap-3">
               <ButtonLink href={`/packages?plan=${encodeURIComponent(plan.id)}#build-plan`}>Select this plan <ArrowRight size={18} /></ButtonLink>
-              <ButtonLink href={`/packages/customize?plan=${encodeURIComponent(plan.id)}`} variant="secondary"><PackagePlus size={18} />Customize</ButtonLink>
+              <ButtonLink href="/packages/build" variant="secondary"><PackagePlus size={18} />Build your own</ButtonLink>
             </div>
           </div>
         </div>
       </section>
 
       <section className="section bg-rose">
-        <div className="section-shell grid gap-6 lg:grid-cols-3">
+        <div className="section-shell grid gap-6 lg:grid-cols-2">
           <article className="rounded-lg border border-ink/10 bg-white p-7 shadow-soft">
             <CheckCircle2 className="text-masala" size={24} />
             <h2 className="mt-4 font-display text-2xl font-black">What is included</h2>
             <ul className="mt-5 grid gap-3">{plan.includes.map((item) => <li key={item} className="flex gap-2 text-sm font-bold leading-6 text-ink/68"><CheckCircle2 className="mt-0.5 shrink-0 text-leaf" size={16} />{item}</li>)}</ul>
-          </article>
-          <article className="rounded-lg border border-ink/10 bg-white p-7 shadow-soft">
-            <Gift className="text-masala" size={24} />
-            <h2 className="mt-4 font-display text-2xl font-black">Complimentary items</h2>
-            <ul className="mt-5 grid gap-4">{plan.complimentaryItems.length ? plan.complimentaryItems.map((item) => <li key={item.id}><p className="text-sm font-extrabold">{item.name}</p>{item.description ? <p className="mt-1 text-xs leading-5 text-ink/55">{item.description}</p> : null}</li>) : <li className="text-sm text-ink/55">No complimentary items are currently listed.</li>}</ul>
-          </article>
-          <article className="rounded-lg border border-ink/10 bg-white p-7 shadow-soft">
-            <PackagePlus className="text-masala" size={24} />
-            <h2 className="mt-4 font-display text-2xl font-black">Eligible add-ons</h2>
-            <ul className="mt-5 grid gap-4">{plan.addOns.length ? plan.addOns.map((addon) => <li key={addon.id} className="flex justify-between gap-4"><div><p className="text-sm font-extrabold">{addon.name}</p><p className="mt-1 text-xs leading-5 text-ink/55">{addon.description}</p></div><span className="text-sm font-black">{formatCurrency(addon.price)}</span></li>) : <li className="text-sm text-ink/55">No add-ons are currently available.</li>}</ul>
           </article>
         </div>
       </section>

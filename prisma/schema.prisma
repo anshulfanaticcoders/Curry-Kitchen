@@ -156,17 +156,17 @@ model VerificationToken {
 }
 
 model Customer {
-  id        String       @id @default(cuid())
-  userId    String?      @unique
-  name      String
-  email     String
-  phone     String?
-  emailReceipts Boolean @default(true)
-  smsUpdates    Boolean @default(false)
-  status    RecordStatus @default(ACTIVE)
-  joinedAt  DateTime     @default(now())
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id            String       @id @default(cuid())
+  userId        String?      @unique
+  name          String
+  email         String
+  phone         String?
+  emailReceipts Boolean      @default(true)
+  smsUpdates    Boolean      @default(false)
+  status        RecordStatus @default(ACTIVE)
+  joinedAt      DateTime     @default(now())
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   user                 User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
   addresses            Address[]
@@ -242,6 +242,7 @@ model Package {
   imageUrl         String         @db.VarChar(600)
   bestFor          String?
   studentOnly      Boolean        @default(false)
+  isCustom         Boolean        @default(false)
   accent           String         @default("saffron")
   status           RecordStatus   @default(ACTIVE)
   createdAt        DateTime       @default(now())
@@ -249,10 +250,7 @@ model Package {
 
   category         PackageCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   items            PackageItem[]
-  addons           PackageAddon[]
-  complimentaryItems PackageComplimentaryItem[]
   orderItems       OrderItem[]
-  cartItems        CartItem[]
   customerPackages CustomerPackage[]
   seoRecord        SeoRecord?
 
@@ -275,75 +273,20 @@ model PackageItem {
   @@map("package_items")
 }
 
-model Addon {
-  id          String       @id @default(cuid())
-  name        String
-  slug        String       @unique
-  description String?      @db.Text
-  price       Decimal      @db.Decimal(10, 2)
-  imageUrl    String?      @db.VarChar(600)
-  status      RecordStatus @default(ACTIVE)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+model CustomPackageItem {
+  id           String       @id @default(cuid())
+  name         String
+  slug         String       @unique
+  unitLabel    String       @default("oz")
+  pricePerUnit Decimal      @db.Decimal(10, 2)
+  required     Boolean      @default(false)
+  sortOrder    Int          @default(0)
+  status       RecordStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
-  packages       PackageAddon[]
-  cartItemAddons CartItemAddon[]
-  orderAddons    OrderAddon[]
-
-  @@map("addons")
-}
-
-model PackageAddon {
-  packageId String
-  addonId   String
-
-  package Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
-  addon   Addon   @relation(fields: [addonId], references: [id], onDelete: Cascade)
-
-  @@id([packageId, addonId])
-  @@index([addonId])
-  @@map("package_addons")
-}
-
-model ComplimentaryItem {
-  id          String       @id @default(cuid())
-  name        String
-  slug        String       @unique
-  description String?      @db.Text
-  status      RecordStatus @default(ACTIVE)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-
-  packages PackageComplimentaryItem[]
-
-  @@map("complimentary_items")
-}
-
-model PackageComplimentaryItem {
-  packageId           String
-  complimentaryItemId String
-
-  package           Package           @relation(fields: [packageId], references: [id], onDelete: Cascade)
-  complimentaryItem ComplimentaryItem @relation(fields: [complimentaryItemId], references: [id], onDelete: Cascade)
-
-  @@id([packageId, complimentaryItemId])
-  @@index([complimentaryItemId])
-  @@map("package_complimentary_items")
-}
-
-model MenuItem {
-  id          String       @id @default(cuid())
-  name        String
-  type        String
-  spice       String       @default("Mild")
-  vegetarian  Boolean      @default(true)
-  description String?      @db.Text
-  status      RecordStatus @default(ACTIVE)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-
-  @@index([type])
-  @@map("menu_items")
+  @@index([status])
+  @@map("custom_package_items")
 }
 
 model WeeklyMenu {
@@ -444,48 +387,6 @@ model Coupon {
   @@map("coupons")
 }
 
-model Cart {
-  id        String   @id @default(cuid())
-  userId    String?
-  email     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  items CartItem[]
-
-  @@index([userId])
-  @@map("carts")
-}
-
-model CartItem {
-  id        String    @id @default(cuid())
-  cartId    String
-  packageId String
-  quantity  Int       @default(1)
-  startDate DateTime?
-
-  cart    Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
-  package Package         @relation(fields: [packageId], references: [id], onDelete: Cascade)
-  addons  CartItemAddon[]
-
-  @@index([cartId])
-  @@index([packageId])
-  @@map("cart_items")
-}
-
-model CartItemAddon {
-  cartItemId String
-  addonId    String
-  quantity   Int    @default(1)
-
-  cartItem CartItem @relation(fields: [cartItemId], references: [id], onDelete: Cascade)
-  addon    Addon    @relation(fields: [addonId], references: [id], onDelete: Cascade)
-
-  @@id([cartItemId, addonId])
-  @@index([addonId])
-  @@map("cart_item_addons")
-}
-
 model Order {
   id               String      @id @default(cuid())
   orderNumber      String      @unique
@@ -512,7 +413,7 @@ model Order {
   deliveryZone         DeliveryZone?         @relation(fields: [deliveryZoneId], references: [id], onDelete: SetNull)
   coupon               Coupon?               @relation(fields: [couponId], references: [id], onDelete: SetNull)
   items                OrderItem[]
-  addons               OrderAddon[]
+  legacyAddons         OrderAddon[]
   payments             Payment[]
   customerPackages     CustomerPackage[]
   studentVerifications StudentVerification[]
@@ -532,17 +433,21 @@ model OrderItem {
   unitPrice Decimal   @db.Decimal(10, 2)
   total     Decimal   @db.Decimal(10, 2)
 
-  order           Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  package         Package          @relation(fields: [packageId], references: [id], onDelete: Restrict)
-  addons          OrderAddon[]
-  complimentaryItems OrderComplimentaryItem[]
-  customerPackage CustomerPackage?
+  order               Order                    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  package             Package                  @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  customerPackage     CustomerPackage?
+  legacyAddons        OrderAddon[]
+  legacyComplimentary OrderComplimentaryItem[]
 
   @@index([orderId])
   @@index([packageId])
   @@map("order_items")
 }
 
+/// Historical record of add-ons sold before add-ons were removed from the
+/// product. No application code reads these; they are retained so past orders
+/// keep an accurate record of what was purchased. `addonId` is a bare column —
+/// the `addons` table it referenced no longer exists.
 model OrderAddon {
   id          String  @id @default(cuid())
   orderId     String
@@ -554,7 +459,6 @@ model OrderAddon {
 
   order     Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
   orderItem OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
-  addon     Addon      @relation(fields: [addonId], references: [id], onDelete: Restrict)
 
   @@index([orderId])
   @@index([orderItemId])
@@ -562,6 +466,7 @@ model OrderAddon {
   @@map("order_addons")
 }
 
+/// Historical record of complimentary items included in past orders. See OrderAddon.
 model OrderComplimentaryItem {
   id                  String @id @default(cuid())
   orderItemId         String
@@ -605,21 +510,21 @@ model StripeEvent {
 }
 
 model CustomerPackage {
-  id                String                @id @default(cuid())
-  customerId        String?
-  orderId           String
-  orderItemId       String?               @unique
-  packageId         String
-  quantity          Int                   @default(1)
-  status            CustomerPackageStatus @default(PENDING_PAYMENT)
-  totalDeliveryDays Int
-  usedDeliveryDays  Int                   @default(0)
-  startDate         DateTime?
-  endDate           DateTime?
+  id                  String                @id @default(cuid())
+  customerId          String?
+  orderId             String
+  orderItemId         String?               @unique
+  packageId           String
+  quantity            Int                   @default(1)
+  status              CustomerPackageStatus @default(PENDING_PAYMENT)
+  totalDeliveryDays   Int
+  usedDeliveryDays    Int                   @default(0)
+  startDate           DateTime?
+  endDate             DateTime?
   reminderEmailSentAt DateTime?
-  customerPauseUsed Boolean               @default(false)
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
+  customerPauseUsed   Boolean               @default(false)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
 
   customer      Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
   order         Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -673,19 +578,19 @@ enum StudentVerificationType {
 }
 
 model StudentVerification {
-  id               String                  @id @default(cuid())
+  id               String                    @id @default(cuid())
   customerId       String?
   orderId          String?
-  verificationType StudentVerificationType @default(STUDENT)
-  universityName String
-  studentNumber  String
-  idCardUrl      String?                   @db.VarChar(600)
-  idCardBackUrl  String?                   @db.VarChar(600)
-  status         StudentVerificationStatus @default(PENDING)
-  adminNote      String?                   @db.Text
-  reviewedAt     DateTime?
-  createdAt      DateTime                  @default(now())
-  updatedAt      DateTime                  @updatedAt
+  verificationType StudentVerificationType   @default(STUDENT)
+  universityName   String
+  studentNumber    String
+  idCardUrl        String?                   @db.VarChar(600)
+  idCardBackUrl    String?                   @db.VarChar(600)
+  status           StudentVerificationStatus @default(PENDING)
+  adminNote        String?                   @db.Text
+  reviewedAt       DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
 
   customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   order    Order?    @relation(fields: [orderId], references: [id], onDelete: Cascade)

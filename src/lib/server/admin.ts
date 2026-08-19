@@ -1,8 +1,7 @@
 import "server-only";
 
 import type {
-  AdminAddonRecord,
-  AdminComplimentaryItemRecord,
+  AdminCustomPackageItemRecord,
   AdminCustomerOption,
   AdminMediaAsset,
   AdminMenuUpload,
@@ -77,6 +76,7 @@ const defaultAdminSettings: AdminSettings = {
   deliveryWindowEnd: "11:00",
   orderCutoff: "Noon",
   deliveryDays: "Monday - Friday",
+  customMonthlyDays: 21,
   acceptWeeklyTrials: true,
   enableCheckoutPauses: true,
   orderConfirmationEmails: true,
@@ -225,30 +225,23 @@ function formatDate(value?: Date | null) {
 }
 
 export async function getAdminPackageManagerData() {
-  const [categories, addons, complimentaryItems, packages] = await Promise.all([
+  const [categories, customPackageItems, packages] = await Promise.all([
     db.packageCategory.findMany({
       where: { status: { not: "ARCHIVED" } },
-      include: { _count: { select: { packages: true } } },
+      include: {
+        _count: { select: { packages: { where: { status: { not: "ARCHIVED" } } } } },
+      },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
-    db.addon.findMany({
+    db.customPackageItem.findMany({
       where: { status: { not: "ARCHIVED" } },
-      orderBy: { name: "asc" },
-    }),
-    db.complimentaryItem.findMany({
-      where: { status: { not: "ARCHIVED" } },
-      orderBy: { name: "asc" },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
     db.package.findMany({
-      where: { status: { not: "ARCHIVED" } },
+      where: { status: { not: "ARCHIVED" }, isCustom: false },
       include: {
         category: true,
         items: { orderBy: { sortOrder: "asc" } },
-        addons: { include: { addon: true } },
-        complimentaryItems: {
-          where: { complimentaryItem: { status: { not: "ARCHIVED" } } },
-          include: { complimentaryItem: true },
-        },
       },
       orderBy: [{ cadence: "asc" }, { price: "asc" }],
     }),
@@ -263,18 +256,13 @@ export async function getAdminPackageManagerData() {
       description: category.description ?? "",
       status: mapStatus(category.status),
     })),
-    addons: addons.map<AdminAddonRecord>((addon) => ({
-      id: addon.id,
-      name: addon.name,
-      description: addon.description ?? "",
-      price: toNumber(addon.price),
-      imageUrl: addon.imageUrl ?? undefined,
-      status: mapStatus(addon.status),
-    })),
-    complimentaryItems: complimentaryItems.map<AdminComplimentaryItemRecord>((item) => ({
+    customPackageItems: customPackageItems.map<AdminCustomPackageItemRecord>((item) => ({
       id: item.id,
       name: item.name,
-      description: item.description ?? "",
+      unitLabel: item.unitLabel,
+      pricePerUnit: toNumber(item.pricePerUnit),
+      required: item.required,
+      sortOrder: item.sortOrder,
       status: mapStatus(item.status),
     })),
     packages: packages.map<AdminPackageRecord>((plan) => ({
@@ -297,19 +285,6 @@ export async function getAdminPackageManagerData() {
       includes: plan.items.map((item) =>
         item.quantity ? `${item.quantity} ${item.name}` : item.name,
       ),
-      addOns: plan.addons.map(({ addon }) => ({
-        id: addon.id,
-        name: addon.name,
-        description: addon.description ?? "",
-        price: toNumber(addon.price),
-      })),
-      addonIds: plan.addons.map(({ addonId }) => addonId),
-      complimentaryItems: plan.complimentaryItems.map(({ complimentaryItem }) => ({
-        id: complimentaryItem.id,
-        name: complimentaryItem.name,
-        description: complimentaryItem.description ?? "",
-      })),
-      complimentaryItemIds: plan.complimentaryItems.map(({ complimentaryItemId }) => complimentaryItemId),
       accent:
         plan.accent === "leaf" || plan.accent === "masala" ? plan.accent : "saffron",
       status: mapStatus(plan.status),

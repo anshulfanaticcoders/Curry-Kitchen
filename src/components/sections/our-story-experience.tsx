@@ -549,7 +549,7 @@ export function OurStoryExperience() {
                     { icon: PackageCheck, text: "Flexible package ordering" },
                     { icon: Clock, text: "Pause support when life changes" },
                     { icon: MapPin, text: "Zone-based delivery clarity" },
-                    { icon: Utensils, text: "Add-ons for appetite" },
+                    { icon: Utensils, text: "Portions for your appetite" },
                   ].map((item) => (
                     <div key={item.text} className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.055] p-3">
                       <span className="grid size-9 shrink-0 place-items-center rounded-button bg-saffron text-ink">

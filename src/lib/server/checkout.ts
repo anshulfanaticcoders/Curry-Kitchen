@@ -10,15 +10,44 @@ import {
   nextEligiblePackageStartDate,
   validatePackageStartInput,
 } from "@/lib/package-schedule";
+import {
+  customDeliveryDayCount,
+  customPackageName,
+  formatCustomQuantity,
+  missingRequiredItems,
+  priceCustomPackage,
+  type CustomPackageItemOption,
+} from "@/lib/custom-package";
+import { MAX_CUSTOM_ITEM_QUANTITY } from "@/lib/package-cart";
 import { CouponError, findValidCoupon } from "@/lib/server/coupons";
 import { shouldUseMockData } from "@/lib/server/data-source";
 import { getStripe } from "@/lib/stripe";
 
-const checkoutItemSchema = z.object({
-  packageId: z.string().min(1),
-  addonIds: z.array(z.string().min(1)).max(20),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a valid package start date."),
-});
+const startDateField = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a valid package start date.");
+
+const checkoutItemSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("plan"),
+    packageId: z.string().min(1),
+    startDate: startDateField,
+  }),
+  z.object({
+    kind: z.literal("custom"),
+    cadence: z.enum(["WEEKLY", "MONTHLY"]),
+    items: z
+      .array(
+        z.object({
+          itemId: z.string().min(1),
+          quantity: z.number().int().min(0).max(MAX_CUSTOM_ITEM_QUANTITY),
+        }),
+      )
+      .min(1)
+      .max(40),
+    startDate: startDateField,
+  }),
+]);
 
 const checkoutSchema = z.object({
   items: z.array(checkoutItemSchema).min(1).max(10),
@@ -113,6 +142,9 @@ async function getOutsideZoneFee(tx: Prisma.TransactionClient) {
 function makeOrderNumber() {
   return `CK-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 900 + 100)}`;
 }
+
+const CUSTOM_PACKAGE_IMAGE =
+  "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=1200&q=80";
 
 export const DEFAULT_TAX_RATE = 0.0875;
 
@@ -229,16 +261,11 @@ export async function createCheckoutOrder(rawInput: unknown) {
       );
     }
 
-    const packageIds = Array.from(new Set(input.items.map((item) => item.packageId)));
+    const packageIds = Array.from(
+      new Set(input.items.flatMap((item) => (item.kind === "plan" ? [item.packageId] : []))),
+    );
     const plans = await tx.package.findMany({
       where: { id: { in: packageIds }, status: "ACTIVE" },
-      include: {
-        addons: { include: { addon: true } },
-        complimentaryItems: {
-          where: { complimentaryItem: { status: "ACTIVE" } },
-          include: { complimentaryItem: true },
-        },
-      },
     });
 
     if (plans.length !== packageIds.length) {
@@ -249,26 +276,121 @@ export async function createCheckoutOrder(rawInput: unknown) {
       );
     }
 
-    const pricedItems = input.items.map((item) => {
-      const plan = plans.find((candidate) => candidate.id === item.packageId);
+    // Custom builds are materialised into real (hidden) Package rows before the
+    // pricing pass below, so every priced line ends up with a plan and the rest
+    // of checkout — fulfilment, packing, pause/resume — needs no special case.
+    const customPackagesByLine = new Map<number, (typeof plans)[number]>();
+    const customLines = input.items.flatMap((item, index) =>
+      item.kind === "custom" ? [{ item, index }] : [],
+    );
+
+    if (customLines.length) {
+      const catalogueRows = await tx.customPackageItem.findMany({ where: { status: "ACTIVE" } });
+      const catalogue: CustomPackageItemOption[] = catalogueRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        unitLabel: row.unitLabel,
+        pricePerUnit: toNumber(row.pricePerUnit),
+        required: row.required,
+        sortOrder: row.sortOrder,
+      }));
+      const catalogueIds = new Set(catalogue.map((option) => option.id));
+      const category = await tx.packageCategory.upsert({
+        where: { slug: "custom-build" },
+        update: {},
+        // ARCHIVED keeps it out of the admin category tab and the package-form
+        // dropdown; it exists only as the required FK target for custom rows.
+        create: {
+          name: "Custom build",
+          slug: "custom-build",
+          description: "Customer-built tiffins. Managed automatically.",
+          status: "ARCHIVED",
+        },
+      });
+
+      for (const { item, index } of customLines) {
+        if (item.cadence === "WEEKLY" && !rules.acceptWeeklyTrials) {
+          throw new CheckoutError(
+            "Weekly packages are not available right now.",
+            409,
+            "WEEKLY_TRIALS_DISABLED",
+          );
+        }
+
+        if (item.items.some((entry) => !catalogueIds.has(entry.itemId))) {
+          throw new CheckoutError(
+            "Your custom package contains an item that is no longer available. Rebuild it and try again.",
+            409,
+            "CUSTOM_ITEM_UNAVAILABLE",
+          );
+        }
+
+        const missing = missingRequiredItems(item.items, catalogue);
+
+        if (missing.length) {
+          throw new CheckoutError(
+            `Your custom package needs ${missing.map((option) => option.name).join(", ")}.`,
+            409,
+            "CUSTOM_ITEM_REQUIRED",
+          );
+        }
+
+        const deliveryDayCount = customDeliveryDayCount(
+          item.cadence,
+          rules.deliveryWeekdays.length,
+          rules.customMonthlyDays,
+        );
+        const pricing = priceCustomPackage(item.items, catalogue, deliveryDayCount);
+
+        if (pricing.perDay <= 0) {
+          throw new CheckoutError(
+            "Add at least one item to your custom package.",
+            400,
+            "CUSTOM_PACKAGE_EMPTY",
+          );
+        }
+
+        const name = customPackageName(item.cadence, pricing);
+        const created = await tx.package.create({
+          data: {
+            categoryId: category.id,
+            name,
+            // randomUUID, not a timestamp: a slug collision here would throw
+            // P2002 inside the transaction and kill a paying customer's order.
+            slug: `custom-${crypto.randomUUID()}`,
+            description: name,
+            price: decimal(pricing.total),
+            cadence: item.cadence,
+            deliveryDayCount,
+            servings: "1 person",
+            imageUrl: CUSTOM_PACKAGE_IMAGE,
+            isCustom: true,
+            // Must stay false: studentOnly parks the package in
+            // PENDING_STUDENT_VERIFICATION with zero delivery days generated.
+            studentOnly: false,
+            status: "ARCHIVED",
+            items: {
+              create: pricing.lines.map((line, sortOrder) => ({
+                name: line.item.name,
+                quantity: formatCustomQuantity(line.item, line.quantity),
+                sortOrder,
+              })),
+            },
+          },
+        });
+
+        customPackagesByLine.set(index, created);
+      }
+    }
+
+    const pricedItems = input.items.map((item, index) => {
+      const plan =
+        item.kind === "custom"
+          ? customPackagesByLine.get(index)
+          : plans.find((candidate) => candidate.id === item.packageId);
 
       if (!plan) {
         throw new CheckoutError("Selected package is not available.", 409, "PACKAGE_UNAVAILABLE");
-      }
-
-      const requestedAddonIds = Array.from(new Set(item.addonIds));
-      const eligibleAddons = plan.addons
-        .map(({ addon }) => addon)
-        .filter(
-          (addon) => requestedAddonIds.includes(addon.id) && addon.status === "ACTIVE",
-        );
-
-      if (eligibleAddons.length !== requestedAddonIds.length) {
-        throw new CheckoutError(
-          `${plan.name} has an unavailable add-on.`,
-          409,
-          "ADDON_UNAVAILABLE",
-        );
       }
 
       if (plan.cadence === "WEEKLY" && !rules.acceptWeeklyTrials) {
@@ -281,17 +403,12 @@ export async function createCheckoutOrder(rawInput: unknown) {
         throw new CheckoutError("Today’s order cut-off has passed. Choose the following delivery day.", 409, "ORDER_CUTOFF_PASSED");
       }
       const packageTotal = toNumber(plan.price);
-      const addonTotal = eligibleAddons.reduce((sum, addon) => sum + toNumber(addon.price), 0);
-      const subtotal = packageTotal + addonTotal;
 
       return {
         plan,
-        eligibleAddons,
-        complimentaryItems: plan.complimentaryItems.map(({ complimentaryItem }) => complimentaryItem),
         startDate,
         packageTotal,
-        addonTotal,
-        subtotal,
+        subtotal: packageTotal,
       };
     });
 
@@ -434,28 +551,6 @@ export async function createCheckoutOrder(rawInput: unknown) {
         },
       });
 
-      if (pricedItem.eligibleAddons.length) {
-        await tx.orderAddon.createMany({
-          data: pricedItem.eligibleAddons.map((addon) => ({
-            orderId: order.id,
-            orderItemId: orderItem.id,
-            addonId: addon.id,
-            unitPrice: addon.price,
-            total: addon.price,
-          })),
-        });
-      }
-
-      if (pricedItem.complimentaryItems.length) {
-        await tx.orderComplimentaryItem.createMany({
-          data: pricedItem.complimentaryItems.map((item) => ({
-            orderItemId: orderItem.id,
-            complimentaryItemId: item.id,
-            name: item.name,
-          })),
-        });
-      }
-
       await tx.customerPackage.create({
         data: {
           customerId: customer.id,
@@ -475,6 +570,10 @@ export async function createCheckoutOrder(rawInput: unknown) {
       planNames: pricedItems.map((item) => item.plan.name),
       total,
     };
+  }, {
+    // Materialising custom packages adds writes to an already long
+    // transaction; Prisma's 5s default is too tight for a full cart.
+    timeout: 15_000,
   });
 
   if (input.paymentMethod === "ZELLE") {

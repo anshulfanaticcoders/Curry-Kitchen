@@ -21,6 +21,8 @@ import { PackageCartDrawer } from "@/components/cart/package-cart-drawer";
 import { usePackageCart } from "@/components/providers/package-cart-provider";
 import { ButtonLink, buttonStyles } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { CustomPackageConfig } from "@/lib/cart-lines";
+import type { CustomPackageItemOption } from "@/lib/custom-package";
 import type { PackagePlan } from "@/lib/types";
 
 const links = [
@@ -48,10 +50,18 @@ function initialsFromSession(name?: string | null, email?: string | null) {
     .toUpperCase();
 }
 
-export function Navbar({ plans }: { plans: PackagePlan[] }) {
+export function Navbar({
+  plans,
+  customItems,
+  customConfig,
+}: {
+  plans: PackagePlan[];
+  customItems: CustomPackageItemOption[];
+  customConfig: CustomPackageConfig;
+}) {
   const pathname = usePathname();
   const { data: session, status } = useSession();
-  const { items: cartItems, openCart, pulseKey, registerPlans } = usePackageCart();
+  const { items: cartItems, openCart, pulseKey, registerPlans, registerCustomItems } = usePackageCart();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -83,6 +93,13 @@ export function Navbar({ plans }: { plans: PackagePlan[] }) {
   useEffect(() => {
     registerPlans(plans);
   }, [plans, registerPlans]);
+
+  // The cart drawer is reachable from every marketing page, so the custom-item
+  // catalogue has to be registered globally — otherwise a custom line renders
+  // as unavailable at $0 anywhere outside the builder and checkout.
+  useEffect(() => {
+    registerCustomItems(customItems, customConfig);
+  }, [customConfig, customItems, registerCustomItems]);
 
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {

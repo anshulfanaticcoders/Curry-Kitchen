@@ -6,7 +6,6 @@ import { z } from "zod";
 import { fail, ok } from "@/lib/action-result";
 import { getCurrentSession } from "@/lib/auth";
 import { getBusinessRules } from "@/lib/business-rules";
-import { complimentaryItemIdsFromFormData } from "@/lib/complimentary-items";
 import { db } from "@/lib/db";
 import { sendVerificationDecisionEmail } from "@/lib/email/notifications";
 import { sendTransactionalEmail } from "@/lib/email/send";
@@ -47,6 +46,7 @@ const adminSettingsSchema = z.object({
   deliveryWindowEnd: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   orderCutoff: z.string().min(2).optional(),
   deliveryDays: z.string().min(2).optional(),
+  customMonthlyDays: z.coerce.number().int().min(1).max(60).optional(),
   acceptWeeklyTrials: optionalFormBoolean,
   enableCheckoutPauses: optionalFormBoolean,
   orderConfirmationEmails: optionalFormBoolean,
@@ -143,19 +143,13 @@ const packageSchema = z.object({
   includes: z.string().optional(),
 });
 
-const addonSchema = z.object({
+const customPackageItemSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(2),
-  description: z.string().optional(),
-  price: z.coerce.number().min(0),
-  imageUrl: siteImage.optional().or(z.literal("")),
-  status: z.enum(["ACTIVE", "DRAFT", "ARCHIVED"]).default("ACTIVE"),
-});
-
-const complimentaryItemSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().min(2),
-  description: z.string().optional(),
+  unitLabel: z.string().min(1).max(20),
+  pricePerUnit: z.coerce.number().min(0),
+  required: formBoolean.default(false),
+  sortOrder: z.coerce.number().int().min(0).default(0),
   status: z.enum(["ACTIVE", "DRAFT", "ARCHIVED"]).default("ACTIVE"),
 });
 
@@ -176,16 +170,6 @@ const categorySchema = z.object({
   slug: z.string().optional(),
   description: z.string().optional(),
   sortOrder: z.coerce.number().int().min(0).default(0),
-  status: z.enum(["ACTIVE", "DRAFT", "ARCHIVED"]).default("ACTIVE"),
-});
-
-const menuItemSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().min(2),
-  type: z.string().min(2),
-  spice: z.string().min(2).default("Mild"),
-  vegetarian: formBoolean.default(true),
-  description: z.string().optional(),
   status: z.enum(["ACTIVE", "DRAFT", "ARCHIVED"]).default("ACTIVE"),
 });
 
@@ -387,59 +371,16 @@ export async function saveSeoSettingsAction(formData: FormData) {
   }
 }
 
-async function ensureAddonCanBeDeactivated(addonId: string) {
-  const assignedPackages = await db.package.findMany({
-    where: {
-      status: "ACTIVE",
-      addons: { some: { addonId } },
-    },
-    select: {
-      name: true,
-      addons: {
-        where: { addon: { status: "ACTIVE" } },
-        select: { addonId: true },
-      },
-    },
-  });
-  const blockedPackages = assignedPackages.filter((plan) => plan.addons.length <= 1);
-
-  if (blockedPackages.length) {
-    throw new Error(
-      `Keep this add-on active or assign another active add-on to: ${blockedPackages.map((plan) => plan.name).join(", ")}.`,
-    );
-  }
-}
-
 export async function savePackageAction(formData: FormData) {
   try {
     const admin = await requireAdmin();
     const parsed = packageSchema.safeParse(formObject(formData));
-    const addonIds = Array.from(new Set(formData.getAll("addonIds").map(String).filter(Boolean)));
-    const complimentaryItemIds = complimentaryItemIdsFromFormData(formData);
 
     if (!parsed.success) {
       return fail("Please fix the package fields.", parsed.error.flatten().fieldErrors);
     }
 
     const { id, includes, ...data } = parsed.data;
-
-    const activeComplimentaryItemCount = await db.complimentaryItem.count({
-      where: { id: { in: complimentaryItemIds }, status: "ACTIVE" },
-    });
-
-    if (activeComplimentaryItemCount !== complimentaryItemIds.length) {
-      return fail("Choose only active complimentary items.");
-    }
-
-    if (data.status === "ACTIVE") {
-      const activeAddonCount = await db.addon.count({
-        where: { id: { in: addonIds }, status: "ACTIVE" },
-      });
-
-      if (activeAddonCount < 1) {
-        return fail("An active package must have at least one active add-on.");
-      }
-    }
 
     const packageRecord = await db.package.upsert({
       where: { id: id ?? "__new_package__" },
@@ -454,12 +395,6 @@ export async function savePackageAction(formData: FormData) {
             sortOrder: index,
           })),
         },
-        addons: {
-          create: addonIds.map((addonId) => ({ addonId })),
-        },
-        complimentaryItems: {
-          create: complimentaryItemIds.map((complimentaryItemId) => ({ complimentaryItemId })),
-        },
       },
       update: {
         ...data,
@@ -472,14 +407,6 @@ export async function savePackageAction(formData: FormData) {
             name,
             sortOrder: index,
           })),
-        },
-        addons: {
-          deleteMany: {},
-          create: addonIds.map((addonId) => ({ addonId })),
-        },
-        complimentaryItems: {
-          deleteMany: {},
-          create: complimentaryItemIds.map((complimentaryItemId) => ({ complimentaryItemId })),
         },
       },
     });
@@ -529,130 +456,71 @@ export async function deletePackageAction(packageId: string) {
   }
 }
 
-export async function saveAddonAction(formData: FormData) {
+export async function saveCustomPackageItemAction(formData: FormData) {
   try {
     const admin = await requireAdmin();
-    const parsed = addonSchema.safeParse(formObject(formData));
+    const parsed = customPackageItemSchema.safeParse(formObject(formData));
 
     if (!parsed.success) {
-      return fail("Please fix the add-on fields.", parsed.error.flatten().fieldErrors);
-    }
-
-    const { id, imageUrl, ...data } = parsed.data;
-
-    if (id && data.status !== "ACTIVE") {
-      await ensureAddonCanBeDeactivated(id);
-    }
-
-    const addon = await db.addon.upsert({
-      where: { id: id ?? "__new_addon__" },
-      create: {
-        ...data,
-        price: new Prisma.Decimal(data.price),
-        slug: slugify(data.name),
-        imageUrl: imageUrl || null,
-      },
-      update: {
-        ...data,
-        price: new Prisma.Decimal(data.price),
-        slug: slugify(data.name),
-        imageUrl: imageUrl || null,
-      },
-    });
-
-    await db.auditLog.create({
-      data: {
-        userId: admin.id,
-        action: id ? "addon.updated" : "addon.created",
-        entity: "addon",
-        entityId: addon.id,
-      },
-    });
-
-    revalidatePath("/admin/packages");
-    return ok({ id: addon.id }, id ? "Add-on updated." : "Add-on created.");
-  } catch (error) {
-    return fail(error instanceof Error ? error.message : "Add-on could not be saved.");
-  }
-}
-
-export async function deleteAddonAction(addonId: string) {
-  try {
-    const admin = await requireAdmin();
-
-    await ensureAddonCanBeDeactivated(addonId);
-
-    await db.addon.update({
-      where: { id: addonId },
-      data: { status: "ARCHIVED" },
-    });
-    await db.auditLog.create({
-      data: { userId: admin.id, action: "addon.archived", entity: "addon", entityId: addonId },
-    });
-
-    revalidatePath("/admin/packages");
-    revalidatePath("/packages");
-    return ok({ id: addonId }, "Add-on archived.");
-  } catch (error) {
-    return fail(error instanceof Error ? error.message : "Add-on could not be archived.");
-  }
-}
-
-export async function saveComplimentaryItemAction(formData: FormData) {
-  try {
-    const admin = await requireAdmin();
-    const parsed = complimentaryItemSchema.safeParse(formObject(formData));
-
-    if (!parsed.success) {
-      return fail("Please fix the complimentary item fields.", parsed.error.flatten().fieldErrors);
+      return fail("Please fix the custom item fields.", parsed.error.flatten().fieldErrors);
     }
 
     const { id, ...data } = parsed.data;
-    const item = await db.complimentaryItem.upsert({
-      where: { id: id ?? "__new_complimentary_item__" },
-      create: { ...data, slug: slugify(data.name) },
-      update: { ...data, slug: slugify(data.name) },
+    const item = await db.customPackageItem.upsert({
+      where: { id: id ?? "__new_custom_package_item__" },
+      create: {
+        ...data,
+        pricePerUnit: new Prisma.Decimal(data.pricePerUnit),
+        slug: slugify(data.name),
+      },
+      update: {
+        ...data,
+        pricePerUnit: new Prisma.Decimal(data.pricePerUnit),
+        slug: slugify(data.name),
+      },
     });
 
     await db.auditLog.create({
       data: {
         userId: admin.id,
-        action: id ? "complimentary_item.updated" : "complimentary_item.created",
-        entity: "complimentary_item",
+        action: id ? "custom_package_item.updated" : "custom_package_item.created",
+        entity: "custom_package_item",
         entityId: item.id,
       },
     });
 
     revalidatePath("/admin/packages");
     revalidatePath("/packages");
-    return ok({ id: item.id }, id ? "Complimentary item updated." : "Complimentary item created.");
+    revalidatePath("/packages/build");
+    return ok({ id: item.id }, id ? "Custom item updated." : "Custom item created.");
   } catch (error) {
-    return fail(error instanceof Error ? error.message : "Complimentary item could not be saved.");
+    return fail(error instanceof Error ? error.message : "Custom item could not be saved.");
   }
 }
 
-export async function deleteComplimentaryItemAction(complimentaryItemId: string) {
+export async function deleteCustomPackageItemAction(itemId: string) {
   try {
     const admin = await requireAdmin();
 
-    await db.complimentaryItem.update({
-      where: { id: complimentaryItemId },
+    await db.customPackageItem.update({
+      where: { id: itemId },
       data: { status: "ARCHIVED" },
     });
     await db.auditLog.create({
       data: {
         userId: admin.id,
-        action: "complimentary_item.archived",
-        entity: "complimentary_item",
-        entityId: complimentaryItemId,
+        action: "custom_package_item.archived",
+        entity: "custom_package_item",
+        entityId: itemId,
       },
     });
 
     revalidatePath("/admin/packages");
     revalidatePath("/packages");
-    return ok({ id: complimentaryItemId }, "Complimentary item archived.");
+    revalidatePath("/packages/build");
+    return ok({ id: itemId }, "Custom item archived.");
   } catch (error) {
-    return fail(error instanceof Error ? error.message : "Complimentary item could not be archived.");
+    return fail(error instanceof Error ? error.message : "Custom item could not be archived.");
   }
 }
 
@@ -785,59 +653,6 @@ export async function deleteCategoryAction(categoryId: string) {
     return ok({ id: categoryId }, "Category archived.");
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Category could not be archived.");
-  }
-}
-
-export async function saveMenuItemAction(formData: FormData) {
-  try {
-    const admin = await requireAdmin();
-    const parsed = menuItemSchema.safeParse(formObject(formData));
-
-    if (!parsed.success) {
-      return fail("Please fix the menu item fields.", parsed.error.flatten().fieldErrors);
-    }
-
-    const { id, ...data } = parsed.data;
-    const item = await db.menuItem.upsert({
-      where: { id: id ?? "__new_menu_item__" },
-      create: data,
-      update: data,
-    });
-
-    await db.auditLog.create({
-      data: {
-        userId: admin.id,
-        action: id ? "menu_item.updated" : "menu_item.created",
-        entity: "menu_item",
-        entityId: item.id,
-      },
-    });
-
-    revalidatePath("/admin/menu");
-    revalidatePath("/menu");
-    return ok({ id: item.id }, id ? "Menu item updated." : "Menu item created.");
-  } catch (error) {
-    return fail(error instanceof Error ? error.message : "Menu item could not be saved.");
-  }
-}
-
-export async function deleteMenuItemAction(menuItemId: string) {
-  try {
-    const admin = await requireAdmin();
-
-    await db.menuItem.update({
-      where: { id: menuItemId },
-      data: { status: "ARCHIVED" },
-    });
-    await db.auditLog.create({
-      data: { userId: admin.id, action: "menu_item.archived", entity: "menu_item", entityId: menuItemId },
-    });
-
-    revalidatePath("/admin/menu");
-    revalidatePath("/menu");
-    return ok({ id: menuItemId }, "Menu item archived.");
-  } catch (error) {
-    return fail(error instanceof Error ? error.message : "Menu item could not be archived.");
   }
 }
 

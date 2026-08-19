@@ -6,7 +6,6 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
-  Gift,
   PackagePlus,
   ShoppingBag,
   X,
@@ -17,7 +16,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { PackageCard } from "@/components/food/package-card";
 import { usePackageCart } from "@/components/providers/package-cart-provider";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import {
   makePackageCartLineId,
@@ -55,17 +54,20 @@ export function PackageExperience({
     addItem,
     updateItem,
   } = usePackageCart();
-  const categories: PackageCategory[] = Array.from(
-    new Set(plans.map((plan) => plan.category)),
+  // "Custom" is deliberately not a PackageCategory: asPackageCategory() collapses
+  // unknown category names to "Monthly", so keeping it out of that union avoids
+  // four coordinated edits to a landmine. It is a tab, not a plan category.
+  const categories: Array<PackageCategory | "Custom"> = [
+    ...Array.from(new Set(plans.map((plan) => plan.category))),
+    "Custom",
+  ];
+  const validInitialCart = initialCartItems.filter(
+    (item) => item.kind === "custom" || plans.some((plan) => plan.id === item.packageId),
   );
-  const validInitialCart = initialCartItems.filter((item) =>
-    plans.some((plan) => plan.id === item.packageId),
-  );
-  const [category, setCategory] = useState<PackageCategory>("Monthly");
+  const [category, setCategory] = useState<PackageCategory | "Custom">("Monthly");
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [editingLineId, setEditingLineId] = useState<string | undefined>();
-  const [editingAddonIds, setEditingAddonIds] = useState<string[]>([]);
   const [startDate, setStartDate] = useState(nextEligiblePackageStartInput());
   const appliedInitialCartKey = useRef<string | null>(null);
   const handledRouteKey = useRef<string | null>(null);
@@ -108,7 +110,8 @@ export function PackageExperience({
         ? cartItems.find((item) => item.lineId === initialEditLineId) ??
           validInitialCart.find((item) => item.lineId === initialEditLineId)
         : undefined;
-      const plan = plans.find((candidate) => candidate.id === (editItem?.packageId ?? initialPlanId));
+      const editPackageId = editItem?.kind === "plan" ? editItem.packageId : undefined;
+      const plan = plans.find((candidate) => candidate.id === (editPackageId ?? initialPlanId));
 
       if (!plan) {
         handledRouteKey.current = routeKey;
@@ -117,7 +120,6 @@ export function PackageExperience({
 
       setSelectedPlanId(plan.id);
       setEditingLineId(editItem?.lineId);
-      setEditingAddonIds(editItem?.addonIds ?? []);
       setStartDate(editItem?.startDate ?? nextEligiblePackageStartInput());
       setModalOpen(true);
       handledRouteKey.current = routeKey;
@@ -147,7 +149,6 @@ export function PackageExperience({
   function openPlan(plan: PackagePlan, item?: PackageCartItemInput) {
     setSelectedPlanId(plan.id);
     setEditingLineId(item?.lineId);
-    setEditingAddonIds(item?.addonIds ?? []);
     setStartDate(item?.startDate ?? nextEligiblePackageStartInput());
     setModalOpen(true);
   }
@@ -161,9 +162,9 @@ export function PackageExperience({
     }
 
     const configuredItem: PackageCartItemInput = {
+      kind: "plan",
       lineId: editingLineId ?? makePackageCartLineId(),
       packageId: selectedPlan.id,
-      addonIds: editingLineId ? editingAddonIds : [],
       startDate,
     };
 
@@ -213,24 +214,6 @@ export function PackageExperience({
     router.push("/checkout");
   }
 
-  function customizePackage() {
-    if (!selectedPlan) return;
-
-    if (startDateError) {
-      toast.error("Choose another start date", { description: startDateError });
-      return;
-    }
-
-    const params = new URLSearchParams({
-      plan: selectedPlan.id,
-      startDate,
-    });
-
-    if (editingLineId) params.set("edit", editingLineId);
-
-    router.push(`/packages/customize?${params.toString()}`);
-  }
-
   return (
     <div id="build-plan" className="scroll-mt-32">
       <div className="mb-8 flex flex-col gap-5 border-b border-ink/10 pb-7 md:flex-row md:items-end md:justify-between">
@@ -251,17 +234,57 @@ export function PackageExperience({
                   : "border-ink/10 bg-white/70 text-ink/68 hover:border-masala/35 hover:text-ink",
               )}
             >
-              {categoryLabel(item)}
+              {item === "Custom" ? "Build your own" : categoryLabel(item)}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 min-[1180px]:grid-cols-4">
-        {visiblePlans.map((plan) => (
-          <PackageCard key={plan.id} plan={plan} onSelect={openPlan} actionLabel="Select plan" />
-        ))}
-      </div>
+      {category === "Custom" ? (
+        <div className="overflow-hidden rounded-lg border border-ink/10 bg-ink text-ivory shadow-soft">
+          <div className="grid gap-8 p-8 lg:grid-cols-[1.3fr_1fr] lg:items-center lg:p-12">
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-saffron">
+                Custom package
+              </p>
+              <h3 className="mt-3 font-display text-4xl font-black leading-[1.12]">
+                Not seeing your portion? Build it yourself.
+              </h3>
+              <p className="mt-4 max-w-xl text-base font-medium leading-8 text-ivory/65">
+                Choose exactly how much roti, rice, dal, sabzi, raita, and salad you want in a
+                day&rsquo;s tiffin. We price each item per unit, then multiply by the delivery days
+                in your weekly or monthly plan.
+              </p>
+              <div className="mt-7">
+                <ButtonLink href="/packages/build">
+                  Start building
+                  <ArrowRight size={18} />
+                </ButtonLink>
+              </div>
+            </div>
+            <ul className="grid gap-3">
+              {[
+                "Pay only for the portions you eat",
+                "Mark your must-have items every day",
+                "Switch between weekly and monthly",
+              ].map((point) => (
+                <li key={point} className="flex gap-3 text-sm font-bold text-ivory/80">
+                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-saffron text-ink">
+                    <Check size={14} />
+                  </span>
+                  {point}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 min-[1180px]:grid-cols-4">
+          {visiblePlans.map((plan) => (
+            <PackageCard key={plan.id} plan={plan} onSelect={openPlan} actionLabel="Select plan" />
+          ))}
+        </div>
+      )}
 
       {typeof document !== "undefined" ? createPortal(
       <AnimatePresence>
@@ -329,27 +352,11 @@ export function PackageExperience({
                         </li>
                       ))}
                     </ul>
-                    {selectedPlan.complimentaryItems.length ? (
-                      <div className="mt-6 rounded-lg border border-saffron/30 bg-rose p-4">
-                        <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.15em] text-masala">
-                          <Gift size={15} /> Complimentary with this plan
-                        </p>
-                        <ul className="mt-3 grid gap-2">
-                          {selectedPlan.complimentaryItems.map((item) => (
-                            <li key={item.id} className="flex gap-2 text-sm font-bold text-ink/78">
-                              <Check size={16} className="mt-0.5 shrink-0 text-masala" />
-                              <span>
-                                {item.name}
-                                {item.description ? <span className="block text-xs font-semibold text-ink/55">{item.description}</span> : null}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
                     <div className="mt-6 rounded-lg border border-leaf/24 bg-mint p-4">
-                      <p className="text-xs font-black uppercase tracking-[0.15em] text-leaf">Customization is optional</p>
-                      <p className="mt-1.5 text-sm font-bold leading-5 text-ink/68">Add this plan as-is, or choose extras on the next page.</p>
+                      <p className="text-xs font-black uppercase tracking-[0.15em] text-leaf">Want different portions?</p>
+                      <p className="mt-1.5 text-sm font-bold leading-5 text-ink/68">
+                        Build your own tiffin and set the exact amount of each item.
+                      </p>
                     </div>
                   </div>
 
@@ -387,14 +394,10 @@ export function PackageExperience({
                   </div>
                   <span className="font-display text-3xl font-black">{formatCurrency(draftTotal)}</span>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <Button variant="secondary" className="w-full" onClick={selectAnotherPlan}>
                     <PackagePlus size={18} />
                     {editingLineId ? "Update cart" : "Add to cart"}
-                  </Button>
-                  <Button variant="dark" className="w-full" onClick={customizePackage}>
-                    Customize
-                    <ArrowRight size={17} />
                   </Button>
                   <Button className="w-full" onClick={proceedToPayment}>
                     <ShoppingBag size={18} />

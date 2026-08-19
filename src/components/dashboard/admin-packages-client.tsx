@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Gift, Pencil, Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import Link from "next/link";
 import { Tabs } from "@/components/dashboard/interactive";
 import { ConfirmActionButton } from "@/components/dashboard/confirm-action-button";
@@ -9,15 +9,10 @@ import { Card, CardHeader, PageHeader, Table, Td, Th } from "@/components/dashbo
 import { ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import {
-  deleteAddonAction,
-  deleteComplimentaryItemAction,
+  deleteCustomPackageItemAction,
   deletePackageAction,
 } from "@/lib/actions/admin";
-import type {
-  AdminAddonRecord,
-  AdminComplimentaryItemRecord,
-  AdminPackageRecord,
-} from "@/lib/types";
+import type { AdminCustomPackageItemRecord, AdminPackageRecord } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 
 function statusTone(status: string) {
@@ -39,8 +34,6 @@ function PackagesTab({ packages }: { packages: AdminPackageRecord[] }) {
             <Th>Plan</Th>
             <Th>Category</Th>
             <Th>Price</Th>
-            <Th>Add-ons</Th>
-            <Th>Free items</Th>
             <Th>Status</Th>
             <Th className="text-right">Actions</Th>
           </tr>
@@ -61,8 +54,6 @@ function PackagesTab({ packages }: { packages: AdminPackageRecord[] }) {
               </Td>
               <Td className="text-ink/70">{plan.category}</Td>
               <Td className="font-black">{formatCurrency(plan.price)}</Td>
-              <Td className="text-ink/60">{plan.addonIds.length}</Td>
-              <Td className="text-ink/60">{plan.complimentaryItemIds.length}</Td>
               <Td>
                 <StatusPill tone={statusTone(plan.status)}>{plan.status}</StatusPill>
               </Td>
@@ -88,60 +79,19 @@ function PackagesTab({ packages }: { packages: AdminPackageRecord[] }) {
   );
 }
 
-function AddonsTab({ addons }: { addons: AdminAddonRecord[] }) {
+function CustomItemsTab({ items }: { items: AdminCustomPackageItemRecord[] }) {
   return (
     <Card>
-      <CardHeader title="Add-ons" description="Extras that can be assigned to packages." />
-      <Table>
-        <thead>
-          <tr>
-            <Th>Name</Th>
-            <Th>Description</Th>
-            <Th>Price</Th>
-            <Th>Status</Th>
-            <Th className="text-right">Actions</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {addons.map((addon) => (
-            <tr key={addon.id} className="transition hover:bg-ivory/60">
-              <Td className="font-extrabold">{addon.name}</Td>
-              <Td className="max-w-sm text-ink/60">{addon.description || "No description"}</Td>
-              <Td className="font-black">{formatCurrency(addon.price)}</Td>
-              <Td>
-                <StatusPill tone={statusTone(addon.status)}>{addon.status}</StatusPill>
-              </Td>
-              <Td>
-                <div className="flex items-center justify-end gap-2">
-                  <Link href={`/admin/packages/addons/${addon.id}/edit`} aria-label={`Edit ${addon.name}`} className={editLinkClass}>
-                    <Pencil size={16} />
-                  </Link>
-                  <ConfirmActionButton
-                    label={`Delete ${addon.name}`}
-                    title={`Archive ${addon.name}?`}
-                    description="This add-on will stop appearing in package builders. Orders that already used it will remain untouched."
-                    confirmLabel="Archive"
-                    action={() => deleteAddonAction(addon.id)}
-                  />
-                </div>
-              </Td>
-            </tr>
-          ))}
-        </tbody>
-      </Table>
-    </Card>
-  );
-}
-
-function ComplimentaryItemsTab({ items }: { items: AdminComplimentaryItemRecord[] }) {
-  return (
-    <Card>
-      <CardHeader title="Complimentary items" description="Free extras that can be assigned to any plan." />
+      <CardHeader
+        title="Custom package items"
+        description="Per-unit priced items customers combine into their own plan."
+      />
       <Table>
         <thead>
           <tr>
             <Th>Item</Th>
-            <Th>Description</Th>
+            <Th>Price per unit</Th>
+            <Th>Mandatory</Th>
             <Th>Status</Th>
             <Th className="text-right">Actions</Th>
           </tr>
@@ -149,27 +99,47 @@ function ComplimentaryItemsTab({ items }: { items: AdminComplimentaryItemRecord[
         <tbody>
           {items.map((item) => (
             <tr key={item.id} className="transition hover:bg-ivory/60">
-              <Td className="font-extrabold">{item.name}</Td>
-              <Td className="max-w-sm text-ink/60">{item.description || "No description"}</Td>
+              <Td>
+                <p className="font-extrabold">{item.name}</p>
+                <p className="text-xs font-bold text-ink/45">Sort order {item.sortOrder}</p>
+              </Td>
+              <Td className="font-black">
+                {formatCurrency(item.pricePerUnit)}
+                <span className="ml-1 text-xs font-bold text-ink/45">/ {item.unitLabel}</span>
+              </Td>
+              <Td>
+                <StatusPill tone={item.required ? "green" : "amber"}>
+                  {item.required ? "Required" : "Optional"}
+                </StatusPill>
+              </Td>
               <Td>
                 <StatusPill tone={statusTone(item.status)}>{item.status}</StatusPill>
               </Td>
               <Td>
                 <div className="flex items-center justify-end gap-2">
-                  <Link href={`/admin/packages/complimentary/${item.id}/edit`} aria-label={`Edit ${item.name}`} className={editLinkClass}>
+                  <Link
+                    href={`/admin/packages/custom-items/${item.id}/edit`}
+                    aria-label={`Edit ${item.name}`}
+                    className={editLinkClass}
+                  >
                     <Pencil size={16} />
                   </Link>
                   <ConfirmActionButton
-                    label={`Archive ${item.name}`}
+                    label={`Delete ${item.name}`}
                     title={`Archive ${item.name}?`}
-                    description="This item will stop appearing with plans, but past order snapshots remain unchanged."
+                    description="Customers will no longer be able to add this item to a custom package. Existing orders are unaffected."
                     confirmLabel="Archive"
-                    action={() => deleteComplimentaryItemAction(item.id)}
+                    action={() => deleteCustomPackageItemAction(item.id)}
                   />
                 </div>
               </Td>
             </tr>
           ))}
+          {items.length === 0 ? (
+            <tr>
+              <Td className="text-ink/50">No custom items yet. Add one to enable custom packages.</Td>
+            </tr>
+          ) : null}
         </tbody>
       </Table>
     </Card>
@@ -178,27 +148,21 @@ function ComplimentaryItemsTab({ items }: { items: AdminComplimentaryItemRecord[
 
 export function AdminPackagesClient({
   packages,
-  addons,
-  complimentaryItems,
+  customPackageItems,
 }: {
   packages: AdminPackageRecord[];
-  addons: AdminAddonRecord[];
-  complimentaryItems: AdminComplimentaryItemRecord[];
+  customPackageItems: AdminCustomPackageItemRecord[];
 }) {
   return (
     <div>
       <PageHeader
         title="Packages"
-        description="Create plans with pricing, delivery days, included items, and add-ons."
+        description="Create fixed plans, and price the items customers can build a custom package from."
         action={
           <div className="flex flex-wrap gap-2">
-            <ButtonLink href="/admin/packages/complimentary/new" variant="secondary">
-              <Gift size={18} />
-              Add complimentary item
-            </ButtonLink>
-            <ButtonLink href="/admin/packages/addons/new" variant="secondary">
+            <ButtonLink href="/admin/packages/custom-items/new" variant="secondary">
               <Plus size={18} />
-              Add add-on
+              Add custom item
             </ButtonLink>
             <ButtonLink href="/admin/packages/new">
               <Plus size={18} />
@@ -215,14 +179,9 @@ export function AdminPackagesClient({
             content: <PackagesTab packages={packages} />,
           },
           {
-            id: "addons",
-            label: `Add-ons (${addons.length})`,
-            content: <AddonsTab addons={addons} />,
-          },
-          {
-            id: "complimentary-items",
-            label: `Complimentary (${complimentaryItems.length})`,
-            content: <ComplimentaryItemsTab items={complimentaryItems} />,
+            id: "custom-items",
+            label: `Custom items (${customPackageItems.length})`,
+            content: <CustomItemsTab items={customPackageItems} />,
           },
         ]}
       />

@@ -10,7 +10,7 @@ const CONTENT_TYPES: Record<string, string> = {
   webp: "image/webp",
 };
 
-// Media assets are public marketing images (package/add-on photos shown on the
+// Media assets are public marketing images (package photos shown on the
 // storefront): no auth, cacheable. File names are unguessable UUIDs written
 // only by the admin upload route.
 export async function GET(
