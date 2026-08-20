@@ -15,10 +15,10 @@ export function AnimatedSection({ children, className, delay = 0, id }: Animated
   return (
     <motion.section
       id={id}
-      initial={{ opacity: 0.82, y: 38, scale: 0.985, filter: "blur(10px)" }}
-      whileInView={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-      viewport={{ once: true, amount: 0.18 }}
-      transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay }}
+      initial={{ opacity: 0, y: 18 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.15 }}
+      transition={{ duration: 0.6, ease: [0.25, 1, 0.5, 1], delay }}
       className={cn("section-shell", className)}
     >
       {children}
@@ -30,18 +30,17 @@ export function AnimatedSection({ children, className, delay = 0, id }: Animated
 export const staggerContainer = {
   hidden: {},
   show: {
-    transition: { staggerChildren: 0.1, delayChildren: 0.05 },
+    transition: { staggerChildren: 0.07 },
   },
 };
 
-/** Per-child reveal: opacity + lift + blur. Pair with `staggerContainer`. */
+/** Per-child reveal: a short lift, nothing theatrical. Pair with `staggerContainer`. */
 export const revealChild = {
-  hidden: { opacity: 0, y: 26, filter: "blur(8px)" },
+  hidden: { opacity: 0, y: 14 },
   show: {
     opacity: 1,
     y: 0,
-    filter: "blur(0px)",
-    transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] as const },
+    transition: { duration: 0.55, ease: [0.25, 1, 0.5, 1] as const },
   },
 };
 

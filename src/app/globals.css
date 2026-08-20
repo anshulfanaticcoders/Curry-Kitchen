@@ -28,8 +28,8 @@
   --color-chili-soft: #fdecea;
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
-  --shadow-soft: 0 24px 80px rgba(7, 7, 7, 0.12);
-  --shadow-lift: 0 22px 44px rgba(255, 122, 26, 0.24);
+  --shadow-soft: 0 10px 36px rgba(7, 7, 7, 0.07);
+  --shadow-lift: 0 12px 30px rgba(255, 122, 26, 0.13);
   --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.65);
   --radius-button: 0.5rem;
 }
@@ -89,22 +89,15 @@ blockquote {
   margin-inline: auto;
 }
 
-/* Vertical rhythm: compact bands so each section reads in ~one glance. */
+/* Vertical rhythm: unhurried bands with consistent breathing room. */
 .section {
-  padding-block: 4rem;
+  padding-block: 4.5rem;
 }
 
 @media (min-width: 1024px) {
   .section {
-    padding-block: 5rem;
+    padding-block: 6.5rem;
   }
-}
-
-/* One-glance band: fills roughly a single viewport, content centered. */
-.section--screen {
-  display: flex;
-  align-items: center;
-  min-height: 88vh;
 }
 
 /* Gradient-black band: warm near-black with depth + a soft saffron glow.
@@ -113,7 +106,7 @@ blockquote {
   background-color: #070707;
   background-image:
     radial-gradient(120% 95% at 50% -12%, #211711 0%, rgba(13, 11, 10, 0) 55%),
-    radial-gradient(85% 70% at 86% 6%, rgba(255, 122, 26, 0.14) 0%, rgba(255, 122, 26, 0) 55%),
+    radial-gradient(85% 70% at 86% 6%, rgba(255, 122, 26, 0.08) 0%, rgba(255, 122, 26, 0) 55%),
     linear-gradient(177deg, #110d0a 0%, #070707 52%, #0c0b0b 100%);
 }
 
@@ -121,7 +114,7 @@ blockquote {
 .dark-band--alt {
   background-image:
     radial-gradient(110% 90% at 18% 110%, #1d150f 0%, rgba(13, 11, 10, 0) 52%),
-    radial-gradient(80% 70% at 12% 92%, rgba(255, 122, 26, 0.12) 0%, rgba(255, 122, 26, 0) 55%),
+    radial-gradient(80% 70% at 12% 92%, rgba(255, 122, 26, 0.07) 0%, rgba(255, 122, 26, 0) 55%),
     linear-gradient(183deg, #0c0b0b 0%, #070707 50%, #110d0a 100%);
 }
 

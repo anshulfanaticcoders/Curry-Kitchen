@@ -5,9 +5,7 @@ import {
   CalendarDays,
   CheckCircle2,
   CookingPot,
-  HeartHandshake,
   Leaf,
-  PackageOpen,
   ShieldCheck,
   Truck,
 } from "lucide-react";
@@ -51,11 +49,11 @@ const serviceNotes = [
 
 const orderingSteps = [
   {
-    title: "Choose your old-school dabba",
-    copy: "Weekly trial, monthly fixed, or student and military packages organized by routine.",
+    title: "Choose your dabba",
+    copy: "Weekly trial, monthly fixed, student and military plans — or build your own by the portion.",
   },
   {
-    title: "Keep the old-school method",
+    title: "Keep it simple",
     copy: "Rice, roti, and spice notes stay simple before checkout.",
   },
   {
@@ -84,82 +82,60 @@ export default async function Home() {
       <JsonLd data={schemas} />
       <HeroSection />
 
-      {/* 2. Promise — LIGHT (warm) */}
-      <section className="section relative bg-rose text-ink">
+      {/* 2. Promise — calm white, plain columns instead of icon cards */}
+      <section className="section bg-white text-ink">
         <StaggerGroup className="section-shell">
-          <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-            <div>
-              <RevealItem as="p" className="text-sm font-black uppercase tracking-[0.18em] text-masala">
-                The Curry Kitchen promise
-              </RevealItem>
-              <RevealItem as="h2" className="mt-3 max-w-xl font-display text-4xl font-black leading-[1.12] lg:text-5xl">
-                Homemade food for guilt-free weekday eating.
-              </RevealItem>
-            </div>
-            <RevealItem as="p" className="max-w-sm text-base font-medium leading-7 text-ink/68">
+          <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+            <RevealItem
+              as="h2"
+              className="max-w-xl font-display text-3xl font-black leading-[1.15] lg:text-4xl"
+            >
+              Homemade food for guilt-free weekday eating.
+            </RevealItem>
+            <RevealItem as="p" className="max-w-sm text-base font-medium leading-7 text-ink/64">
               #Ghar Ka Khana Roz Khana, built into clear weekly plans and dependable San Diego
               delivery.
             </RevealItem>
           </div>
-          <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-12 grid gap-x-8 gap-y-10 border-t border-ink/10 pt-10 sm:grid-cols-2 lg:grid-cols-4">
             {serviceNotes.map((item) => (
-              <RevealItem
-                key={item.title}
-                as="article"
-                className="group rounded-lg border border-ink/10 bg-white p-6 shadow-soft transition hover:-translate-y-1 hover:border-saffron/50 hover:shadow-lift"
-              >
-                <span className="grid size-11 place-items-center rounded-button bg-saffron/15 text-masala transition group-hover:bg-saffron group-hover:text-ink">
-                  <item.icon size={22} strokeWidth={2.4} />
-                </span>
-                <h3 className="mt-5 font-display text-xl font-black leading-tight">{item.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-ink/62">{item.copy}</p>
+              <RevealItem key={item.title} as="article">
+                <item.icon size={22} strokeWidth={2.2} className="text-masala" />
+                <h3 className="mt-4 font-display text-lg font-black leading-tight">{item.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-ink/60">{item.copy}</p>
               </RevealItem>
             ))}
           </div>
         </StaggerGroup>
       </section>
 
-      {/* 3. How it works — DARK gradient, orange only as accent */}
-      <section className="section section--screen dark-band relative text-white">
-        <Image
-          src="https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=1600&q=80"
-          alt="Fresh Indian snacks and chutneys arranged on a table"
-          fill
-          className="object-cover opacity-[0.07] mix-blend-luminosity"
-          sizes="100vw"
-        />
-        <StaggerGroup className="section-shell relative w-full">
+      {/* 3. How it works — soft rose, simple numbered columns */}
+      <section className="section bg-rose text-ink">
+        <StaggerGroup className="section-shell">
           <div className="max-w-2xl">
-            <RevealItem as="p" className="text-sm font-black uppercase tracking-[0.18em] text-saffron">
-              A calmer order path
-            </RevealItem>
-            <RevealItem as="h2" className="mt-3 font-display text-4xl font-black leading-[1.12] lg:text-5xl">
+            <RevealItem
+              as="h2"
+              className="font-display text-3xl font-black leading-[1.15] lg:text-4xl"
+            >
               Let&apos;s keep the old-school method.
             </RevealItem>
-            <RevealItem as="p" className="mt-5 text-base leading-7 text-white/68">
+            <RevealItem as="p" className="mt-4 text-base leading-7 text-ink/64">
               See what is cooking, pick the right portion, set preferences, and keep the week moving
               with a familiar tiffin rhythm.
             </RevealItem>
           </div>
 
-          <div className="relative mt-12 grid gap-6 lg:grid-cols-3">
-            <div className="absolute left-0 right-0 top-6 hidden h-px bg-gradient-to-r from-saffron/10 via-saffron/45 to-saffron/10 lg:block" />
+          <div className="mt-12 grid gap-10 border-t border-ink/10 pt-10 lg:grid-cols-3">
             {orderingSteps.map((step, index) => (
-              <RevealItem
-                key={step.title}
-                as="article"
-                className="relative rounded-lg border border-white/10 bg-white/[0.04] p-6 backdrop-blur-sm transition hover:-translate-y-1 hover:border-saffron/45 hover:bg-white/[0.07]"
-              >
-                <span className="grid size-12 place-items-center rounded-full bg-saffron font-display text-lg font-black text-ink">
-                  {index + 1}
-                </span>
-                <h3 className="mt-5 font-display text-2xl font-black leading-tight">{step.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-white/64">{step.copy}</p>
+              <RevealItem key={step.title} as="article">
+                <p className="font-display text-3xl font-black text-saffron">{index + 1}</p>
+                <h3 className="mt-3 font-display text-xl font-black leading-tight">{step.title}</h3>
+                <p className="mt-2 max-w-xs text-sm leading-6 text-ink/60">{step.copy}</p>
               </RevealItem>
             ))}
           </div>
 
-          <RevealItem className="mt-9">
+          <RevealItem className="mt-12">
             <ButtonLink href="/menu" className="w-fit">
               See this week&apos;s menu
               <ArrowRight size={18} />
@@ -168,18 +144,16 @@ export default async function Home() {
         </StaggerGroup>
       </section>
 
-      {/* 4. Weekly menu — LIGHT, food cards carry the color */}
-      <section className="section section--screen relative bg-ivory text-ink">
-        <StaggerGroup className="section-shell w-full">
-          <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-            <div>
-              <RevealItem as="p" className="text-sm font-black uppercase tracking-[0.18em] text-masala">
-                Menu items
-              </RevealItem>
-              <RevealItem as="h2" className="mt-3 max-w-2xl font-display text-4xl font-black leading-[1.12] lg:text-5xl">
-                A weekly menu that still feels old school.
-              </RevealItem>
-            </div>
+      {/* 4. Weekly menu — white, food photography carries the color */}
+      <section className="section bg-white text-ink">
+        <StaggerGroup className="section-shell">
+          <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+            <RevealItem
+              as="h2"
+              className="max-w-2xl font-display text-3xl font-black leading-[1.15] lg:text-4xl"
+            >
+              A weekly menu that still feels old school.
+            </RevealItem>
             <RevealItem>
               <ButtonLink href="/menu" variant="dark" className="w-fit">
                 View full menu
@@ -188,30 +162,30 @@ export default async function Home() {
             </RevealItem>
           </div>
 
-          <div className="mt-9 grid gap-5 lg:grid-cols-3">
+          <div className="mt-10 grid gap-6 lg:grid-cols-3">
             {menuPreview.map((item) => (
               <RevealItem
                 key={item.day}
                 as="article"
-                className="group overflow-hidden rounded-lg border border-ink/10 bg-white shadow-soft transition hover:-translate-y-1 hover:shadow-lift"
+                className="group overflow-hidden rounded-lg border border-ink/10 bg-white shadow-soft transition hover:shadow-lift"
               >
-                <div className="relative h-56 overflow-hidden">
+                <div className="relative h-52 overflow-hidden">
                   <Image
                     src={item.image}
                     alt={`${item.day} tiffin preview`}
                     fill
-                    className="object-cover transition duration-700 group-hover:scale-105"
+                    className="object-cover transition duration-700 group-hover:scale-[1.03]"
                     sizes="(min-width: 1024px) 33vw, 100vw"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/72 to-transparent" />
                   <div className="absolute bottom-4 left-4 right-4 text-white">
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-saffron">{item.date}</p>
-                    <h3 className="font-display text-3xl font-black">{item.day}</h3>
+                    <p className="text-xs font-bold text-white/72">{item.date}</p>
+                    <h3 className="font-display text-2xl font-black">{item.day}</h3>
                   </div>
                 </div>
                 <div className="p-5">
                   <p className="font-black text-masala">{item.headline}</p>
-                  <p className="mt-2 text-sm leading-6 text-ink/64">
+                  <p className="mt-2 text-sm leading-6 text-ink/60">
                     {item.daal}, {item.sabzi}, {item.rice}, and {item.side}.
                   </p>
                 </div>
@@ -221,29 +195,18 @@ export default async function Home() {
         </StaggerGroup>
       </section>
 
-      {/* 5. Packages — DARK gradient, white cards pop */}
-      <section className="section section--screen dark-band dark-band--alt relative text-white">
-        <Image
-          src="https://images.unsplash.com/photo-1596797038530-2c107229654b?auto=format&fit=crop&w=1600&q=80"
-          alt="Indian meal ingredients and prepared dishes"
-          fill
-          className="object-cover opacity-[0.06] mix-blend-luminosity"
-          sizes="100vw"
-        />
-        <StaggerGroup className="section-shell relative w-full">
-          <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+      {/* 5. Packages — the single dark anchor of the page */}
+      <section className="section dark-band relative text-white">
+        <StaggerGroup className="section-shell relative">
+          <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
             <div>
               <RevealItem
-                as="p"
-                className="inline-flex items-center gap-2 text-sm font-black uppercase tracking-[0.18em] text-saffron"
+                as="h2"
+                className="max-w-2xl font-display text-3xl font-black leading-[1.15] lg:text-4xl"
               >
-                <PackageOpen size={16} />
-                Featured packages
-              </RevealItem>
-              <RevealItem as="h2" className="mt-3 max-w-2xl font-display text-4xl font-black leading-[1.12] lg:text-5xl">
                 Weekly trial, monthly fixed, student and military packages.
               </RevealItem>
-              <RevealItem as="p" className="mt-4 max-w-xl text-base leading-7 text-white/68">
+              <RevealItem as="p" className="mt-4 max-w-xl text-base leading-7 text-white/64">
                 Clear portions and transparent pricing customers understand in seconds.
               </RevealItem>
             </div>
@@ -254,7 +217,7 @@ export default async function Home() {
               </ButtonLink>
             </RevealItem>
           </div>
-          <div className="mt-9 grid gap-6 lg:grid-cols-3">
+          <div className="mt-10 grid gap-6 lg:grid-cols-3">
             {featuredPlans.map((plan) => (
               <RevealItem key={plan.id}>
                 <PackageCard plan={plan} />
@@ -264,46 +227,46 @@ export default async function Home() {
         </StaggerGroup>
       </section>
 
-      {/* 6. Our Story — LIGHT (warm) */}
-      <section id="story" className="section relative bg-rose text-ink">
-        <StaggerGroup className="section-shell grid items-center gap-10 lg:grid-cols-[0.92fr_1.08fr]">
+      {/* 6. Our Story — soft rose */}
+      <section id="story" className="section bg-rose text-ink">
+        <StaggerGroup className="section-shell grid items-center gap-12 lg:grid-cols-[0.92fr_1.08fr]">
           <RevealItem className="media-panel relative overflow-hidden rounded-lg bg-ink shadow-soft">
             <Image
-              src="https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=1400&q=80"
-              alt="Kitchen team preparing fresh food"
+              src="https://images.unsplash.com/photo-1567337710282-00832b415979?auto=format&fit=crop&w=1400&q=80"
+              alt="Homestyle Indian thali with dal, sabzi, roti, and rice"
               fill
               className="object-cover"
               sizes="(min-width: 1024px) 44vw, 100vw"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/74 via-black/10 to-transparent" />
-            <div className="absolute bottom-5 left-5 right-5 rounded-lg border border-white/15 bg-black/70 p-4 text-white backdrop-blur-md">
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-saffron">Cooked in small batches</p>
-              <p className="mt-1 font-display text-3xl font-black leading-none">Made to feel close to home.</p>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+            <div className="absolute bottom-5 left-5 right-5 text-white">
+              <p className="text-xs font-bold text-white/72">Cooked in small batches</p>
+              <p className="mt-1 font-display text-2xl font-black leading-tight">
+                Made to feel close to home.
+              </p>
             </div>
           </RevealItem>
 
           <div>
             <RevealItem
-              as="p"
-              className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-saffron"
+              as="h2"
+              className="max-w-2xl font-display text-3xl font-black leading-[1.15] lg:text-4xl"
             >
-              <HeartHandshake size={16} />
-              Our story
-            </RevealItem>
-            <RevealItem as="h2" className="mt-4 max-w-2xl font-display text-4xl font-black leading-[1.12] lg:text-5xl">
               For people who miss Ghar Ka Khana.
             </RevealItem>
-            <RevealItem as="p" className="mt-5 max-w-xl text-base font-medium leading-7 text-ink/68">
+            <RevealItem as="p" className="mt-5 max-w-xl text-base font-medium leading-7 text-ink/64">
               Curry Kitchen is built around home-style Indian comfort: dal that changes through the
               week, freshly prepared sabzi, soft roti, rice, salad, and the occasional sweet.
             </RevealItem>
-            <div className="mt-8 grid gap-4 sm:grid-cols-3">
-              {["San Diego Rooted", "Freshly Made", "Delivered Daily"].map((item) => (
-                <RevealItem key={item} className="border-y border-ink/12 py-4">
-                  <p className="font-display text-xl font-black">{item}</p>
-                  <p className="mt-1 text-sm font-medium leading-5 text-ink/55">
-                    Built for students, families, and busy professionals.
-                  </p>
+            <div className="mt-10 grid gap-6 border-t border-ink/10 pt-8 sm:grid-cols-3">
+              {[
+                { title: "San Diego rooted", copy: "Cooked locally and delivered by people nearby." },
+                { title: "Freshly made", copy: "Prepared the same morning it reaches your door." },
+                { title: "Delivered daily", copy: "A steady Monday to Friday dinner rhythm." },
+              ].map((item) => (
+                <RevealItem key={item.title}>
+                  <p className="font-display text-lg font-black">{item.title}</p>
+                  <p className="mt-1.5 text-sm font-medium leading-6 text-ink/58">{item.copy}</p>
                 </RevealItem>
               ))}
             </div>
@@ -311,31 +274,23 @@ export default async function Home() {
         </StaggerGroup>
       </section>
 
-      {/* 7. Reviews — DARK, immersive (component carries layout) */}
+      {/* 7. Reviews — component carries its own layout */}
       <TestimonialsCarousel items={testimonials} />
 
-      {/* 8. Final CTA — LIGHT band with dark inset */}
-      <section className="section relative bg-ivory text-ink">
+      {/* 8. Final CTA — contained dark inset on white */}
+      <section className="section bg-white text-ink">
         <StaggerGroup className="section-shell">
-          <div className="dark-band relative grid items-center gap-8 overflow-hidden rounded-lg p-8 text-white shadow-[0_28px_80px_rgba(7,7,7,0.28)] md:grid-cols-[1.2fr_auto] md:p-10">
-            <Image
-              src="https://images.unsplash.com/photo-1631292784640-2b24be784d5d?auto=format&fit=crop&w=1400&q=80"
-              alt="Fresh Indian curries served for a shared meal"
-              fill
-              className="object-cover opacity-[0.12] mix-blend-luminosity"
-              sizes="100vw"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-ink/80 via-ink/40 to-transparent" />
+          <div className="dark-band relative grid items-center gap-8 overflow-hidden rounded-lg p-8 text-white md:grid-cols-[1.2fr_auto] md:p-12">
             <div className="relative">
-              <RevealItem as="p" className="text-sm font-black uppercase tracking-[0.18em] text-saffron">
-                Ready to order
-              </RevealItem>
-              <RevealItem as="h2" className="mt-3 max-w-2xl font-display text-4xl font-black leading-[1.12] lg:text-5xl">
+              <RevealItem
+                as="h2"
+                className="max-w-2xl font-display text-3xl font-black leading-[1.15] lg:text-4xl"
+              >
                 Build your weekly dinner rhythm.
               </RevealItem>
-              <RevealItem as="p" className="mt-4 flex items-center gap-2 text-sm font-bold text-white/70">
+              <RevealItem as="p" className="mt-4 flex items-center gap-2 text-sm font-bold text-white/68">
                 <CheckCircle2 size={18} className="text-saffron" />
-                San Diego Rooted &gt; Freshly Made &gt; Delivered Daily.
+                San Diego rooted, freshly made, delivered daily.
               </RevealItem>
             </div>
             <RevealItem className="relative flex flex-col gap-3 sm:flex-row md:flex-col">
@@ -344,11 +299,11 @@ export default async function Home() {
                 <ArrowRight size={18} />
               </ButtonLink>
               <ButtonLink
-                href="/checkout"
+                href="/packages/build"
                 variant="secondary"
-                className="border-white/18 bg-white/10 text-white hover:bg-white hover:text-ink"
+                className="border-white/18 bg-transparent text-white hover:bg-white hover:text-ink"
               >
-                Preview checkout
+                Build your own
               </ButtonLink>
             </RevealItem>
           </div>
