@@ -8,26 +8,32 @@ import { usePackageCart } from "@/components/providers/package-cart-provider";
 import { Button } from "@/components/ui/button";
 import type { CustomPackageConfig } from "@/lib/cart-lines";
 import {
+  belowMinimumItems,
   customDeliveryDayCount,
-  missingRequiredItems,
   priceCustomPackage,
   type CustomPackageItemOption,
 } from "@/lib/custom-package";
 import {
   MAX_CUSTOM_ITEM_QUANTITY,
   makePackageCartLineId,
-  type CustomCartLine,
   type PackageCartItemInput,
 } from "@/lib/package-cart";
 import { nextEligiblePackageStartInput, packageStartDateIssue } from "@/lib/package-schedule";
 import { formatCurrency } from "@/lib/utils";
 
-type Cadence = CustomCartLine["cadence"];
+function initialRequiredQuantities(items: CustomPackageItemOption[]) {
+  return Object.fromEntries(
+    items.filter((item) => item.required).map((item) => [item.id, item.minQuantity]),
+  );
+}
 
-const CADENCES: Array<{ value: Cadence; label: string; blurb: string }> = [
-  { value: "WEEKLY", label: "Weekly", blurb: "One week of deliveries." },
-  { value: "MONTHLY", label: "Monthly", blurb: "A full month of deliveries." },
-];
+function isRoti(item: CustomPackageItemOption) {
+  return item.name.trim().toLowerCase() === "roti";
+}
+
+function minimumLabel(item: CustomPackageItemOption) {
+  return `Min ${item.minQuantity} ${item.unitLabel}`;
+}
 
 export function CustomPackageBuilder({
   items,
@@ -39,17 +45,11 @@ export function CustomPackageBuilder({
   editLineId?: string;
 }) {
   const router = useRouter();
-  const {
-    items: cartItems,
-    hydrated,
-    registerCustomItems,
-    addItem,
-    updateItem,
-    openCart,
-  } = usePackageCart();
-
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [cadence, setCadence] = useState<Cadence>("MONTHLY");
+  const { items: cartItems, hydrated, registerCustomItems, addItem, updateItem, openCart } =
+    usePackageCart();
+  const [quantities, setQuantities] = useState<Record<string, number>>(() =>
+    initialRequiredQuantities(items),
+  );
   const [startDate, setStartDate] = useState(nextEligiblePackageStartInput());
   const [loadedEdit, setLoadedEdit] = useState(false);
 
@@ -57,19 +57,11 @@ export function CustomPackageBuilder({
     registerCustomItems(items, config);
   }, [config, items, registerCustomItems]);
 
-  // Seed the form from the cart line being edited, once the stored cart has
-  // loaded. Adjusting state during render (rather than in an effect) avoids
-  // painting the empty form for a frame before the saved values land.
   if (hydrated && !loadedEdit) {
-    const existing = editLineId
-      ? cartItems.find((item) => item.lineId === editLineId)
-      : undefined;
+    const existing = editLineId ? cartItems.find((item) => item.lineId === editLineId) : undefined;
 
     if (existing?.kind === "custom") {
-      setQuantities(
-        Object.fromEntries(existing.items.map((entry) => [entry.itemId, entry.quantity])),
-      );
-      setCadence(existing.cadence);
+      setQuantities(Object.fromEntries(existing.items.map((entry) => [entry.itemId, entry.quantity])));
       setStartDate(existing.startDate);
     }
 
@@ -80,13 +72,9 @@ export function CustomPackageBuilder({
     () => items.map((item) => ({ itemId: item.id, quantity: quantities[item.id] ?? 0 })),
     [items, quantities],
   );
-  const deliveryDayCount = customDeliveryDayCount(
-    cadence,
-    config.deliveryWeekdayCount,
-    config.customMonthlyDays,
-  );
+  const deliveryDayCount = customDeliveryDayCount(config.customMonthlyDays);
   const pricing = priceCustomPackage(selections, items, deliveryDayCount);
-  const missing = missingRequiredItems(selections, items);
+  const minimumFailures = belowMinimumItems(selections, items);
   const startDateError = packageStartDateIssue(startDate);
 
   function setQuantity(itemId: string, value: number) {
@@ -96,10 +84,25 @@ export function CustomPackageBuilder({
     }));
   }
 
+  function decreaseQuantity(item: CustomPackageItemOption, quantity: number) {
+    if (item.required) {
+      setQuantity(item.id, Math.max(item.minQuantity, quantity - 1));
+      return;
+    }
+
+    setQuantity(item.id, quantity <= item.minQuantity ? 0 : quantity - 1);
+  }
+
+  function increaseQuantity(item: CustomPackageItemOption, quantity: number) {
+    setQuantity(item.id, quantity === 0 ? item.minQuantity : quantity + 1);
+  }
+
   function save() {
-    if (missing.length) {
-      toast.error("Add the required items", {
-        description: `${missing.map((item) => item.name).join(", ")} must be included.`,
+    if (minimumFailures.length) {
+      toast.error("Check the minimum portions", {
+        description: minimumFailures
+          .map((item) => `${item.name}: at least ${item.minQuantity} ${item.unitLabel}`)
+          .join(". "),
       });
       return;
     }
@@ -117,7 +120,7 @@ export function CustomPackageBuilder({
     const line: PackageCartItemInput = {
       kind: "custom",
       lineId: editLineId ?? makePackageCartLineId(),
-      cadence,
+      cadence: "MONTHLY",
       items: selections.filter((entry) => entry.quantity > 0),
       startDate,
     };
@@ -142,7 +145,7 @@ export function CustomPackageBuilder({
         <div className="section-shell rounded-lg border border-ink/10 bg-ivory p-10 text-center">
           <h2 className="font-display text-3xl font-black">Custom packages are not available yet.</h2>
           <p className="mt-3 text-sm font-bold text-ink/60">
-            Please choose one of our weekly, monthly, or student plans for now.
+            Please choose one of our monthly or student plans for now.
           </p>
         </div>
       </section>
@@ -155,67 +158,97 @@ export function CustomPackageBuilder({
         <div className="rounded-lg border border-ink/10 bg-white p-6 shadow-soft lg:p-8">
           <h2 className="font-display text-3xl font-black">Build your plate</h2>
           <p className="mt-2 text-sm font-bold text-ink/58">
-            Set how much of each item you want in a single day&rsquo;s tiffin.
+            Set the portions for one day&apos;s tiffin. Minimum portions protect the quality and
+            value of every meal.
           </p>
 
           <div className="mt-7 divide-y divide-ink/10 border-y border-ink/10">
             {items.map((item) => {
               const quantity = quantities[item.id] ?? 0;
               const lineTotal = item.pricePerUnit * quantity;
+              const hasMinimumError = minimumFailures.some((failure) => failure.id === item.id);
 
               return (
-                <div key={item.id} className="flex flex-wrap items-center gap-4 py-4">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-display text-lg font-black">
-                      {item.name}
+                <div key={item.id} className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_11rem_5rem] sm:items-center">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-display text-lg font-black">{item.name}</p>
                       {item.required ? (
-                        <span className="ml-2 rounded-full bg-rose px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-masala">
+                        <span className="rounded-full bg-rose px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-masala">
                           Required
                         </span>
                       ) : null}
-                    </p>
+                      <span className="rounded-full border border-ink/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.1em] text-ink/55">
+                        {minimumLabel(item)}
+                      </span>
+                    </div>
                     <p className="mt-1 text-xs font-bold text-ink/50">
                       {formatCurrency(item.pricePerUnit)} per {item.unitLabel}
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      aria-label={`Decrease ${item.name}`}
-                      onClick={() => setQuantity(item.id, quantity - 1)}
-                      className="grid size-9 place-items-center rounded-button border border-ink/10 bg-white transition hover:border-saffron disabled:opacity-40"
-                      disabled={quantity <= 0}
-                    >
-                      <Minus size={15} />
-                    </button>
-                    <label className="sr-only" htmlFor={`qty-${item.id}`}>
-                      {item.name} quantity in {item.unitLabel}
-                    </label>
-                    <input
-                      id={`qty-${item.id}`}
-                      type="number"
-                      min={0}
-                      max={MAX_CUSTOM_ITEM_QUANTITY}
-                      step={1}
-                      value={quantity}
-                      onChange={(event) => setQuantity(item.id, Number(event.target.value))}
-                      aria-invalid={item.required && quantity < 1}
-                      className="h-9 w-16 rounded-button border border-ink/12 bg-ivory text-center text-sm font-black"
-                    />
-                    <button
-                      type="button"
-                      aria-label={`Increase ${item.name}`}
-                      onClick={() => setQuantity(item.id, quantity + 1)}
-                      className="grid size-9 place-items-center rounded-button border border-ink/10 bg-white transition hover:border-saffron"
-                    >
-                      <Plus size={15} />
-                    </button>
-                  </div>
+                  {isRoti(item) ? (
+                    <div className="flex items-center justify-start gap-2 sm:justify-center">
+                      <button
+                        type="button"
+                        aria-label={`Decrease ${item.name}`}
+                        onClick={() => decreaseQuantity(item, quantity)}
+                        className="grid size-9 place-items-center rounded-button border border-ink/10 bg-white transition hover:border-saffron disabled:opacity-40"
+                        disabled={item.required ? quantity <= item.minQuantity : quantity <= 0}
+                      >
+                        <Minus size={15} />
+                      </button>
+                      <label className="sr-only" htmlFor={`qty-${item.id}`}>
+                        {item.name} quantity in {item.unitLabel}
+                      </label>
+                      <input
+                        id={`qty-${item.id}`}
+                        type="number"
+                        min={item.required ? item.minQuantity : 0}
+                        max={MAX_CUSTOM_ITEM_QUANTITY}
+                        step={1}
+                        value={quantity}
+                        onChange={(event) => setQuantity(item.id, Number(event.target.value))}
+                        aria-invalid={hasMinimumError}
+                        className="h-9 w-16 rounded-button border border-ink/12 bg-ivory text-center text-sm font-black"
+                      />
+                      <button
+                        type="button"
+                        aria-label={`Increase ${item.name}`}
+                        onClick={() => increaseQuantity(item, quantity)}
+                        className="grid size-9 place-items-center rounded-button border border-ink/10 bg-white transition hover:border-saffron"
+                      >
+                        <Plus size={15} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="sr-only" htmlFor={`qty-${item.id}`}>
+                        {item.name} quantity in {item.unitLabel}
+                      </label>
+                      <input
+                        id={`qty-${item.id}`}
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        max={MAX_CUSTOM_ITEM_QUANTITY}
+                        step={1}
+                        value={quantity === 0 ? "" : quantity}
+                        placeholder={minimumLabel(item)}
+                        onChange={(event) => setQuantity(item.id, Number(event.target.value))}
+                        aria-invalid={hasMinimumError}
+                        aria-describedby={hasMinimumError ? `minimum-${item.id}` : undefined}
+                        className="h-10 w-full rounded-button border border-ink/12 bg-ivory px-3 text-sm font-black placeholder:text-ink/40"
+                      />
+                      {hasMinimumError ? (
+                        <p id={`minimum-${item.id}`} className="mt-1 text-xs font-bold text-masala">
+                          Minimum is {item.minQuantity} {item.unitLabel}.
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
 
-                  <p className="w-20 shrink-0 text-right text-sm font-black">
-                    {formatCurrency(lineTotal)}
-                  </p>
+                  <p className="text-right text-sm font-black">{formatCurrency(lineTotal)}</p>
                 </div>
               );
             })}
@@ -227,47 +260,13 @@ export function CustomPackageBuilder({
           </div>
         </div>
 
-        <div className="rounded-lg border border-ink/10 bg-ink p-6 text-ivory shadow-soft lg:p-8">
-          <h2 className="font-display text-2xl font-black">How long?</h2>
-          <div className="mt-5 grid gap-3">
-            {CADENCES.map((option) => {
-              const days = customDeliveryDayCount(
-                option.value,
-                config.deliveryWeekdayCount,
-                config.customMonthlyDays,
-              );
-
-              return (
-                <label
-                  key={option.value}
-                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition ${
-                    cadence === option.value
-                      ? "border-saffron bg-white/10"
-                      : "border-white/15 hover:border-white/35"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="cadence"
-                    value={option.value}
-                    checked={cadence === option.value}
-                    onChange={() => setCadence(option.value)}
-                    className="mt-1 size-4 accent-saffron"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center justify-between gap-3">
-                      <span className="font-display text-lg font-black">{option.label}</span>
-                      <span className="text-sm font-black text-saffron">
-                        {formatCurrency(pricing.perDay * days)}
-                      </span>
-                    </span>
-                    <span className="mt-1 block text-xs font-bold text-ivory/55">
-                      {option.blurb} {days} delivery days.
-                    </span>
-                  </span>
-                </label>
-              );
-            })}
+        <div className="rounded-lg border border-ink/10 bg-ink p-6 text-ivory shadow-soft lg:sticky lg:top-24 lg:p-8">
+          <h2 className="font-display text-2xl font-black">Monthly custom package</h2>
+          <div className="mt-5 rounded-lg border border-white/15 bg-white/10 p-4">
+            <p className="font-display text-lg font-black">{deliveryDayCount} delivery days</p>
+            <p className="mt-1 text-xs font-bold text-ivory/60">
+              Your daily plate is prepared across the full monthly delivery cycle.
+            </p>
           </div>
 
           <div className="mt-6">
@@ -285,9 +284,7 @@ export function CustomPackageBuilder({
               onChange={(event) => setStartDate(event.target.value)}
               className="mt-2 h-11 w-full rounded-button border border-white/15 bg-white/10 px-3 text-sm font-extrabold text-ivory"
             />
-            {startDateError ? (
-              <p className="mt-2 text-xs font-bold text-saffron">{startDateError}</p>
-            ) : null}
+            {startDateError ? <p className="mt-2 text-xs font-bold text-saffron">{startDateError}</p> : null}
           </div>
 
           <div className="mt-7 border-t border-white/12 pt-5">
@@ -300,16 +297,18 @@ export function CustomPackageBuilder({
             </p>
           </div>
 
-          {missing.length ? (
+          {minimumFailures.length ? (
             <p className="mt-5 rounded-button bg-white/10 p-3 text-xs font-bold text-saffron">
-              Add at least one unit of {missing.map((item) => item.name).join(", ")} to continue.
+              {minimumFailures
+                .map((item) => `${item.name}: at least ${item.minQuantity} ${item.unitLabel}`)
+                .join(". ")}
             </p>
           ) : null}
 
           <Button
             type="button"
             onClick={save}
-            disabled={Boolean(missing.length) || pricing.perDay <= 0 || Boolean(startDateError)}
+            disabled={!loadedEdit || Boolean(minimumFailures.length) || pricing.perDay <= 0 || Boolean(startDateError)}
             className="mt-5 w-full"
           >
             <ShoppingBag size={18} />

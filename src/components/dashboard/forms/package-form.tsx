@@ -12,12 +12,6 @@ function statusValue(status?: string) {
   return "DRAFT";
 }
 
-function cadenceValue(plan?: AdminPackageRecord) {
-  if (plan?.category === "Weekly") return "WEEKLY";
-  if (plan?.category === "Student") return "STUDENT";
-  return "MONTHLY";
-}
-
 export function PackageForm({
   plan,
   categories,
@@ -33,7 +27,7 @@ export function PackageForm({
       {plan ? <input type="hidden" name="id" value={plan.id} /> : null}
       {/* accent is no longer edited in the simplified form; preserve the saved value */}
       <input type="hidden" name="accent" value={plan?.accent ?? "saffron"} />
-      <div className="grid gap-5 sm:grid-cols-2">
+      <div className="grid gap-5 sm:grid-cols-3">
         <Field label="Plan name">
           <Input name="name" defaultValue={plan?.name} placeholder="Regular 8 Roti Tiffin" required />
         </Field>
@@ -44,35 +38,40 @@ export function PackageForm({
             <option value="ARCHIVED">Archived</option>
           </Select>
         </Field>
+        <Field label="Card badge" hint="Optional. Leave blank to hide it from the package card.">
+          <Input name="badge" defaultValue={plan?.badge} placeholder="Most loved" maxLength={36} />
+        </Field>
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="Category">
+        <Field label="Category" hint="Package duration and verification rules come from this category.">
           <Select name="categoryId" defaultValue={plan?.categoryId ?? categories[0]?.id} required>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
-                {category.name}
+                {category.name} ({category.deliveryDayCount} days)
               </option>
             ))}
           </Select>
         </Field>
-        <Field label="Plan type">
-          <Select name="cadence" defaultValue={cadenceValue(plan)}>
-            <option value="WEEKLY">Weekly trial</option>
-            <option value="MONTHLY">Monthly</option>
-            <option value="STUDENT">Student / Military</option>
-          </Select>
-        </Field>
-      </div>
-
-      <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Price (USD)">
           <Input name="price" type="number" step="0.01" min="0" defaultValue={plan?.price} required />
         </Field>
-        <Field label="Delivery days">
-          <Input name="deliveryDayCount" type="number" min="1" defaultValue={plan?.deliveryDayCount ?? 20} required />
-        </Field>
       </div>
+
+      <label className="flex items-start gap-3 rounded-lg border border-ink/10 bg-ivory p-4 text-sm">
+        <input
+          type="checkbox"
+          name="isFeatured"
+          defaultChecked={plan?.isFeatured}
+          className="mt-0.5 size-4 accent-saffron"
+        />
+        <span>
+          <span className="block font-extrabold">Feature on homepage</span>
+          <span className="mt-1 block leading-5 text-ink/58">
+            Show this active package in the Home package section. You can feature up to three packages.
+          </span>
+        </span>
+      </label>
 
       <Field label="What's in each tiffin" hint="Shown on the package card.">
         <Input name="servings" defaultValue={plan?.servings} placeholder="8 roti, daal, sabzi, salad" required />
@@ -87,11 +86,6 @@ export function PackageForm({
       <Field label="Included items" hint="One item per line.">
         <Textarea name="includes" defaultValue={plan?.includes.join("\n")} placeholder={"12oz daal\n8oz sabzi\nSalad included"} />
       </Field>
-
-      <label className="flex items-center gap-3 rounded-lg border border-ink/10 bg-ivory p-3 text-sm font-extrabold">
-        <input type="checkbox" name="studentOnly" defaultChecked={plan?.studentOnly} className="size-4 accent-saffron" />
-        Student / military verification required
-      </label>
 
       <FormActions pending={pending} backHref={backHref} submitLabel={plan ? "Save package" : "Create package"} />
     </form>
@@ -122,6 +116,17 @@ export function CustomPackageItemForm({ item }: { item?: AdminCustomPackageItemR
             required
           />
         </Field>
+        <Field label="Minimum quantity" hint="The least amount a customer can choose when they add this item.">
+          <Input
+            name="minQuantity"
+            type="number"
+            min="1"
+            max="99"
+            step="1"
+            defaultValue={item?.minQuantity ?? 1}
+            required
+          />
+        </Field>
       </div>
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Sort order" hint="Lower numbers show first in the builder.">
@@ -142,7 +147,7 @@ export function CustomPackageItemForm({ item }: { item?: AdminCustomPackageItemR
           defaultChecked={item?.required}
           className="size-4 accent-saffron"
         />
-        Mandatory — every custom package must include at least one unit
+        Mandatory — every custom package must include at least this minimum quantity
       </label>
       <FormActions
         pending={pending}

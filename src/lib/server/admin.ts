@@ -28,14 +28,6 @@ function toNumber(value: DecimalLike) {
   return Number(value ?? 0);
 }
 
-function titleCase(value: string) {
-  return value
-    .toLowerCase()
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 function mapStatus(status: string) {
   if (status === "ACTIVE") return "Active" as const;
   if (status === "ARCHIVED") return "Archived" as const;
@@ -77,6 +69,9 @@ const defaultAdminSettings: AdminSettings = {
   orderCutoff: "Noon",
   deliveryDays: "Monday - Friday",
   customMonthlyDays: 21,
+  deliveryChargeEnabled: true,
+  deliveryCharge: 30,
+  deliveryChargeNote: "A flat delivery charge applies once to each order.",
   acceptWeeklyTrials: true,
   enableCheckoutPauses: true,
   orderConfirmationEmails: true,
@@ -243,7 +238,7 @@ export async function getAdminPackageManagerData() {
         category: true,
         items: { orderBy: { sortOrder: "asc" } },
       },
-      orderBy: [{ cadence: "asc" }, { price: "asc" }],
+      orderBy: [{ price: "asc" }],
     }),
   ]);
 
@@ -254,6 +249,8 @@ export async function getAdminPackageManagerData() {
       slug: category.slug,
       count: category._count.packages,
       description: category.description ?? "",
+      deliveryDayCount: category.deliveryDayCount,
+      requiresVerification: category.requiresVerification,
       status: mapStatus(category.status),
     })),
     customPackageItems: customPackageItems.map<AdminCustomPackageItemRecord>((item) => ({
@@ -261,6 +258,7 @@ export async function getAdminPackageManagerData() {
       name: item.name,
       unitLabel: item.unitLabel,
       pricePerUnit: toNumber(item.pricePerUnit),
+      minQuantity: item.minQuantity,
       required: item.required,
       sortOrder: item.sortOrder,
       status: mapStatus(item.status),
@@ -270,14 +268,13 @@ export async function getAdminPackageManagerData() {
       slug: plan.slug,
       categoryId: plan.categoryId,
       name: plan.name,
-      category:
-        plan.category.name === "Weekly" || plan.category.name === "Student"
-          ? plan.category.name
-          : "Monthly",
-      badge: plan.badge ?? titleCase(plan.cadence),
+      category: plan.category.name,
+      deliveryDayCount: plan.category.deliveryDayCount,
+      requiresVerification: plan.category.requiresVerification,
+      isFeatured: plan.isFeatured,
+      badge: plan.badge ?? plan.category.name,
       price: toNumber(plan.price),
-      cadence: titleCase(plan.cadence),
-      deliveryDayCount: plan.deliveryDayCount,
+      cadence: `${plan.category.deliveryDayCount} delivery day${plan.category.deliveryDayCount === 1 ? "" : "s"}`,
       servings: plan.servings,
       image: plan.imageUrl,
       description: plan.description,
@@ -288,7 +285,6 @@ export async function getAdminPackageManagerData() {
       accent:
         plan.accent === "leaf" || plan.accent === "masala" ? plan.accent : "saffron",
       status: mapStatus(plan.status),
-      studentOnly: plan.studentOnly,
     })),
   };
 }
@@ -329,6 +325,8 @@ export async function getAdminCategoryManagerData() {
       slug: category.slug,
       count: category._count.packages,
       description: category.description ?? "",
+      deliveryDayCount: category.deliveryDayCount,
+      requiresVerification: category.requiresVerification,
       status: mapStatus(category.status),
     })),
   };

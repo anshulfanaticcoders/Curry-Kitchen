@@ -28,11 +28,11 @@ import {
   nextEligiblePackageStartInput,
   packageStartDateIssue,
 } from "@/lib/package-schedule";
-import type { PackageCategory, PackagePlan } from "@/lib/types";
+import type { PackagePlan } from "@/lib/types";
 import { cn, formatCurrency } from "@/lib/utils";
 
-function categoryLabel(category: PackageCategory) {
-  return category === "Student" ? "Student / Military" : category;
+function categoryLabel(category: string) {
+  return category;
 }
 
 export function PackageExperience({
@@ -54,17 +54,14 @@ export function PackageExperience({
     addItem,
     updateItem,
   } = usePackageCart();
-  // "Custom" is deliberately not a PackageCategory: asPackageCategory() collapses
-  // unknown category names to "Monthly", so keeping it out of that union avoids
-  // four coordinated edits to a landmine. It is a tab, not a plan category.
-  const categories: Array<PackageCategory | "Custom"> = [
+  const categories: Array<string> = [
     ...Array.from(new Set(plans.map((plan) => plan.category))),
     "Custom",
   ];
   const validInitialCart = initialCartItems.filter(
     (item) => item.kind === "custom" || plans.some((plan) => plan.id === item.packageId),
   );
-  const [category, setCategory] = useState<PackageCategory | "Custom">("Monthly");
+  const [category, setCategory] = useState<string>(plans[0]?.category ?? "Custom");
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [editingLineId, setEditingLineId] = useState<string | undefined>();

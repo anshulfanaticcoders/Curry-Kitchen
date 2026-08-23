@@ -99,24 +99,25 @@ async function main() {
   });
 
   const categories = await Promise.all([
-    prisma.packageCategory.create({ data: { name: "Monthly", slug: "monthly", description: "Full-month tiffin plans.", sortOrder: 1 } }),
-    prisma.packageCategory.create({ data: { name: "Weekly", slug: "weekly", description: "Trial weekly packages.", sortOrder: 2 } }),
-    prisma.packageCategory.create({ data: { name: "Student", slug: "student", description: "Student and military-priced plans pending verification.", sortOrder: 3 } }),
+    prisma.packageCategory.create({ data: { name: "Monthly", slug: "monthly", description: "Full-month tiffin plans.", deliveryDayCount: 20, sortOrder: 1 } }),
+    prisma.packageCategory.create({ data: { name: "Weekly", slug: "weekly", description: "Trial weekly packages.", deliveryDayCount: 5, sortOrder: 2 } }),
+    prisma.packageCategory.create({ data: { name: "Student / Military", slug: "student-military", description: "Student and military-priced plans pending verification.", deliveryDayCount: 20, requiresVerification: true, sortOrder: 3 } }),
+    prisma.packageCategory.create({ data: { name: "One Day", slug: "one-day", description: "One freshly made tiffin delivered on your chosen date.", deliveryDayCount: 1, sortOrder: 4 } }),
   ]);
-  const [monthly, weekly, student] = categories;
+  const [monthly, weekly, student, oneDay] = categories;
 
   const customPackageItems = [
-    { name: "Roti", slug: "roti", unitLabel: "roti", pricePerUnit: "0.60", required: true, sortOrder: 1 },
-    { name: "Rice", slug: "rice", unitLabel: "oz", pricePerUnit: "0.20", required: false, sortOrder: 2 },
-    { name: "Sabzi", slug: "sabzi", unitLabel: "oz", pricePerUnit: "0.90", required: true, sortOrder: 3 },
-    { name: "Dal", slug: "dal", unitLabel: "oz", pricePerUnit: "0.80", required: true, sortOrder: 4 },
-    { name: "Raita", slug: "raita", unitLabel: "oz", pricePerUnit: "0.20", required: false, sortOrder: 5 },
-    { name: "Salad", slug: "salad", unitLabel: "serving", pricePerUnit: "0.10", required: false, sortOrder: 6 },
+    { name: "Roti", slug: "roti", unitLabel: "roti", pricePerUnit: "0.60", minQuantity: 3, required: true, sortOrder: 1 },
+    { name: "Rice", slug: "rice", unitLabel: "oz", pricePerUnit: "0.20", minQuantity: 4, required: false, sortOrder: 2 },
+    { name: "Sabzi", slug: "sabzi", unitLabel: "oz", pricePerUnit: "0.90", minQuantity: 6, required: true, sortOrder: 3 },
+    { name: "Dal", slug: "dal", unitLabel: "oz", pricePerUnit: "0.80", minQuantity: 8, required: true, sortOrder: 4 },
+    { name: "Raita", slug: "raita", unitLabel: "oz", pricePerUnit: "0.20", minQuantity: 4, required: false, sortOrder: 5 },
+    { name: "Salad", slug: "salad", unitLabel: "serving", pricePerUnit: "0.10", minQuantity: 1, required: false, sortOrder: 6 },
   ];
 
   await prisma.customPackageItem.createMany({ data: customPackageItems });
 
-  async function createPackage({ category, name, slug, price, cadence, days, studentOnly = false, badge, imageUrl, items }) {
+  async function createPackage({ category, name, slug, price, badge, imageUrl, items, isFeatured = false }) {
     return prisma.package.create({
       data: {
         categoryId: category.id,
@@ -126,12 +127,13 @@ async function main() {
         description: `${name} with homestyle dal, sabzi, roti, rice options, salad, and rotating weekly comfort dishes.`,
         price,
         taxRate: "0.0875",
-        cadence,
-        deliveryDayCount: days,
+        cadence: category.requiresVerification ? PackageCadence.STUDENT : category.slug === "weekly" ? PackageCadence.WEEKLY : PackageCadence.MONTHLY,
+        deliveryDayCount: category.deliveryDayCount,
         servings: items.join(", "),
         imageUrl,
-        bestFor: studentOnly ? "Students / Military" : cadence === PackageCadence.WEEKLY ? "Trial week" : "Daily dinner",
-        studentOnly,
+        bestFor: category.requiresVerification ? "Students / Military" : category.slug === "weekly" ? "Trial week" : "Daily dinner",
+        studentOnly: category.requiresVerification,
+        isFeatured,
         status: RecordStatus.ACTIVE,
         items: {
           create: items.map((item, index) => ({ name: item, sortOrder: index + 1 })),
@@ -145,9 +147,8 @@ async function main() {
     name: "Regular 8 Roti Tiffin",
     slug: "regular-8-roti-tiffin",
     price: "350.00",
-    cadence: PackageCadence.MONTHLY,
-    days: 20,
     badge: "Most loved",
+    isFeatured: true,
     imageUrl: image("1626777552726-4a6b54c97e46"),
     items: ["12oz dal", "8oz sabzi", "8 roti", "weekly dessert"],
   });
@@ -157,9 +158,8 @@ async function main() {
     name: "Small 4 Roti Tiffin",
     slug: "small-4-roti-tiffin",
     price: "250.00",
-    cadence: PackageCadence.MONTHLY,
-    days: 20,
     badge: "Starter favorite",
+    isFeatured: true,
     imageUrl: image("1630409346824-4f0e7b080087"),
     items: ["8oz dal", "6oz sabzi", "4 roti"],
   });
@@ -169,9 +169,8 @@ async function main() {
     name: "Weekly Trial Pack",
     slug: "weekly-trial-pack",
     price: "95.00",
-    cadence: PackageCadence.WEEKLY,
-    days: 5,
     badge: "Try first",
+    isFeatured: true,
     imageUrl: image("1604909052743-94e838986d24"),
     items: ["5 meals", "rotating menu", "delivery included"],
   });
@@ -181,12 +180,19 @@ async function main() {
     name: "Student & Military Saver Pack",
     slug: "student-saver-pack",
     price: "220.00",
-    cadence: PackageCadence.STUDENT,
-    days: 20,
     badge: "Student / military pricing",
     imageUrl: image("1617692855027-33b14f061079"),
     items: ["simple veg meals", "4 roti", "dal", "sabzi"],
-    studentOnly: true,
+  });
+
+  await createPackage({
+    category: oneDay,
+    name: "One Day Homestyle Tiffin",
+    slug: "one-day-homestyle-tiffin",
+    price: "18.00",
+    badge: "Fresh today",
+    imageUrl: image("1547592180-85f173990554"),
+    items: ["dal", "sabzi", "4 roti", "rice"],
   });
 
   await prisma.deliveryZone.createMany({

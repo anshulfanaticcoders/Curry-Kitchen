@@ -1,8 +1,8 @@
 "use client";
 
-import { Loader2, UploadCloud } from "lucide-react";
-import { type ChangeEvent, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
+import { FileDropzone } from "@/components/dashboard/file-dropzone";
 import { FormActions, useAdminFormSubmit } from "@/components/dashboard/form-utils";
 import { Field, Input } from "@/components/dashboard/primitives";
 import { saveMenuUploadAction } from "@/lib/actions/admin";
@@ -17,10 +17,8 @@ export function MenuUploadForm({ upload }: { upload?: AdminMenuUpload }) {
   const [fileName, setFileName] = useState("");
   const [uploading, setUploading] = useState(false);
 
-  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.target;
-    const file = input.files?.[0];
-    input.value = "";
+  async function handleFileChange(files: File[]) {
+    const file = files[0];
 
     if (!file) return;
 
@@ -61,20 +59,14 @@ export function MenuUploadForm({ upload }: { upload?: AdminMenuUpload }) {
         <Input name="title" defaultValue={upload?.title} placeholder="Week 1 menu" required />
       </Field>
       <Field label="Menu file (image or PDF)">
-        <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-ink/20 bg-ivory px-4 py-3 text-sm font-extrabold transition hover:border-saffron/60">
-          {uploading ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
-          <span className="min-w-0 truncate">
-            {uploading
-              ? "Uploading…"
-              : fileName || (fileUrl ? "Current file kept — choose a new file to replace" : "Choose a JPG, PNG, WEBP, or PDF")}
-          </span>
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp,application/pdf"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-        </label>
+        <FileDropzone
+          accept="image/jpeg,image/png,image/webp,application/pdf"
+          disabled={uploading}
+          loading={uploading}
+          onFiles={handleFileChange}
+          title={fileName || (fileUrl ? "Replace current menu file" : "Upload weekly menu")}
+          description="Drag a JPG, PNG, WEBP, or PDF here, or browse files. Maximum 10MB."
+        />
         <p className="mt-1 text-xs font-bold text-ink/45">Max 10MB. Export straight from Canva.</p>
       </Field>
       <div className="grid gap-5 sm:grid-cols-2">

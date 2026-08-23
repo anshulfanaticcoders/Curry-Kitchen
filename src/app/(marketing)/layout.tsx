@@ -20,7 +20,6 @@ export default async function MarketingLayout({ children }: { children: React.Re
         customItems={customItems}
         customConfig={{
           customMonthlyDays: rules.customMonthlyDays,
-          deliveryWeekdayCount: rules.deliveryWeekdays.length,
         }}
       />
       {children}

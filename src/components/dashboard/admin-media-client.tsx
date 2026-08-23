@@ -1,10 +1,11 @@
 "use client";
 
-import { FolderPlus, Loader2, Trash2, UploadCloud } from "lucide-react";
+import { FolderPlus, Loader2, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type ChangeEvent, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { ConfirmActionButton } from "@/components/dashboard/confirm-action-button";
+import { FileDropzone } from "@/components/dashboard/file-dropzone";
 import { Card, CardHeader, PageHeader, Select } from "@/components/dashboard/primitives";
 import {
   createMediaFolderAction,
@@ -33,11 +34,7 @@ export function AdminMediaClient({
   const uploadFolder = activeFolder === "all" ? "general" : activeFolder;
   const visible = activeFolder === "all" ? assets : assets.filter((asset) => asset.folder === activeFolder);
 
-  async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.target;
-    const files = Array.from(input.files ?? []);
-    input.value = "";
-
+  async function handleUpload(files: File[]) {
     if (!files.length) return;
 
     setUploading(true);
@@ -103,20 +100,6 @@ export function AdminMediaClient({
       <PageHeader
         title="Media"
         description="Upload images once, organize them into folders, and reuse them anywhere an image is needed."
-        action={
-          <label className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-button bg-saffron px-5 text-sm font-extrabold text-white shadow-[0_10px_24px_rgba(255,122,26,0.35)] transition hover:bg-masala">
-            {uploading ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
-            {uploading ? "Uploading…" : `Upload to ${uploadFolder}`}
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              multiple
-              className="hidden"
-              onChange={handleUpload}
-              disabled={uploading}
-            />
-          </label>
-        }
       />
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -158,6 +141,18 @@ export function AdminMediaClient({
             {creatingFolder ? <Loader2 className="animate-spin" size={16} /> : <FolderPlus size={16} />}
           </button>
         </div>
+      </div>
+
+      <div className="mb-6">
+        <FileDropzone
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          disabled={uploading}
+          loading={uploading}
+          onFiles={handleUpload}
+          title={`Upload to ${uploadFolder}`}
+          description="Drag one or more JPG, PNG, or WEBP files here. They will be added to the selected folder and ready to reuse across the website."
+        />
       </div>
 
       <Card>

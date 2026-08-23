@@ -11,10 +11,10 @@ import {
   validatePackageStartInput,
 } from "@/lib/package-schedule";
 import {
+  belowMinimumItems,
   customDeliveryDayCount,
   customPackageName,
   formatCustomQuantity,
-  missingRequiredItems,
   priceCustomPackage,
   type CustomPackageItemOption,
 } from "@/lib/custom-package";
@@ -35,7 +35,7 @@ const checkoutItemSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("custom"),
-    cadence: z.enum(["WEEKLY", "MONTHLY"]),
+    cadence: z.literal("MONTHLY"),
     items: z
       .array(
         z.object({
@@ -79,15 +79,6 @@ const checkoutSchema = z.object({
     .optional(),
 });
 
-type DeliveryZoneCandidate = {
-  id: string;
-  fee: Prisma.Decimal;
-  isFreeDelivery: boolean;
-  outsideZone: boolean;
-  cities: Prisma.JsonValue;
-  postalCodes: Prisma.JsonValue;
-};
-
 export class CheckoutError extends Error {
   constructor(
     message: string,
@@ -115,28 +106,12 @@ function cents(value: number) {
   return Math.round(value * 100);
 }
 
-function asArray(value: Prisma.JsonValue) {
-  return Array.isArray(value) ? value.map(String) : [];
-}
-
-function matchesZone(zone: DeliveryZoneCandidate, city: string, postalCode: string) {
-  const normalizedCity = city.trim().toLowerCase();
-  const normalizedPostalCode = postalCode.trim().toLowerCase();
-
-  return (
-    asArray(zone.cities).some((item) => item.toLowerCase() === normalizedCity) ||
-    asArray(zone.postalCodes).some((item) => item.toLowerCase() === normalizedPostalCode)
-  );
-}
-
-async function getOutsideZoneFee(tx: Prisma.TransactionClient) {
-  const setting = await tx.setting.findUnique({ where: { key: "outside_zone_fee" } });
-  const value = setting?.value;
-
-  if (typeof value === "number") return value;
-  if (typeof value === "string") return Number(value);
-
-  return 12.99;
+function isWeeklyTrialPackage(plan: {
+  cadence: string;
+  isCustom: boolean;
+  category: { slug: string };
+}) {
+  return plan.isCustom ? plan.cadence === "WEEKLY" : /weekly|trial/i.test(plan.category.slug);
 }
 
 function makeOrderNumber() {
@@ -147,6 +122,7 @@ const CUSTOM_PACKAGE_IMAGE =
   "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=1200&q=80";
 
 export const DEFAULT_TAX_RATE = 0.0875;
+export const DEFAULT_DELIVERY_CHARGE = 30;
 
 export function globalTaxRateFromValue(value: unknown) {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -159,13 +135,31 @@ export function globalTaxRateFromValue(value: unknown) {
   return DEFAULT_TAX_RATE;
 }
 
+export function globalDeliveryChargeFromValue(value: unknown) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const candidate = value as Record<string, unknown>;
+    const amount = candidate.deliveryCharge;
+    const enabled = candidate.deliveryChargeEnabled;
+
+    return {
+      enabled: typeof enabled === "boolean" ? enabled : true,
+      amount:
+        typeof amount === "number" && Number.isFinite(amount) && amount >= 0
+          ? amount
+          : DEFAULT_DELIVERY_CHARGE,
+    };
+  }
+
+  return { enabled: true, amount: DEFAULT_DELIVERY_CHARGE };
+}
+
 export async function markOrderPaidAndActivate(orderId: string, stripePaymentId?: string) {
   const rules = await getBusinessRules();
   const order = await db.order.findUnique({
     where: { id: orderId },
     include: {
       customer: true,
-      customerPackages: { include: { package: true, deliveryDays: true } },
+      customerPackages: { include: { package: { include: { category: true } }, deliveryDays: true } },
     },
   });
 
@@ -194,7 +188,7 @@ export async function markOrderPaidAndActivate(orderId: string, stripePaymentId?
     });
 
     for (const customerPackage of order.customerPackages) {
-      const requiresStudentApproval = customerPackage.package.studentOnly;
+      const requiresStudentApproval = customerPackage.package.category.requiresVerification;
       const nextStatus = requiresStudentApproval ? "PENDING_STUDENT_VERIFICATION" : "ACTIVE";
       const startDate = customerPackage.startDate ?? nextEligiblePackageStartDate(new Date(), rules.deliveryWeekdays);
       const deliveryDates = requiresStudentApproval
@@ -266,6 +260,7 @@ export async function createCheckoutOrder(rawInput: unknown) {
     );
     const plans = await tx.package.findMany({
       where: { id: { in: packageIds }, status: "ACTIVE" },
+      include: { category: true },
     });
 
     if (plans.length !== packageIds.length) {
@@ -291,6 +286,7 @@ export async function createCheckoutOrder(rawInput: unknown) {
         name: row.name,
         unitLabel: row.unitLabel,
         pricePerUnit: toNumber(row.pricePerUnit),
+        minQuantity: row.minQuantity,
         required: row.required,
         sortOrder: row.sortOrder,
       }));
@@ -309,14 +305,6 @@ export async function createCheckoutOrder(rawInput: unknown) {
       });
 
       for (const { item, index } of customLines) {
-        if (item.cadence === "WEEKLY" && !rules.acceptWeeklyTrials) {
-          throw new CheckoutError(
-            "Weekly packages are not available right now.",
-            409,
-            "WEEKLY_TRIALS_DISABLED",
-          );
-        }
-
         if (item.items.some((entry) => !catalogueIds.has(entry.itemId))) {
           throw new CheckoutError(
             "Your custom package contains an item that is no longer available. Rebuild it and try again.",
@@ -325,21 +313,19 @@ export async function createCheckoutOrder(rawInput: unknown) {
           );
         }
 
-        const missing = missingRequiredItems(item.items, catalogue);
+        const minimumFailures = belowMinimumItems(item.items, catalogue);
 
-        if (missing.length) {
+        if (minimumFailures.length) {
           throw new CheckoutError(
-            `Your custom package needs ${missing.map((option) => option.name).join(", ")}.`,
+            `Your custom package needs ${minimumFailures
+              .map((option) => `${option.name} (minimum ${option.minQuantity} ${option.unitLabel})`)
+              .join(", ")}.`,
             409,
-            "CUSTOM_ITEM_REQUIRED",
+            "CUSTOM_ITEM_MINIMUM",
           );
         }
 
-        const deliveryDayCount = customDeliveryDayCount(
-          item.cadence,
-          rules.deliveryWeekdays.length,
-          rules.customMonthlyDays,
-        );
+        const deliveryDayCount = customDeliveryDayCount(rules.customMonthlyDays);
         const pricing = priceCustomPackage(item.items, catalogue, deliveryDayCount);
 
         if (pricing.perDay <= 0) {
@@ -350,7 +336,7 @@ export async function createCheckoutOrder(rawInput: unknown) {
           );
         }
 
-        const name = customPackageName(item.cadence, pricing);
+        const name = customPackageName(pricing);
         const created = await tx.package.create({
           data: {
             categoryId: category.id,
@@ -360,7 +346,7 @@ export async function createCheckoutOrder(rawInput: unknown) {
             slug: `custom-${crypto.randomUUID()}`,
             description: name,
             price: decimal(pricing.total),
-            cadence: item.cadence,
+            cadence: "MONTHLY",
             deliveryDayCount,
             servings: "1 person",
             imageUrl: CUSTOM_PACKAGE_IMAGE,
@@ -377,6 +363,7 @@ export async function createCheckoutOrder(rawInput: unknown) {
               })),
             },
           },
+          include: { category: true },
         });
 
         customPackagesByLine.set(index, created);
@@ -393,7 +380,7 @@ export async function createCheckoutOrder(rawInput: unknown) {
         throw new CheckoutError("Selected package is not available.", 409, "PACKAGE_UNAVAILABLE");
       }
 
-      if (plan.cadence === "WEEKLY" && !rules.acceptWeeklyTrials) {
+      if (isWeeklyTrialPackage(plan) && !rules.acceptWeeklyTrials) {
         throw new CheckoutError("Weekly trial packages are not available right now.", 409, "WEEKLY_TRIALS_DISABLED");
       }
 
@@ -412,7 +399,7 @@ export async function createCheckoutOrder(rawInput: unknown) {
       };
     });
 
-    if (pricedItems.some(({ plan }) => plan.studentOnly) && !input.student) {
+    if (pricedItems.some(({ plan }) => plan.category.requiresVerification) && !input.student) {
       throw new CheckoutError(
         "Student or military packages require verification details.",
         400,
@@ -421,21 +408,8 @@ export async function createCheckoutOrder(rawInput: unknown) {
     }
 
     const subtotal = pricedItems.reduce((sum, item) => sum + item.subtotal, 0);
-    const zones = await tx.deliveryZone.findMany({
-      where: { status: "ACTIVE" },
-      orderBy: [{ outsideZone: "asc" }, { createdAt: "asc" }],
-    });
-    const matchedZone =
-      zones.find(
-        (zone) =>
-          !zone.outsideZone && matchesZone(zone, input.address.city, input.address.postalCode),
-      ) ?? zones.find((zone) => zone.outsideZone);
-    const deliveryFeePerPackage = matchedZone
-      ? matchedZone.isFreeDelivery
-        ? 0
-        : toNumber(matchedZone.fee)
-      : await getOutsideZoneFee(tx);
-    const deliveryFee = deliveryFeePerPackage * pricedItems.length;
+    const deliveryCharge = globalDeliveryChargeFromValue(settings?.value);
+    const deliveryFee = deliveryCharge.enabled ? deliveryCharge.amount : 0;
     let customer = await tx.customer.findUnique({ where: { userId: session.user.id } });
     customer ??= await tx.customer.findFirst({ where: { email: input.customer.email } });
 
@@ -499,7 +473,7 @@ export async function createCheckoutOrder(rawInput: unknown) {
         orderNumber: makeOrderNumber(),
         customerId: customer.id,
         addressId: address.id,
-        deliveryZoneId: matchedZone?.id,
+        deliveryZoneId: null,
         couponId: coupon?.id,
         guestName: null,
         guestEmail: null,
@@ -557,7 +531,9 @@ export async function createCheckoutOrder(rawInput: unknown) {
           orderId: order.id,
           orderItemId: orderItem.id,
           packageId: pricedItem.plan.id,
-          totalDeliveryDays: pricedItem.plan.deliveryDayCount,
+          totalDeliveryDays: pricedItem.plan.isCustom
+            ? pricedItem.plan.deliveryDayCount
+            : pricedItem.plan.category.deliveryDayCount,
           status: "PENDING_PAYMENT",
           startDate: pricedItem.startDate,
         },

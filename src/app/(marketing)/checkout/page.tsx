@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { CheckoutFlow } from "@/components/checkout/checkout-flow";
 import { PageHero } from "@/components/sections/page-hero";
 import { ButtonLink } from "@/components/ui/button";
-import { getAdminSettings, getDeliveryZoneManagerData } from "@/lib/server/admin";
+import { getAdminSettings } from "@/lib/server/admin";
 import {
   getCustomPackageItems,
   getCustomerProfileDetails,
@@ -14,7 +14,6 @@ import {
   parsePackageCart,
   type PackageCartItemInput,
 } from "@/lib/package-cart";
-import { deliveryWeekdaysFromText } from "@/lib/business-rules";
 import { nextEligiblePackageStartInput } from "@/lib/package-schedule";
 
 export const dynamic = "force-dynamic";
@@ -25,16 +24,14 @@ export default async function CheckoutPage({
 }: {
   searchParams: Promise<{ package?: string; cart?: string }>;
 }) {
-  const [params, packagePlans, customPackageItems, deliveryZones, customerProfile, adminSettings] =
+  const [params, packagePlans, customPackageItems, customerProfile, adminSettings] =
     await Promise.all([
       searchParams,
       getPackagePlans(),
       getCustomPackageItems(),
-      getDeliveryZoneManagerData(),
       getCustomerProfileDetails(),
       getAdminSettings(),
     ]);
-  const deliveryWeekdayCount = deliveryWeekdaysFromText(adminSettings.deliveryDays).length;
   let initialItems = parsePackageCart(params.cart);
 
   if (!initialItems.length && params.package) {
@@ -90,8 +87,9 @@ export default async function CheckoutPage({
         plans={packagePlans}
         customItems={customPackageItems}
         customMonthlyDays={adminSettings.customMonthlyDays}
-        deliveryWeekdayCount={deliveryWeekdayCount}
-        deliveryZones={deliveryZones}
+        deliveryChargeEnabled={adminSettings.deliveryChargeEnabled}
+        deliveryCharge={adminSettings.deliveryCharge}
+        deliveryChargeNote={adminSettings.deliveryChargeNote}
         initialItems={initialItems}
         customerProfile={customerProfile}
         taxRate={adminSettings.taxRate}

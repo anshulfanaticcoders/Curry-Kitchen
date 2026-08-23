@@ -20,7 +20,7 @@ export function AdminCategoriesClient({ categories }: { categories: Category[] }
     <div>
       <PageHeader
         title="Categories"
-        description="Group plans for storefront filters and reporting."
+        description="Set the package duration and any verification rule once, then assign packages to the category."
         action={
           <ButtonLink href="/admin/categories/new">
             <Plus size={18} />
@@ -36,6 +36,8 @@ export function AdminCategoriesClient({ categories }: { categories: Category[] }
               <Th>Name</Th>
               <Th>Slug</Th>
               <Th>Plans</Th>
+              <Th>Delivery days</Th>
+              <Th>Verification</Th>
               <Th>Description</Th>
               <Th>Status</Th>
               <Th className="text-right">Actions</Th>
@@ -47,6 +49,12 @@ export function AdminCategoriesClient({ categories }: { categories: Category[] }
                 <Td className="font-extrabold">{category.name}</Td>
                 <Td className="text-ink/55">/{category.slug}</Td>
                 <Td>{category.count}</Td>
+                <Td>{category.deliveryDayCount}</Td>
+                <Td>
+                  <StatusPill tone={category.requiresVerification ? "amber" : "green"}>
+                    {category.requiresVerification ? "Required" : "Not required"}
+                  </StatusPill>
+                </Td>
                 <Td className="max-w-sm text-ink/60">{category.description}</Td>
                 <Td>
                   <StatusPill tone={statusTone(category.status)}>{category.status ?? "Active"}</StatusPill>

@@ -64,7 +64,7 @@ export default async function PackagesPage({
           </>
         }
       >
-        Compare portions, cadence, and estimated totals without the clutter of a generic
+        Compare portions, package duration, and estimated totals without the clutter of a generic
         ecommerce product page.
       </PageHero>
 
@@ -93,7 +93,7 @@ export default async function PackagesPage({
             <div className="grid grid-cols-[1.1fr_0.8fr_0.8fr_1fr] gap-4 border-b border-white/10 bg-white/[0.04] px-5 py-4 text-xs font-black uppercase tracking-[0.14em] text-white/55">
               <span>Plan</span>
               <span>Price</span>
-              <span>Cadence</span>
+              <span>Delivery days</span>
               <span>Best for</span>
             </div>
             {packagePlans.map((plan) => (

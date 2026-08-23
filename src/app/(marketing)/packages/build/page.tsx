@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { CustomPackageBuilder } from "@/components/sections/custom-package-builder";
 import { PageHero } from "@/components/sections/page-hero";
-import { deliveryWeekdaysFromText } from "@/lib/business-rules";
 import { getAdminSettings } from "@/lib/server/admin";
 import { getCustomPackageItems } from "@/lib/server/catalog";
 import { getMarketingMetadata } from "@/lib/server/seo";
@@ -34,7 +33,7 @@ export default async function BuildPackagePage({
         title="Build a tiffin around your appetite."
         image="https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=1400&q=80"
         imageAlt="Indian thali with roti, rice, dal and sabzi"
-        chips={["Pay per portion", "Weekly or monthly", "Same morning delivery"]}
+        chips={["Pay per portion", "Monthly delivery", "Same morning delivery"]}
       >
         Pick the exact portions you want. We price each item per unit, then multiply by the
         number of delivery days in your plan.
@@ -43,7 +42,6 @@ export default async function BuildPackagePage({
         items={customItems}
         config={{
           customMonthlyDays: adminSettings.customMonthlyDays,
-          deliveryWeekdayCount: deliveryWeekdaysFromText(adminSettings.deliveryDays).length,
         }}
         editLineId={firstValue(params.edit)}
       />

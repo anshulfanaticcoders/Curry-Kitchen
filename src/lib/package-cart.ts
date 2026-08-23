@@ -13,7 +13,7 @@ export type PlanCartLine = {
 export type CustomCartLine = {
   kind: "custom";
   lineId: string;
-  cadence: "WEEKLY" | "MONTHLY";
+  cadence: "MONTHLY";
   items: PackageCustomItemInput[];
   startDate: string;
 };
@@ -59,7 +59,7 @@ function isCartItem(value: unknown): value is PackageCartItemInput {
 
   if (item.kind === "custom") {
     return (
-      (item.cadence === "WEEKLY" || item.cadence === "MONTHLY") &&
+      item.cadence === "MONTHLY" &&
       Array.isArray(item.items) &&
       item.items.every(isCustomItem)
     );

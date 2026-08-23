@@ -30,7 +30,7 @@ import { type PackageCartItemInput } from "@/lib/package-cart";
 import { cartLineEditHref, resolveCartLine } from "@/lib/cart-lines";
 import type { CustomPackageItemOption } from "@/lib/custom-package";
 import { packageStartDateIssue } from "@/lib/package-schedule";
-import type { CustomerProfileDetails, DeliveryZoneRecord, PackagePlan } from "@/lib/types";
+import type { CustomerProfileDetails, PackagePlan } from "@/lib/types";
 import { cn, formatCurrency } from "@/lib/utils";
 
 const checkoutSteps = [
@@ -40,7 +40,7 @@ const checkoutSteps = [
 ];
 
 function categoryLabel(category: PackagePlan["category"]) {
-  return category === "Student" ? "Student / Military" : category;
+  return category;
 }
 
 function displayStartDate(value: string) {
@@ -131,8 +131,9 @@ export function CheckoutFlow({
   plans,
   customItems,
   customMonthlyDays,
-  deliveryWeekdayCount,
-  deliveryZones,
+  deliveryChargeEnabled,
+  deliveryCharge,
+  deliveryChargeNote,
   initialItems,
   customerProfile,
   taxRate,
@@ -140,8 +141,9 @@ export function CheckoutFlow({
   plans: PackagePlan[];
   customItems: CustomPackageItemOption[];
   customMonthlyDays: number;
-  deliveryWeekdayCount: number;
-  deliveryZones: DeliveryZoneRecord[];
+  deliveryChargeEnabled: boolean;
+  deliveryCharge: number;
+  deliveryChargeNote: string;
   initialItems: PackageCartItemInput[];
   customerProfile: CustomerProfileDetails;
   taxRate: number;
@@ -157,8 +159,8 @@ export function CheckoutFlow({
     removeItem,
   } = usePackageCart();
   const customConfig = useMemo(
-    () => ({ customMonthlyDays, deliveryWeekdayCount }),
-    [customMonthlyDays, deliveryWeekdayCount],
+    () => ({ customMonthlyDays }),
+    [customMonthlyDays],
   );
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -239,26 +241,10 @@ export function CheckoutFlow({
             ? subtotal * (appliedCoupon.value / 100)
             : appliedCoupon.value,
         ),
-      )
+  )
     : 0;
   const taxAmount = (subtotal - discountAmount) * taxRate;
-  const normalizedCity = address.city.trim().toLowerCase();
-  const normalizedPostalCode = address.postalCode.trim().toLowerCase();
-  const matchedZone =
-    deliveryZones.find(
-      (zone) =>
-        !zone.outsideZone &&
-        (zone.cities.some((city) => city.toLowerCase() === normalizedCity) ||
-          zone.postalCodes.some(
-            (postalCode) => postalCode.toLowerCase() === normalizedPostalCode,
-          )),
-    ) ?? deliveryZones.find((zone) => zone.outsideZone);
-  const deliveryFeePerPackage = matchedZone
-    ? matchedZone.isFreeDelivery
-      ? 0
-      : matchedZone.fee
-    : 0;
-  const deliveryFee = deliveryFeePerPackage * resolvedItems.length;
+  const deliveryFee = deliveryChargeEnabled ? deliveryCharge : 0;
   const total = subtotal - discountAmount + taxAmount + deliveryFee;
   const requiresStudent = resolvedItems.some((line) => line.isStudent);
   const deliveryErrors = {
@@ -298,8 +284,6 @@ export function CheckoutFlow({
           ? "Upload the back of your military ID."
           : "Upload the back of your student ID.",
   };
-  const addressReady =
-    !deliveryErrors.line1 && !deliveryErrors.city && !deliveryErrors.postalCode;
   const deliveryReady = Object.values(deliveryErrors).every((message) => !message);
   const cartReady =
     resolvedItems.length === cartItems.length &&
@@ -309,13 +293,7 @@ export function CheckoutFlow({
   const signInHref = `/login?callbackUrl=${encodeURIComponent("/checkout")}`;
   const registerHref = `/register?callbackUrl=${encodeURIComponent("/checkout")}`;
   const packagesHref = "/packages#build-plan";
-  const deliveryLabel = !addressReady
-    ? "Enter ZIP"
-    : matchedZone?.outsideZone
-      ? "Outside zone"
-      : matchedZone?.isFreeDelivery
-        ? "Free delivery"
-        : matchedZone?.name ?? "Delivery";
+  const deliveryLabel = deliveryChargeEnabled ? "Delivery" : "Delivery waived";
 
   function removeLine(lineId: string) {
     removeItem(lineId);
@@ -823,21 +801,15 @@ export function CheckoutFlow({
               <div className="rounded-lg border border-ink/10 bg-white p-4 md:col-span-2">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-extrabold">Delivery eligibility</p>
+                    <p className="text-sm font-extrabold">Delivery charge</p>
                     <p className="mt-1 text-xs font-bold text-ink/50">
-                      {addressReady
-                        ? matchedZone
-                          ? `${matchedZone.name} matched by city or ZIP.`
-                          : "No active zone matched."
-                        : "Enter a complete address and ZIP to check delivery pricing."}
+                      {deliveryChargeEnabled
+                        ? deliveryChargeNote || "A flat delivery charge applies once to this order."
+                        : "Delivery is currently included with your order."}
                     </p>
                   </div>
-                  <span className={cn("rounded-full px-3 py-1 text-xs font-black", addressReady && deliveryFee === 0 ? "bg-mint text-leaf" : "bg-rose text-masala")}>
-                    {addressReady
-                      ? deliveryFee === 0
-                        ? "Free delivery"
-                        : `${formatCurrency(deliveryFee)} delivery`
-                      : "Check ZIP"}
+                  <span className={cn("rounded-full px-3 py-1 text-xs font-black", deliveryChargeEnabled ? "bg-rose text-masala" : "bg-mint text-leaf")}>
+                    {deliveryChargeEnabled ? `${formatCurrency(deliveryFee)} delivery` : "No delivery charge"}
                   </span>
                 </div>
               </div>
@@ -1176,11 +1148,11 @@ export function CheckoutFlow({
             </div>
           ) : null}
           <div className="flex justify-between border-b border-white/10 pb-4">
-            <span className="text-ivory/62">Delivery · {deliveryLabel}</span>
-            <span>{deliveryFee === 0 ? deliveryLabel : formatCurrency(deliveryFee)}</span>
+            <span className="text-ivory/62">{deliveryLabel}</span>
+            <span>{deliveryFee === 0 ? "Included" : formatCurrency(deliveryFee)}</span>
           </div>
           <div className="flex justify-between border-b border-white/10 pb-4">
-            <span className="text-ivory/62">Tax estimate</span>
+            <span className="text-ivory/62">Tax</span>
             <span>{formatCurrency(taxAmount)}</span>
           </div>
         </div>

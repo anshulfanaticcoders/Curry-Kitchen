@@ -213,14 +213,16 @@ model Address {
 }
 
 model PackageCategory {
-  id          String       @id @default(cuid())
-  name        String
-  slug        String       @unique
-  description String?      @db.Text
-  sortOrder   Int          @default(0)
-  status      RecordStatus @default(ACTIVE)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                   String       @id @default(cuid())
+  name                 String
+  slug                 String       @unique
+  description          String?      @db.Text
+  deliveryDayCount     Int          @default(20)
+  requiresVerification Boolean      @default(false)
+  sortOrder            Int          @default(0)
+  status               RecordStatus @default(ACTIVE)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
 
   packages Package[]
 
@@ -243,6 +245,7 @@ model Package {
   bestFor          String?
   studentOnly      Boolean        @default(false)
   isCustom         Boolean        @default(false)
+  isFeatured       Boolean        @default(false)
   accent           String         @default("saffron")
   status           RecordStatus   @default(ACTIVE)
   createdAt        DateTime       @default(now())
@@ -279,6 +282,7 @@ model CustomPackageItem {
   slug         String       @unique
   unitLabel    String       @default("oz")
   pricePerUnit Decimal      @db.Decimal(10, 2)
+  minQuantity  Int          @default(1)
   required     Boolean      @default(false)
   sortOrder    Int          @default(0)
   status       RecordStatus @default(ACTIVE)

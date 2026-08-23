@@ -1,10 +1,11 @@
-import type { CustomCartLine, PackageCustomItemInput } from "@/lib/package-cart";
+import type { PackageCustomItemInput } from "@/lib/package-cart";
 
 export type CustomPackageItemOption = {
   id: string;
   name: string;
   unitLabel: string;
   pricePerUnit: number;
+  minQuantity: number;
   required: boolean;
   sortOrder: number;
 };
@@ -20,17 +21,8 @@ export function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-/**
- * Delivery days for a custom package. Weekly is one pass of the kitchen's
- * configured delivery weekdays, so it can never drift out of sync with the
- * `deliveryDays` admin setting. Only the monthly count is stored separately.
- */
-export function customDeliveryDayCount(
-  cadence: CustomCartLine["cadence"],
-  deliveryWeekdayCount: number,
-  customMonthlyDays: number,
-) {
-  return cadence === "WEEKLY" ? Math.max(1, deliveryWeekdayCount) : Math.max(1, customMonthlyDays);
+export function customDeliveryDayCount(customMonthlyDays: number) {
+  return Math.max(1, customMonthlyDays);
 }
 
 /**
@@ -57,13 +49,16 @@ export function priceCustomPackage(
   return { perDay, total: roundMoney(perDay * deliveryDayCount), deliveryDayCount, lines };
 }
 
-export function missingRequiredItems(
+export function belowMinimumItems(
   selections: PackageCustomItemInput[],
   options: CustomPackageItemOption[],
 ) {
   const quantityById = new Map(selections.map((selection) => [selection.itemId, selection.quantity]));
 
-  return options.filter((option) => option.required && (quantityById.get(option.id) ?? 0) < 1);
+  return options.filter((option) => {
+    const quantity = quantityById.get(option.id) ?? 0;
+    return option.required ? quantity < option.minQuantity : quantity > 0 && quantity < option.minQuantity;
+  });
 }
 
 export function describeCustomPackage(pricing: CustomPackagePricing) {
@@ -90,9 +85,8 @@ const MAX_PACKAGE_NAME = 120;
  * summary, and the plan name in every reminder email. So it has to describe
  * the plate, not just say "Custom".
  */
-export function customPackageName(cadence: CustomCartLine["cadence"], pricing: CustomPackagePricing) {
-  const cadenceLabel = cadence === "WEEKLY" ? "Weekly" : "Monthly";
-  const base = `Custom ${cadenceLabel} tiffin`;
+export function customPackageName(pricing: CustomPackagePricing) {
+  const base = "Custom monthly tiffin";
   const detail = describeCustomPackage(pricing);
 
   if (!detail) return base;

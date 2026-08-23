@@ -44,7 +44,11 @@ export default async function PackageDetailPage({ params }: Props) {
           <div className="relative min-h-[420px] overflow-hidden rounded-lg bg-ink lg:min-h-[610px]">
             <Image src={plan.image} alt={`${plan.name} tiffin meal`} fill priority className="object-cover" sizes="(min-width: 1024px) 55vw, 100vw" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/10" />
-            <p className="absolute bottom-6 left-6 rounded-full bg-saffron px-4 py-2 text-xs font-black uppercase tracking-[0.15em]">{plan.badge}</p>
+            {plan.badge ? (
+              <p className="absolute bottom-6 left-6 rounded-full border border-white/20 bg-black/45 px-4 py-2 text-xs font-black uppercase tracking-[0.15em] text-white shadow-[0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-md">
+                {plan.badge}
+              </p>
+            ) : null}
           </div>
 
           <div className="flex flex-col justify-center rounded-lg border border-ink/10 bg-ivory p-7 shadow-soft lg:p-10">
@@ -53,7 +57,7 @@ export default async function PackageDetailPage({ params }: Props) {
             <p className="mt-5 text-base font-medium leading-8 text-ink/66">{plan.description}</p>
             <div className="mt-7 grid grid-cols-2 gap-4 border-y border-ink/10 py-6">
               <div><p className="text-xs font-black uppercase tracking-[0.14em] text-ink/42">Price</p><p className="mt-2 font-display text-3xl font-black">{formatCurrency(plan.price)}</p></div>
-              <div><p className="text-xs font-black uppercase tracking-[0.14em] text-ink/42">Cadence</p><p className="mt-2 text-lg font-extrabold">{plan.cadence}</p></div>
+              <div><p className="text-xs font-black uppercase tracking-[0.14em] text-ink/42">Delivery days</p><p className="mt-2 text-lg font-extrabold">{plan.cadence}</p></div>
               <div><p className="text-xs font-black uppercase tracking-[0.14em] text-ink/42">Portions</p><p className="mt-2 text-sm font-extrabold leading-6">{plan.servings}</p></div>
               <div><p className="text-xs font-black uppercase tracking-[0.14em] text-ink/42">Best for</p><p className="mt-2 text-sm font-extrabold leading-6">{plan.bestFor}</p></div>
             </div>

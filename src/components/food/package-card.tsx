@@ -3,20 +3,10 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, CircleCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PackagePlan } from "@/lib/types";
 import { cn, formatCurrency } from "@/lib/utils";
-
-const accentStyles = {
-  saffron: "border-saffron/70 bg-saffron/15 text-ink",
-  leaf: "border-ink/15 bg-mint text-ink",
-  masala: "border-masala/30 bg-rose text-masala",
-};
-
-function categoryLabel(category: PackagePlan["category"]) {
-  return category === "Student" ? "Student / Military" : category;
-}
 
 export function PackageCard({
   plan,
@@ -39,17 +29,17 @@ export function PackageCard({
 
   return (
     <motion.article
-      whileHover={selected ? undefined : { y: -10, scale: 1.012 }}
-      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={selected ? undefined : { y: -6, scale: 1.005 }}
+      transition={{ type: "spring", stiffness: 240, damping: 24, mass: 0.85 }}
       aria-selected={selected}
       className={cn(
-        "group overflow-hidden rounded-lg border bg-white shadow-soft transition",
+        "group will-change-transform overflow-hidden rounded-lg border bg-white shadow-soft transition-[box-shadow,border-color] duration-500 ease-out",
         selected
           ? "border-saffron shadow-[0_22px_58px_rgba(255,122,26,0.2)] ring-2 ring-saffron/30"
           : "border-ink/10 hover:shadow-lift",
       )}
     >
-      <div className="relative h-56 overflow-hidden">
+      <div className="relative h-52 overflow-hidden">
         <Image
           src={plan.image}
           alt={plan.name}
@@ -57,39 +47,31 @@ export function PackageCard({
           className="object-cover transition duration-700 group-hover:scale-105"
           sizes="(min-width: 1024px) 33vw, 100vw"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/76 via-black/16 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/18 to-transparent" />
         <div className="absolute inset-x-0 top-0 h-1 bg-saffron" />
         {plan.badge ? (
-          <span className="absolute left-4 top-4 rounded-full bg-saffron px-3.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-ink shadow-soft">
+          <span className="absolute left-5 top-5 rounded-full border border-white/20 bg-black/45 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-white shadow-[0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-md">
             {plan.badge}
           </span>
         ) : null}
-        <div className="absolute bottom-4 left-4 right-4 text-white">
-          <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-white/72">
-            {categoryLabel(plan.category)}
-          </p>
-          <h3 className="mt-1 font-display text-3xl font-black leading-[1.12]">{plan.name}</h3>
-        </div>
+        <h3 className="absolute bottom-5 left-5 right-5 font-display text-3xl font-black leading-none text-white">
+          {plan.name}
+        </h3>
       </div>
 
-      <div className="p-5">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="text-3xl font-black">{formatCurrency(plan.price)}</p>
-            <p className="text-sm font-bold text-ink/55">{plan.cadence}</p>
-          </div>
-          <span className={cn("rounded-full border px-3 py-1 text-xs font-extrabold", accentStyles[plan.accent])}>
-            {plan.bestFor}
-          </span>
+      <div className="p-6">
+        <div>
+          <p className="text-3xl font-black">{formatCurrency(plan.price)}</p>
+          <p className="mt-1 text-xs font-bold text-ink/52">{plan.cadence}</p>
         </div>
 
-        <p className="mt-4 text-sm leading-7 text-ink/64">{plan.description}</p>
+        <p className="mt-5 text-sm leading-6 text-ink/62">{plan.description}</p>
 
         {!compact ? (
-          <ul className="mt-5 grid gap-3">
-            {plan.includes.slice(0, 4).map((item) => (
-              <li key={item} className="flex items-center gap-2 text-sm font-bold text-ink/72">
-                <CheckCircle2 size={17} className="text-leaf" />
+          <ul className="mt-5 grid gap-2 border-t border-ink/8 pt-5">
+            {plan.includes.map((item) => (
+              <li key={item} className="flex items-center gap-2 text-xs font-bold text-ink/70">
+                <CircleCheck size={15} className="shrink-0 text-saffron" />
                 {item}
               </li>
             ))}
@@ -98,11 +80,11 @@ export function PackageCard({
 
         <Button
           className={cn(
-            "mt-6 w-full",
+            "mt-6 w-full rounded-full",
             selected && "bg-ink text-saffron shadow-none hover:bg-ink",
             selected && disableSelected && "cursor-default hover:translate-y-0",
           )}
-          variant={selected || plan.accent === "leaf" ? "dark" : "primary"}
+          variant={selected ? "dark" : "primary"}
           disabled={selected && disableSelected}
           onClick={() =>
             onSelect

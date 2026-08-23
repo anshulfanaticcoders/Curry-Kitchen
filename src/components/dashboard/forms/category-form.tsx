@@ -33,6 +33,26 @@ export function CategoryForm({ category }: { category?: Category }) {
           </Select>
         </Field>
       </div>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="Delivery days" hint="Every package in this category uses this duration.">
+          <Input
+            name="deliveryDayCount"
+            type="number"
+            min="1"
+            defaultValue={category?.deliveryDayCount ?? 20}
+            required
+          />
+        </Field>
+        <label className="flex items-center gap-3 self-end rounded-lg border border-ink/10 bg-ivory p-3 text-sm font-extrabold">
+          <input
+            type="checkbox"
+            name="requiresVerification"
+            defaultChecked={category?.requiresVerification}
+            className="size-4 accent-saffron"
+          />
+          Student / military verification required
+        </label>
+      </div>
       <Field label="Sort order">
         <Input name="sortOrder" type="number" min="0" defaultValue="0" />
       </Field>

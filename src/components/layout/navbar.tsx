@@ -34,11 +34,6 @@ const links = [
   { href: "/contact", label: "Contact" },
 ];
 
-// Pages that open with a full-width dark hero, where the glassy dark header
-// treatment is legible. Light-topped pages (about, package detail, customize)
-// get the white pill instead.
-const darkHeroPaths = new Set(["/", "/menu", "/packages", "/blog", "/contact", "/faq", "/checkout"]);
-
 function initialsFromSession(name?: string | null, email?: string | null) {
   const source = name?.trim() || email?.split("@")[0] || "CK";
   const parts = source.split(/[\s._-]+/).filter(Boolean);
@@ -65,30 +60,14 @@ export function Navbar({
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const [pastHero, setPastHero] = useState(false);
   const profileRef = useRef<HTMLDivElement | null>(null);
-  const transparent = darkHeroPaths.has(pathname) && !pastHero && !open;
+  const transparent = true;
   const user = session?.user;
   const isAdmin = user?.role === "ADMIN";
   const dashboardHref = isAdmin ? "/admin" : "/dashboard";
   const userInitials = initialsFromSession(user?.name, user?.email);
   const userLabel = isAdmin ? "Admin" : "Customer";
   const cartCount = cartItems.length;
-
-  useEffect(() => {
-    function updateHeader() {
-      setPastHero(window.scrollY > Math.max(360, window.innerHeight * 0.58));
-    }
-
-    updateHeader();
-    window.addEventListener("scroll", updateHeader, { passive: true });
-    window.addEventListener("resize", updateHeader);
-
-    return () => {
-      window.removeEventListener("scroll", updateHeader);
-      window.removeEventListener("resize", updateHeader);
-    };
-  }, []);
 
   useEffect(() => {
     registerPlans(plans);
@@ -218,13 +197,13 @@ export function Navbar({
 
   return (
     <>
-      <header className="fixed inset-x-0 top-4 z-50 transition duration-500">
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#0a0a0a]/95 text-white shadow-[0_12px_38px_rgba(0,0,0,0.2)] backdrop-blur-xl">
       <div
         className={cn(
-          "section-shell flex min-h-16 items-center justify-between rounded-[2rem] border px-3 py-2 pl-4 transition duration-500 md:px-4",
+          "section-shell flex min-h-[72px] items-center justify-between px-3 py-2 pl-4 md:px-4",
           transparent
-            ? "border-white/16 bg-black/30 text-white shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur-xl"
-            : "border-ink/10 bg-white/94 text-ink shadow-[0_18px_46px_rgba(7,7,7,0.08)] backdrop-blur-xl",
+            ? "text-white"
+            : "text-ink",
         )}
       >
         <div className="flex min-w-0 shrink-0 items-center">
@@ -244,8 +223,8 @@ export function Navbar({
 
           <nav
             className={cn(
-              "mx-6 hidden items-center gap-1 rounded-full border p-1 min-[1240px]:flex",
-              transparent ? "border-white/12 bg-white/8" : "border-ink/10 bg-ink/[0.03]",
+              "mx-6 hidden items-center gap-1 min-[1240px]:flex",
+              transparent ? "border-transparent bg-transparent" : "border-ink/10 bg-ink/[0.03]",
             )}
           >
             {links.map((link) => (
@@ -253,13 +232,13 @@ export function Navbar({
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  "rounded-full px-4 py-2 text-sm font-extrabold transition",
+                  "relative px-4 py-2 text-sm font-extrabold transition after:absolute after:inset-x-4 after:bottom-0 after:h-px after:origin-left after:scale-x-0 after:bg-saffron after:transition-transform hover:text-saffron hover:after:scale-x-100",
                   transparent
                     ? "text-white/80 hover:bg-white hover:text-ink"
                     : "text-ink/64 hover:bg-white hover:text-ink",
                   pathname === link.href &&
                     (transparent
-                      ? "bg-white text-ink"
+                      ? "bg-transparent text-saffron after:scale-x-100"
                       : "bg-ink text-ivory hover:bg-ink hover:text-ivory"),
                 )}
               >

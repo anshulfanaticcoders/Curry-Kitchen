@@ -1,10 +1,13 @@
-export type PackageCategory = "Monthly" | "Weekly" | "Student";
+export type PackageCategory = string;
 
 export type PackagePlan = {
   id: string;
   slug: string;
   name: string;
   category: PackageCategory;
+  deliveryDayCount: number;
+  requiresVerification: boolean;
+  isFeatured: boolean;
   badge: string;
   price: number;
   cadence: string;
@@ -19,9 +22,7 @@ export type PackagePlan = {
 
 export type AdminPackageRecord = PackagePlan & {
   categoryId: string;
-  deliveryDayCount: number;
   status: ProductStatus;
-  studentOnly: boolean;
 };
 
 export type AdminCustomPackageItemRecord = {
@@ -29,6 +30,7 @@ export type AdminCustomPackageItemRecord = {
   name: string;
   unitLabel: string;
   pricePerUnit: number;
+  minQuantity: number;
   required: boolean;
   sortOrder: number;
   status: ProductStatus;
@@ -58,6 +60,9 @@ export type AdminSettings = {
   orderCutoff: string;
   deliveryDays: string;
   customMonthlyDays: number;
+  deliveryChargeEnabled: boolean;
+  deliveryCharge: number;
+  deliveryChargeNote: string;
   acceptWeeklyTrials: boolean;
   enableCheckoutPauses: boolean;
   orderConfirmationEmails: boolean;
@@ -203,6 +208,8 @@ export type Category = {
   slug: string;
   count: number;
   description: string;
+  deliveryDayCount: number;
+  requiresVerification: boolean;
   status?: ProductStatus;
 };
 

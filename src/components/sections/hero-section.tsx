@@ -2,58 +2,55 @@
 
 import Image from "next/image";
 import { motion, useScroll, useTransform } from "framer-motion";
-import { ArrowRight, CalendarDays, ChefHat, Clock, MapPin, Truck } from "lucide-react";
+import { ArrowRight, ChefHat, CirclePlay } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 
-const heroReveal = {
+const reveal = {
   hidden: { opacity: 0, y: 22 },
   show: { opacity: 1, y: 0 },
 };
 
-const titleChar = {
+const titleCharacter = {
   hidden: { opacity: 0, y: 30 },
   show: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.55, ease: [0.25, 1, 0.5, 1] as const },
+    transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] as const },
   },
 };
 
 function AnimatedTitle() {
-  const curry = "Curry".split("");
-  const kitchen = "Kitchen".split("");
-
   return (
     <motion.h1
-      variants={heroReveal}
-      transition={{ duration: 0.8, ease: [0.25, 1, 0.5, 1], staggerChildren: 0.04, delayChildren: 0.15 }}
-      className="flex flex-nowrap whitespace-nowrap font-display text-5xl font-black leading-[1.12] tracking-tight sm:text-6xl md:text-7xl"
+      variants={reveal}
+      transition={{ staggerChildren: 0.035, delayChildren: 0.18 }}
+      className="flex flex-nowrap whitespace-nowrap font-display text-[clamp(3.15rem,7vw,6.35rem)] font-black leading-[0.94] tracking-[-0.045em]"
     >
-      {curry.map((char, i) => (
-        <motion.span key={`c-${i}`} variants={titleChar} className="inline-block">
-          {char}
+      {"Curry".split("").map((character, index) => (
+        <motion.span key={`curry-${index}`} variants={titleCharacter} className="inline-block">
+          {character}
         </motion.span>
       ))}
-      <span className="inline-block w-[0.28em]" aria-hidden />
-      {kitchen.map((char, i) =>
-        char === "i" ? (
-          <span key={`k-${i}`} className="relative inline-block">
-            <motion.span variants={titleChar} className="inline-block">
+      <span className="inline-block w-[0.23em]" aria-hidden />
+      {"Kitchen".split("").map((character, index) =>
+        character === "i" ? (
+          <span key={`kitchen-${index}`} className="relative inline-block">
+            <motion.span variants={titleCharacter} className="inline-block">
               {"ı"}
             </motion.span>
             <motion.span
               aria-hidden
-              className="pointer-events-none absolute -top-[0.5em] left-1/2 -translate-x-1/2 text-saffron"
-              initial={{ y: -20, opacity: 0, rotate: -12 }}
-              animate={{ y: 0, opacity: 1, rotate: 0 }}
-              transition={{ delay: 0.9, duration: 0.6, ease: [0.25, 1, 0.5, 1] }}
+              className="pointer-events-none absolute -top-[0.55em] left-1/2 -translate-x-1/2 text-saffron"
+              initial={{ opacity: 0, rotate: -16, y: -16 }}
+              animate={{ opacity: 1, rotate: 0, y: 0 }}
+              transition={{ delay: 1, duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
             >
-              <ChefHat className="h-[0.62em] w-[0.62em]" strokeWidth={2.1} />
+              <ChefHat className="h-[0.6em] w-[0.6em]" strokeWidth={2.25} />
             </motion.span>
           </span>
         ) : (
-          <motion.span key={`k-${i}`} variants={titleChar} className="inline-block">
-            {char}
+          <motion.span key={`kitchen-${index}`} variants={titleCharacter} className="inline-block">
+            {character}
           </motion.span>
         ),
       )}
@@ -63,92 +60,68 @@ function AnimatedTitle() {
 
 export function HeroSection() {
   const { scrollY } = useScroll();
-  const y = useTransform(scrollY, [0, 600], [0, 90]);
+  const imageY = useTransform(scrollY, [0, 760], [0, 96]);
 
   return (
-    <section className="dark-band relative isolate flex min-h-[100svh] flex-col overflow-hidden">
-      <motion.div style={{ y }} className="absolute inset-0 -z-10">
+    <section className="dark-band relative isolate flex min-h-[720px] overflow-hidden text-white lg:min-h-[780px]">
+      <motion.div style={{ y: imageY }} className="absolute inset-0 -z-20">
         <Image
-          src="https://images.unsplash.com/photo-1630409346824-4f0e7b080087?auto=format&fit=crop&w=1800&q=82"
-          alt="Nostalgic steel tiffin dabba packed with Indian food"
+          src="https://images.unsplash.com/photo-1630409346824-4f0e7b080087?auto=format&fit=crop&w=2000&q=88"
+          alt="Freshly prepared Indian tiffin meal served in a steel bowl"
           fill
           priority
-          className="object-cover"
+          className="object-cover object-[62%_center]"
           sizes="100vw"
         />
       </motion.div>
-      <div className="absolute inset-0 -z-10 bg-gradient-to-r from-black/90 via-black/62 to-black/24" />
-      <div className="absolute inset-x-0 bottom-0 -z-10 h-52 bg-gradient-to-t from-black/85 via-black/34 to-transparent" />
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-saffron/70 to-transparent" />
+      <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(6,6,5,0.96)_0%,rgba(6,6,5,0.8)_39%,rgba(6,6,5,0.31)_72%,rgba(6,6,5,0.48)_100%)]" />
+      <div className="absolute inset-x-0 bottom-0 -z-10 h-[42%] bg-gradient-to-t from-black/88 via-black/34 to-transparent" />
+      <div className="absolute inset-x-0 top-0 -z-10 h-36 bg-gradient-to-b from-black/64 to-transparent" />
 
-      <div className="section-shell flex flex-1 items-center pb-14 pt-32">
+      <div className="section-shell flex w-full flex-col justify-center pb-16 pt-36 lg:pt-40">
         <motion.div
           initial="hidden"
           animate="show"
-          transition={{ staggerChildren: 0.1, delayChildren: 0.05 }}
-          className="max-w-3xl text-white"
+          transition={{ staggerChildren: 0.11, delayChildren: 0.04 }}
+          className="max-w-2xl"
         >
           <motion.p
-            variants={heroReveal}
-            transition={{ duration: 0.7, ease: [0.25, 1, 0.5, 1] }}
-            className="mb-6 inline-flex items-center gap-2.5 text-sm font-bold text-white/78"
+            variants={reveal}
+            transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+            className="mb-7 flex items-center gap-3 text-[11px] font-extrabold uppercase tracking-[0.18em] text-white/76"
           >
-            <MapPin size={16} className="text-saffron" />
-            San Diego tiffin delivery
+            <span className="h-px w-9 bg-saffron" />
+            Fresh. Healthy. Homemade.
           </motion.p>
           <AnimatedTitle />
           <motion.p
-            variants={heroReveal}
-            transition={{ duration: 0.75, ease: [0.25, 1, 0.5, 1] }}
-            className="mt-7 max-w-xl text-lg font-medium leading-8 text-white/78"
+            variants={reveal}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            className="mt-7 max-w-xl text-base font-medium leading-7 text-white/78 sm:text-lg sm:leading-8"
           >
-            Fresh Indian meals cooked daily, packed in the spirit of a classic tiffin dabba,
-            and delivered across San Diego for students, families, and busy professionals.
+            Honest Indian food, cooked fresh each day and delivered in the comforting rhythm of a proper tiffin.
           </motion.p>
           <motion.div
-            variants={heroReveal}
-            transition={{ duration: 0.75, ease: [0.25, 1, 0.5, 1] }}
-            className="mt-9 flex flex-col gap-3 sm:flex-row"
+            variants={reveal}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            className="mt-9 flex flex-wrap items-center gap-4"
           >
-            <ButtonLink href="/packages">
-              View packages
+            <ButtonLink href="/packages" className="rounded-full px-6">
+              Order now
               <ArrowRight size={18} />
             </ButtonLink>
             <ButtonLink
-              href="/menu"
+              href="/about"
               variant="secondary"
-              className="border-white/25 bg-transparent text-white hover:bg-white hover:text-ink"
+              className="rounded-full border-white/22 bg-transparent px-5 text-white hover:bg-white hover:text-ink"
             >
-              <CalendarDays size={18} />
-              This week&apos;s menu
+              <CirclePlay size={19} />
+              Our story
             </ButtonLink>
           </motion.div>
         </motion.div>
-      </div>
 
-      {/* In-flow strip (not absolute) so it can never overlap the hero copy. */}
-      <motion.div
-        initial={{ opacity: 0, y: 18 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.75, delay: 0.5, ease: [0.25, 1, 0.5, 1] }}
-        className="relative hidden border-t border-white/10 lg:block"
-      >
-        <div className="section-shell grid grid-cols-3 py-6 text-white">
-          {[
-            { icon: MapPin, label: "Delivery area", value: "San Diego" },
-            { icon: Clock, label: "Delivery", value: "Every morning" },
-            { icon: Truck, label: "Weekly rhythm", value: "Monday to Friday" },
-          ].map((item) => (
-            <div key={item.label} className="flex items-center gap-3.5">
-              <item.icon size={18} className="shrink-0 text-saffron" />
-              <span>
-                <span className="block text-xs font-bold text-white/52">{item.label}</span>
-                <span className="mt-0.5 block font-display text-lg font-black">{item.value}</span>
-              </span>
-            </div>
-          ))}
-        </div>
-      </motion.div>
+      </div>
     </section>
   );
 }

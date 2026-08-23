@@ -47,6 +47,9 @@ const adminSettingsSchema = z.object({
   orderCutoff: z.string().min(2).optional(),
   deliveryDays: z.string().min(2).optional(),
   customMonthlyDays: z.coerce.number().int().min(1).max(60).optional(),
+  deliveryChargeEnabled: optionalFormBoolean,
+  deliveryCharge: z.coerce.number().min(0).max(999).optional(),
+  deliveryChargeNote: z.string().trim().max(240).optional(),
   acceptWeeklyTrials: optionalFormBoolean,
   enableCheckoutPauses: optionalFormBoolean,
   orderConfirmationEmails: optionalFormBoolean,
@@ -130,14 +133,12 @@ const packageSchema = z.object({
   categoryId: z.string().min(1),
   name: z.string().min(2),
   badge: z.string().optional(),
+  isFeatured: formBoolean.default(false),
   description: z.string().min(10),
   price: z.coerce.number().positive(),
-  cadence: z.enum(["WEEKLY", "MONTHLY", "STUDENT"]),
-  deliveryDayCount: z.coerce.number().int().positive(),
   servings: z.string().min(2),
   imageUrl: siteImage,
   bestFor: z.string().optional(),
-  studentOnly: formBoolean.default(false),
   accent: z.enum(["saffron", "leaf", "masala"]).default("saffron"),
   status: z.enum(["ACTIVE", "DRAFT", "ARCHIVED"]).default("ACTIVE"),
   includes: z.string().optional(),
@@ -148,6 +149,7 @@ const customPackageItemSchema = z.object({
   name: z.string().min(2),
   unitLabel: z.string().min(1).max(20),
   pricePerUnit: z.coerce.number().min(0),
+  minQuantity: z.coerce.number().int().min(1).max(99),
   required: formBoolean.default(false),
   sortOrder: z.coerce.number().int().min(0).default(0),
   status: z.enum(["ACTIVE", "DRAFT", "ARCHIVED"]).default("ACTIVE"),
@@ -169,9 +171,16 @@ const categorySchema = z.object({
   name: z.string().min(2),
   slug: z.string().optional(),
   description: z.string().optional(),
+  deliveryDayCount: z.coerce.number().int().min(1).max(366),
+  requiresVerification: formBoolean.default(false),
   sortOrder: z.coerce.number().int().min(0).default(0),
   status: z.enum(["ACTIVE", "DRAFT", "ARCHIVED"]).default("ACTIVE"),
 });
+
+function legacyCadenceForCategory(category: { slug: string; requiresVerification: boolean }) {
+  if (category.requiresVerification) return "STUDENT" as const;
+  return /weekly|trial/i.test(category.slug) ? "WEEKLY" as const : "MONTHLY" as const;
+}
 
 const menuUploadSchema = z
   .object({
@@ -243,6 +252,7 @@ export async function saveAdminSettingsAction(formData: FormData) {
     });
 
     revalidatePath("/admin/settings");
+    revalidatePath("/checkout");
     revalidatePath("/", "layout");
     revalidatePath("/dashboard", "layout");
     revalidatePath("/register");
@@ -380,15 +390,48 @@ export async function savePackageAction(formData: FormData) {
       return fail("Please fix the package fields.", parsed.error.flatten().fieldErrors);
     }
 
-    const { id, includes, ...data } = parsed.data;
+    const { id, includes, isFeatured, ...data } = parsed.data;
+    const category = await db.packageCategory.findFirst({
+      where: { id: data.categoryId, status: { not: "ARCHIVED" } },
+      select: { slug: true, deliveryDayCount: true, requiresVerification: true },
+    });
+
+    if (!category) {
+      return fail("Choose an active package category.");
+    }
+
+    const shouldFeatureOnHomepage = data.status === "ACTIVE" && isFeatured;
+
+    if (shouldFeatureOnHomepage) {
+      const featuredCount = await db.package.count({
+        where: {
+          status: "ACTIVE",
+          isFeatured: true,
+          ...(id ? { id: { not: id } } : {}),
+        },
+      });
+
+      if (featuredCount >= 3) {
+        return fail("Only three packages can be featured on the homepage. Unfeature another package first.");
+      }
+    }
+
+    // These fields remain on Package for historic orders and custom-package compatibility.
+    // Their values are copied from the category; admins never set them per package.
+    const categoryRules = {
+      cadence: legacyCadenceForCategory(category),
+      deliveryDayCount: category.deliveryDayCount,
+      studentOnly: category.requiresVerification,
+      isFeatured: shouldFeatureOnHomepage,
+    };
 
     const packageRecord = await db.package.upsert({
       where: { id: id ?? "__new_package__" },
       create: {
         ...data,
+        ...categoryRules,
         price: new Prisma.Decimal(data.price),
         slug: slugify(data.name),
-        studentOnly: data.studentOnly || data.cadence === "STUDENT",
         items: {
           create: splitLines(includes).map((name, index) => ({
             name,
@@ -398,9 +441,9 @@ export async function savePackageAction(formData: FormData) {
       },
       update: {
         ...data,
+        ...categoryRules,
         price: new Prisma.Decimal(data.price),
         slug: slugify(data.name),
-        studentOnly: data.studentOnly || data.cadence === "STUDENT",
         items: {
           deleteMany: {},
           create: splitLines(includes).map((name, index) => ({
@@ -426,6 +469,7 @@ export async function savePackageAction(formData: FormData) {
     });
 
     revalidatePath("/admin/packages");
+    revalidatePath("/");
     revalidatePath("/packages");
     revalidatePath(`/packages/${packageRecord.slug}`);
     revalidatePath("/sitemap.xml");
@@ -448,6 +492,7 @@ export async function deletePackageAction(packageId: string) {
     });
 
     revalidatePath("/admin/packages");
+    revalidatePath("/");
     revalidatePath("/packages");
     revalidatePath("/sitemap.xml");
     return ok({ id: packageId }, "Package archived.");

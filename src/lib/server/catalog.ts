@@ -14,7 +14,6 @@ import type {
   Delivery,
   NotificationItem,
   Order,
-  PackageCategory,
   PackagePlan,
   PackagingRecord,
   ReviewItem,
@@ -64,14 +63,6 @@ async function getCurrentCustomer() {
     },
     select: { id: true, name: true, email: true },
   });
-}
-
-function asPackageCategory(value: string): PackageCategory {
-  if (value === "Weekly" || value === "Student") {
-    return value;
-  }
-
-  return "Monthly";
 }
 
 function titleCase(value: string) {
@@ -126,10 +117,10 @@ function planFromRecord(plan: {
   id: string;
   slug: string;
   name: string;
-  category: { name: string };
+  category: { name: string; deliveryDayCount: number; requiresVerification: boolean };
+  isFeatured: boolean;
   badge: string | null;
   price: DecimalLike;
-  cadence: string;
   servings: string;
   imageUrl: string;
   description: string;
@@ -145,10 +136,13 @@ function planFromRecord(plan: {
     id: plan.id,
     slug: plan.slug,
     name: plan.name,
-    category: asPackageCategory(plan.category.name),
-    badge: plan.badge ?? titleCase(plan.cadence),
+    category: plan.category.name,
+    deliveryDayCount: plan.category.deliveryDayCount,
+    requiresVerification: plan.category.requiresVerification,
+    isFeatured: plan.isFeatured,
+    badge: plan.badge ?? plan.category.name,
     price: toNumber(plan.price),
-    cadence: titleCase(plan.cadence),
+    cadence: `${plan.category.deliveryDayCount} delivery day${plan.category.deliveryDayCount === 1 ? "" : "s"}`,
     servings: plan.servings,
     image: plan.imageUrl,
     description: plan.description,
@@ -179,6 +173,7 @@ export async function getCustomPackageItems(): Promise<CustomPackageItemOption[]
       name: item.name,
       unitLabel: item.unitLabel,
       pricePerUnit: toNumber(item.pricePerUnit),
+      minQuantity: item.minQuantity,
       required: item.required,
       sortOrder: item.sortOrder,
     }));

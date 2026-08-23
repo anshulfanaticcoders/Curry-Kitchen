@@ -26,6 +26,9 @@ export const packagePlans: PackagePlan[] = [
     slug: "monthly-small",
     name: "Small 4 Roti Tiffin",
     category: "Monthly",
+    deliveryDayCount: 20,
+    requiresVerification: false,
+    isFeatured: true,
     badge: "Starter favorite",
     price: 250,
     cadence: "5 days a week",
@@ -43,6 +46,9 @@ export const packagePlans: PackagePlan[] = [
     slug: "monthly-regular",
     name: "Regular 8 Roti Tiffin",
     category: "Monthly",
+    deliveryDayCount: 20,
+    requiresVerification: false,
+    isFeatured: true,
     badge: "Most loved",
     price: 350,
     cadence: "5 days a week",
@@ -60,6 +66,9 @@ export const packagePlans: PackagePlan[] = [
     slug: "monthly-xl",
     name: "Extra Large 12 Roti Tiffin",
     category: "Monthly",
+    deliveryDayCount: 20,
+    requiresVerification: false,
+    isFeatured: true,
     badge: "Family portion",
     price: 450,
     cadence: "5 days a week",
@@ -77,6 +86,9 @@ export const packagePlans: PackagePlan[] = [
     slug: "weekly-trial",
     name: "Weekly Trial Pack",
     category: "Weekly",
+    deliveryDayCount: 5,
+    requiresVerification: false,
+    isFeatured: false,
     badge: "Try first",
     price: 95,
     cadence: "One week",
@@ -94,6 +106,9 @@ export const packagePlans: PackagePlan[] = [
     slug: "student-pack",
     name: "Student & Military Saver Pack",
     category: "Student",
+    deliveryDayCount: 20,
+    requiresVerification: true,
+    isFeatured: false,
     badge: "Verified pricing",
     price: 220,
     cadence: "Monthly",
@@ -293,9 +308,10 @@ export const planPerformance: PlanPerformance[] = [
 ];
 
 export const productCategories: Category[] = [
-  { id: "cat-monthly", name: "Monthly", slug: "monthly", count: 3, description: "Full-month tiffin plans billed every 4 weeks." },
-  { id: "cat-weekly", name: "Weekly", slug: "weekly", count: 1, description: "Short trial plans for new customers." },
-  { id: "cat-student", name: "Student", slug: "student", count: 1, description: "Budget plans with student pricing." },
+  { id: "cat-monthly", name: "Monthly", slug: "monthly", count: 3, description: "Full-month tiffin plans billed every 4 weeks.", deliveryDayCount: 20, requiresVerification: false },
+  { id: "cat-weekly", name: "Weekly", slug: "weekly", count: 1, description: "Short trial plans for new customers.", deliveryDayCount: 5, requiresVerification: false },
+  { id: "cat-student", name: "Student / Military", slug: "student-military", count: 1, description: "Budget plans with student pricing.", deliveryDayCount: 20, requiresVerification: true },
+  { id: "cat-one-day", name: "One Day", slug: "one-day", count: 0, description: "One freshly made tiffin on your chosen delivery date.", deliveryDayCount: 1, requiresVerification: false },
 ];
 
 export const productTags: Tag[] = [
@@ -373,10 +389,10 @@ export const adminOrders: AdminOrder[] = [
 ];
 
 export const customPackageItems = [
-  { id: "custom-roti", name: "Roti", unitLabel: "roti", pricePerUnit: 0.6, required: true, sortOrder: 1 },
-  { id: "custom-rice", name: "Rice", unitLabel: "oz", pricePerUnit: 0.2, required: false, sortOrder: 2 },
-  { id: "custom-sabzi", name: "Sabzi", unitLabel: "oz", pricePerUnit: 0.9, required: true, sortOrder: 3 },
-  { id: "custom-dal", name: "Dal", unitLabel: "oz", pricePerUnit: 0.8, required: true, sortOrder: 4 },
-  { id: "custom-raita", name: "Raita", unitLabel: "oz", pricePerUnit: 0.2, required: false, sortOrder: 5 },
-  { id: "custom-salad", name: "Salad", unitLabel: "serving", pricePerUnit: 0.1, required: false, sortOrder: 6 },
+  { id: "custom-roti", name: "Roti", unitLabel: "roti", pricePerUnit: 0.6, minQuantity: 3, required: true, sortOrder: 1 },
+  { id: "custom-rice", name: "Rice", unitLabel: "oz", pricePerUnit: 0.2, minQuantity: 4, required: false, sortOrder: 2 },
+  { id: "custom-sabzi", name: "Sabzi", unitLabel: "oz", pricePerUnit: 0.9, minQuantity: 6, required: true, sortOrder: 3 },
+  { id: "custom-dal", name: "Dal", unitLabel: "oz", pricePerUnit: 0.8, minQuantity: 8, required: true, sortOrder: 4 },
+  { id: "custom-raita", name: "Raita", unitLabel: "oz", pricePerUnit: 0.2, minQuantity: 4, required: false, sortOrder: 5 },
+  { id: "custom-salad", name: "Salad", unitLabel: "serving", pricePerUnit: 0.1, minQuantity: 1, required: false, sortOrder: 6 },
 ];

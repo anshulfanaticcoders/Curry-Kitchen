@@ -34,6 +34,7 @@ function PackagesTab({ packages }: { packages: AdminPackageRecord[] }) {
             <Th>Plan</Th>
             <Th>Category</Th>
             <Th>Price</Th>
+            <Th>Homepage</Th>
             <Th>Status</Th>
             <Th className="text-right">Actions</Th>
           </tr>
@@ -48,12 +49,17 @@ function PackagesTab({ packages }: { packages: AdminPackageRecord[] }) {
                   </span>
                   <div>
                     <p className="font-extrabold">{plan.name}</p>
-                    <p className="text-xs font-bold text-ink/45">{plan.deliveryDayCount} delivery days</p>
+                    <p className="text-xs font-bold text-ink/45">{plan.deliveryDayCount} delivery days from {plan.category}</p>
                   </div>
                 </div>
               </Td>
               <Td className="text-ink/70">{plan.category}</Td>
               <Td className="font-black">{formatCurrency(plan.price)}</Td>
+              <Td>
+                <StatusPill tone={plan.isFeatured ? "green" : "amber"}>
+                  {plan.isFeatured ? "Featured" : "Not featured"}
+                </StatusPill>
+              </Td>
               <Td>
                 <StatusPill tone={statusTone(plan.status)}>{plan.status}</StatusPill>
               </Td>
@@ -91,6 +97,7 @@ function CustomItemsTab({ items }: { items: AdminCustomPackageItemRecord[] }) {
           <tr>
             <Th>Item</Th>
             <Th>Price per unit</Th>
+            <Th>Minimum</Th>
             <Th>Mandatory</Th>
             <Th>Status</Th>
             <Th className="text-right">Actions</Th>
@@ -106,6 +113,10 @@ function CustomItemsTab({ items }: { items: AdminCustomPackageItemRecord[] }) {
               <Td className="font-black">
                 {formatCurrency(item.pricePerUnit)}
                 <span className="ml-1 text-xs font-bold text-ink/45">/ {item.unitLabel}</span>
+              </Td>
+              <Td className="font-black">
+                {item.minQuantity}
+                <span className="ml-1 text-xs font-bold text-ink/45">{item.unitLabel}</span>
               </Td>
               <Td>
                 <StatusPill tone={item.required ? "green" : "amber"}>

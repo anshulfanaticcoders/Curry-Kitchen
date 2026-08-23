@@ -1,8 +1,9 @@
 "use client";
 
-import { FolderOpen, Loader2, UploadCloud, X } from "lucide-react";
-import { type ChangeEvent, useState } from "react";
+import { FolderOpen, Loader2, X } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
+import { FileDropzone } from "@/components/dashboard/file-dropzone";
 import { Input } from "@/components/dashboard/primitives";
 
 const MAX_MEDIA_FILE_SIZE = 10 * 1024 * 1024;
@@ -37,10 +38,8 @@ export function ImagePicker({
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [folderFilter, setFolderFilter] = useState("all");
 
-  async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.target;
-    const file = input.files?.[0];
-    input.value = "";
+  async function handleUpload(files: File[]) {
+    const file = files[0];
 
     if (!file) return;
 
@@ -108,17 +107,6 @@ export function ImagePicker({
           </span>
         )}
         <div className="flex flex-wrap gap-2">
-          <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-button border border-ink/10 bg-white px-4 text-sm font-extrabold transition hover:border-saffron/50">
-            {uploading ? <Loader2 className="animate-spin" size={16} /> : <UploadCloud size={16} />}
-            {uploading ? "Uploading…" : "Upload image"}
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={handleUpload}
-              disabled={uploading}
-            />
-          </label>
           <button
             type="button"
             onClick={openPicker}
@@ -129,6 +117,16 @@ export function ImagePicker({
           </button>
         </div>
       </div>
+
+      <FileDropzone
+        compact
+        accept="image/jpeg,image/png,image/webp"
+        disabled={uploading}
+        loading={uploading}
+        onFiles={handleUpload}
+        title="Upload package image"
+        description="Drag a JPG, PNG, or WEBP here. Maximum 10MB."
+      />
 
       <Input
         value={url}

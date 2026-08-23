@@ -1,4 +1,5 @@
 import {
+  belowMinimumItems,
   customDeliveryDayCount,
   describeCustomPackage,
   priceCustomPackage,
@@ -9,12 +10,10 @@ import type { PackagePlan } from "@/lib/types";
 
 export type CustomPackageConfig = {
   customMonthlyDays: number;
-  deliveryWeekdayCount: number;
 };
 
 export const DEFAULT_CUSTOM_CONFIG: CustomPackageConfig = {
   customMonthlyDays: 21,
-  deliveryWeekdayCount: 5,
 };
 
 export type ResolvedCartLine = {
@@ -41,24 +40,18 @@ export function resolveCartLine(
   config: CustomPackageConfig,
 ): ResolvedCartLine {
   if (item.kind === "custom") {
-    const deliveryDayCount = customDeliveryDayCount(
-      item.cadence,
-      config.deliveryWeekdayCount,
-      config.customMonthlyDays,
-    );
+    const deliveryDayCount = customDeliveryDayCount(config.customMonthlyDays);
     const pricing = priceCustomPackage(item.items, customItems, deliveryDayCount);
     const known = item.items.every((entry) =>
       customItems.some((option) => option.id === entry.itemId),
     );
-    const cadenceLabel = item.cadence === "WEEKLY" ? "Weekly" : "Monthly";
-
     return {
       item,
-      name: `Custom ${cadenceLabel.toLowerCase()} tiffin`,
+      name: "Custom monthly tiffin",
       detail: describeCustomPackage(pricing) || "No items selected",
       subtotal: pricing.total,
       isStudent: false,
-      valid: known && pricing.perDay > 0,
+      valid: known && pricing.perDay > 0 && belowMinimumItems(item.items, customItems).length === 0,
     };
   }
 
