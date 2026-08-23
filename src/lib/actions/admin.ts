@@ -11,6 +11,7 @@ import { sendVerificationDecisionEmail } from "@/lib/email/notifications";
 import { sendTransactionalEmail } from "@/lib/email/send";
 import { createOrderCancelledEmail } from "@/lib/email/templates";
 import { calculateDeliveryDates, nextEligiblePackageStartDate } from "@/lib/package-schedule";
+import { isPageBackgroundSlot } from "@/lib/page-backgrounds";
 import { pausePackage, resumePackage } from "@/lib/server/package-pause";
 import { markOrderPaidAndActivate } from "@/lib/server/checkout";
 import { STATIC_SEO_ROUTES, normalizeSeoInput, validateHttpsImageUrl, validateHttpsUrl } from "@/lib/seo-core.mjs";
@@ -69,6 +70,13 @@ const seoImageSchema = z.string().trim().max(600).refine(
   validateHttpsImageUrl,
   "Use a relative site image or a secure HTTPS image URL.",
 );
+
+const pageBackgroundSchema = z.object({
+  slot: z.string().refine(isPageBackgroundSlot, "This page background is not recognized."),
+  imageUrl: seoImageSchema,
+  focalPoint: z.enum(["LEFT", "CENTER", "RIGHT"]),
+  overlay: z.enum(["NONE", "LIGHT", "MEDIUM", "DARK"]),
+});
 
 const seoRecordSchema = z.object({
   id: z.string().optional(),
@@ -224,6 +232,93 @@ function splitCsv(value: string) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+const pageBackgroundPaths = [
+  "/",
+  "/packages",
+  "/packages/build",
+  "/menu",
+  "/about",
+  "/faq",
+  "/contact",
+  "/blog",
+  "/checkout",
+];
+
+function revalidatePageBackgrounds() {
+  for (const path of pageBackgroundPaths) {
+    revalidatePath(path);
+  }
+
+  revalidatePath("/admin/appearance");
+}
+
+export async function savePageBackgroundAction(formData: FormData) {
+  try {
+    const admin = await requireAdmin();
+    const parsed = pageBackgroundSchema.safeParse(formObject(formData));
+
+    if (!parsed.success) {
+      return fail("Please add a secure image and check the background options.", parsed.error.flatten().fieldErrors);
+    }
+
+    const background = await db.pageBackground.upsert({
+      where: { slot: parsed.data.slot },
+      create: parsed.data,
+      update: {
+        imageUrl: parsed.data.imageUrl,
+        focalPoint: parsed.data.focalPoint,
+        overlay: parsed.data.overlay,
+      },
+    });
+
+    await db.auditLog.create({
+      data: {
+        userId: admin.id,
+        action: "appearance.background_saved",
+        entity: "page_background",
+        entityId: background.id,
+        metadata: { slot: background.slot },
+      },
+    });
+
+    revalidatePageBackgrounds();
+    return ok({ id: background.id, slot: background.slot }, "Page background saved.");
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "The page background could not be saved.");
+  }
+}
+
+export async function resetPageBackgroundAction(slot: string) {
+  try {
+    const admin = await requireAdmin();
+
+    if (!isPageBackgroundSlot(slot)) {
+      return fail("This page background is not recognized.");
+    }
+
+    const background = await db.pageBackground.findUnique({ where: { slot } });
+    if (!background) {
+      return ok({ slot }, "This page is already using the built-in background.");
+    }
+
+    await db.pageBackground.delete({ where: { slot } });
+    await db.auditLog.create({
+      data: {
+        userId: admin.id,
+        action: "appearance.background_reset",
+        entity: "page_background",
+        entityId: background.id,
+        metadata: { slot },
+      },
+    });
+
+    revalidatePageBackgrounds();
+    return ok({ slot }, "Built-in background restored.");
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "The built-in background could not be restored.");
+  }
 }
 
 export async function saveAdminSettingsAction(formData: FormData) {
@@ -839,7 +934,23 @@ export async function deleteMediaAssetAction(assetId: string) {
   try {
     const admin = await requireAdmin();
 
-    const asset = await db.mediaAsset.delete({ where: { id: assetId } });
+    const asset = await db.mediaAsset.findUnique({ where: { id: assetId } });
+    if (!asset) {
+      return fail("This image no longer exists.");
+    }
+
+    const backgroundUsingAsset = await db.pageBackground.findFirst({
+      where: { imageUrl: asset.fileUrl },
+      select: { slot: true },
+    });
+
+    if (backgroundUsingAsset) {
+      return fail(
+        `This image is used by the ${backgroundUsingAsset.slot} background. Replace it or restore the built-in background first.`,
+      );
+    }
+
+    await db.mediaAsset.delete({ where: { id: assetId } });
 
     const fileName = asset.fileUrl.split("/").pop() ?? "";
     if (/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(fileName) && !fileName.includes("..")) {

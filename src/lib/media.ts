@@ -4,6 +4,7 @@ export const DEFAULT_MEDIA_FOLDERS = [
   "packages",
   "menu",
   "about",
+  "backgrounds",
   "seo",
 ];
 

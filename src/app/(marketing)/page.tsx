@@ -14,6 +14,7 @@ import { TestimonialsCarousel } from "@/components/sections/testimonials-carouse
 import { RevealItem, StaggerGroup } from "@/components/ui/animated-section";
 import { ButtonLink } from "@/components/ui/button";
 import { getActiveMenuUploads, getPackagePlans, getTestimonials, getWeeklyMenu } from "@/lib/server/catalog";
+import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
 import { getHomeSchemas, getMarketingMetadata } from "@/lib/server/seo";
 
 export const dynamic = "force-dynamic";
@@ -47,23 +48,29 @@ const tiffinElements = [
   ["A fresh side", "A little lift with every tiffin."],
 ];
 
+const backgroundOverlay = {
+  NONE: "bg-transparent",
+  LIGHT: "bg-black/20",
+  MEDIUM: "bg-black/42",
+  DARK: "bg-black/64",
+} as const;
+
 export default async function Home() {
-  const [packagePlans, weeklyMenu, menuUploads, testimonials, schemas] = await Promise.all([
+  const [packagePlans, weeklyMenu, menuUploads, testimonials, schemas, backgrounds] = await Promise.all([
     getPackagePlans(),
     getWeeklyMenu(),
     getActiveMenuUploads(),
     getTestimonials(),
     getHomeSchemas(),
+    getPageBackgrounds(),
   ]);
   const featuredPlans = packagePlans.filter((plan) => plan.isFeatured).slice(0, 3);
   const menuPreview = weeklyMenu.slice(0, 4);
   const uploadedMenus = menuUploads.slice(0, 3);
-  const comfortImage = menuPreview[0]?.image ?? packagePlans[0]?.image;
-
   return (
     <main className="overflow-hidden bg-[#fffdf9] text-ink">
       <JsonLd data={schemas} />
-      <HeroSection />
+      <HeroSection background={backgrounds["home.hero"]} />
 
       <section className="section bg-[#fffdf9]">
         <StaggerGroup className="section-shell grid items-center gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:gap-20">
@@ -84,14 +91,14 @@ export default async function Home() {
           </div>
 
           <RevealItem className="relative min-h-[340px] overflow-hidden rounded-lg sm:min-h-[440px]">
-            <Image
-              src={comfortImage ?? "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=1400&q=82"}
+            {/* eslint-disable-next-line @next/next/no-img-element -- this image is selected by an admin and may be hosted externally. */}
+            <img
+              src={backgrounds["home.comfort"].imageUrl}
               alt="A comforting home-style Indian meal, freshly prepared"
-              fill
-              className="object-cover transition duration-700 hover:scale-[1.025]"
-              sizes="(min-width: 1024px) 50vw, 100vw"
+              className="absolute inset-0 size-full object-cover transition duration-700 hover:scale-[1.025]"
+              style={{ objectPosition: `${backgrounds["home.comfort"].focalPoint.toLowerCase()} center` }}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/44 via-transparent to-transparent" />
+            <div className={`absolute inset-0 ${backgroundOverlay[backgrounds["home.comfort"].overlay]}`} />
             <p className="absolute bottom-6 left-6 max-w-xs text-sm font-bold leading-6 text-white">
               Freshly made in San Diego, for people who miss Ghar Ka Khana.
             </p>
@@ -274,14 +281,14 @@ export default async function Home() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_42%,rgba(255,122,26,0.16),transparent_30%)]" />
         <StaggerGroup className="section-shell relative grid items-center gap-12 lg:grid-cols-[1.06fr_0.94fr] lg:gap-20">
           <RevealItem className="relative min-h-[390px] overflow-hidden rounded-lg sm:min-h-[520px]">
-            <Image
-              src="https://images.unsplash.com/photo-1567337710282-00832b415979?auto=format&fit=crop&w=1600&q=86"
+            {/* eslint-disable-next-line @next/next/no-img-element -- this image is selected by an admin and may be hosted externally. */}
+            <img
+              src={backgrounds["home.tiffin-details"].imageUrl}
               alt="A complete Indian thali with roti, dal, sabzi, rice, and accompaniments"
-              fill
-              className="object-cover transition duration-1000 hover:scale-[1.04]"
-              sizes="(min-width: 1024px) 52vw, 100vw"
+              className="absolute inset-0 size-full object-cover transition duration-1000 hover:scale-[1.04]"
+              style={{ objectPosition: `${backgrounds["home.tiffin-details"].focalPoint.toLowerCase()} center` }}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+            <div className={`absolute inset-0 ${backgroundOverlay[backgrounds["home.tiffin-details"].overlay]}`} />
             <p className="absolute bottom-7 left-7 right-7 max-w-sm font-display text-2xl font-black leading-tight text-white sm:text-3xl">
               A proper thali, packed with care.
             </p>
@@ -321,14 +328,14 @@ export default async function Home() {
       <TestimonialsCarousel items={testimonials} />
 
       <section className="dark-band relative overflow-hidden py-20 text-white lg:py-24">
-        <Image
-          src="https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=1800&q=84"
+        {/* eslint-disable-next-line @next/next/no-img-element -- this image is selected by an admin and may be hosted externally. */}
+        <img
+          src={backgrounds["home.final-cta"].imageUrl}
           alt="Fresh vegetables and ingredients in a warm kitchen"
-          fill
-          className="object-cover opacity-26"
-          sizes="100vw"
+          className="absolute inset-0 size-full object-cover"
+          style={{ objectPosition: `${backgrounds["home.final-cta"].focalPoint.toLowerCase()} center` }}
         />
-        <div className="absolute inset-0 bg-black/56" />
+        <div className={`absolute inset-0 ${backgroundOverlay[backgrounds["home.final-cta"].overlay]}`} />
         <StaggerGroup className="section-shell relative flex flex-col justify-between gap-12 lg:flex-row lg:items-end">
           <div className="max-w-2xl">
             <RevealItem as="h2" className="font-display text-4xl font-black leading-[1.08] sm:text-5xl">

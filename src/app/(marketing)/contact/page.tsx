@@ -7,6 +7,7 @@ import { RevealItem, StaggerGroup } from "@/components/ui/animated-section";
 import { ButtonLink, buttonStyles } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { getMarketingMetadata, getSimplePageSchemas } from "@/lib/server/seo";
+import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
 
 const contactCards = [
   {
@@ -34,15 +35,17 @@ export function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function ContactPage() {
-  const schemas = await getSimplePageSchemas("/contact");
+  const [schemas, backgrounds] = await Promise.all([getSimplePageSchemas("/contact"), getPageBackgrounds()]);
   return (
     <main>
       <JsonLd data={schemas} />
       <PageHero
         eyebrow="Contact"
         title="Need help choosing the right tiffin rhythm?"
-        image="https://images.unsplash.com/photo-1551218808-94e220e084d2?auto=format&fit=crop&w=1400&q=80"
+        image={backgrounds["contact.hero"].imageUrl}
         imageAlt="Kitchen counter with fresh ingredients"
+        focalPoint={backgrounds["contact.hero"].focalPoint}
+        overlay={backgrounds["contact.hero"].overlay}
         chips={["Package help", "Delivery zones", "Student support"]}
         actions={
           <>

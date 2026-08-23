@@ -1,5 +1,5 @@
-import Image from "next/image";
 import type { ReactNode } from "react";
+import type { PageBackgroundFocalPoint, PageBackgroundOverlay } from "@/lib/page-backgrounds";
 import { cn } from "@/lib/utils";
 
 type PageHeroProps = {
@@ -12,6 +12,28 @@ type PageHeroProps = {
   chips?: string[];
   imageCaption?: ReactNode;
   className?: string;
+  focalPoint?: PageBackgroundFocalPoint;
+  overlay?: PageBackgroundOverlay;
+};
+
+const focalPosition: Record<PageBackgroundFocalPoint, string> = {
+  LEFT: "left center",
+  CENTER: "center center",
+  RIGHT: "right center",
+};
+
+const horizontalOverlay: Record<PageBackgroundOverlay, string> = {
+  NONE: "bg-gradient-to-r from-ink/50 via-ink/26 to-ink/8",
+  LIGHT: "bg-gradient-to-r from-ink/68 via-ink/42 to-ink/16",
+  MEDIUM: "bg-gradient-to-r from-ink/82 via-ink/62 to-ink/25",
+  DARK: "bg-gradient-to-r from-ink via-ink/90 to-ink/35",
+};
+
+const verticalOverlay: Record<PageBackgroundOverlay, string> = {
+  NONE: "bg-gradient-to-t from-ink/38 via-transparent to-ink/18",
+  LIGHT: "bg-gradient-to-t from-ink/56 via-transparent to-ink/28",
+  MEDIUM: "bg-gradient-to-t from-ink/72 via-transparent to-ink/36",
+  DARK: "bg-gradient-to-t from-ink/85 via-transparent to-ink/40",
 };
 
 export function PageHero({
@@ -24,20 +46,21 @@ export function PageHero({
   chips,
   imageCaption,
   className,
+  focalPoint = "CENTER",
+  overlay = "DARK",
 }: PageHeroProps) {
   return (
     <section className={cn("dark-band relative isolate overflow-hidden text-white", className)}>
-      <Image
+      {/* eslint-disable-next-line @next/next/no-img-element -- admin can choose a secure external background URL. */}
+      <img
         src={image}
         alt={imageAlt}
-        fill
-        priority
-        className="object-cover"
-        sizes="100vw"
+        className="absolute inset-0 size-full object-cover"
+        style={{ objectPosition: focalPosition[focalPoint] }}
+        fetchPriority="high"
       />
-      {/* Legibility overlays — dark on the left where the copy sits, image breathes on the right */}
-      <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink/90 to-ink/35" />
-      <div className="absolute inset-0 bg-gradient-to-t from-ink/85 via-transparent to-ink/40" />
+      <div className={cn("absolute inset-0", horizontalOverlay[overlay])} />
+      <div className={cn("absolute inset-0", verticalOverlay[overlay])} />
       <div className="absolute inset-x-0 top-0 h-1 bg-saffron" />
 
       <div className="section-shell relative grid min-h-[64vh] items-center gap-10 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:py-24">

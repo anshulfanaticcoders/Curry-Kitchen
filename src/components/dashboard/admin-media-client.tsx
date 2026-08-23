@@ -203,7 +203,7 @@ export function AdminMediaClient({
                     <ConfirmActionButton
                       label={`Delete ${asset.fileName}`}
                       title={`Delete ${asset.fileName}?`}
-                      description="Pages already using this image keep working until you change them, but the file is removed."
+                      description="An image used as a page background must be replaced or restored first. Other pages keep their current reference until you change them."
                       confirmLabel="Delete"
                       action={() => deleteMediaAssetAction(asset.id)}
                     />

@@ -19,12 +19,18 @@ export function ImagePicker({
   required = false,
   folder = "general",
   onValueChange,
+  uploadTitle = "Upload package image",
+  uploadDescription = "Drag a JPG, PNG, or WEBP here. Maximum 10MB.",
+  previewAlt = "Selected image",
 }: {
   name: string;
   defaultValue?: string;
   required?: boolean;
   folder?: string;
   onValueChange?: (url: string) => void;
+  uploadTitle?: string;
+  uploadDescription?: string;
+  previewAlt?: string;
 }) {
   const [url, setUrlState] = useState(defaultValue);
 
@@ -99,7 +105,7 @@ export function ImagePicker({
         {url ? (
           <span className="relative size-20 shrink-0 overflow-hidden rounded-xl border border-ink/10 bg-frost">
             {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary admin-selected image */}
-            <img src={url} alt="Selected image" className="size-full object-cover" />
+            <img src={url} alt={previewAlt} className="size-full object-cover" />
           </span>
         ) : (
           <span className="grid size-20 shrink-0 place-items-center rounded-xl border border-dashed border-ink/15 bg-frost text-[11px] font-bold text-ink/40">
@@ -124,8 +130,8 @@ export function ImagePicker({
         disabled={uploading}
         loading={uploading}
         onFiles={handleUpload}
-        title="Upload package image"
-        description="Drag a JPG, PNG, or WEBP here. Maximum 10MB."
+        title={uploadTitle}
+        description={uploadDescription}
       />
 
       <Input

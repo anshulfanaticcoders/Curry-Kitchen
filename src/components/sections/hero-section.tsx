@@ -1,9 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { ArrowRight, ChefHat, CirclePlay } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
+import type { PageBackgroundVisual } from "@/lib/page-backgrounds";
+import { cn } from "@/lib/utils";
 
 const reveal = {
   hidden: { opacity: 0, y: 22 },
@@ -18,6 +19,13 @@ const titleCharacter = {
     transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] as const },
   },
 };
+
+const heroOverlay = {
+  NONE: "bg-[linear-gradient(90deg,rgba(6,6,5,0.50)_0%,rgba(6,6,5,0.34)_39%,rgba(6,6,5,0.12)_72%,rgba(6,6,5,0.22)_100%)]",
+  LIGHT: "bg-[linear-gradient(90deg,rgba(6,6,5,0.68)_0%,rgba(6,6,5,0.50)_39%,rgba(6,6,5,0.18)_72%,rgba(6,6,5,0.30)_100%)]",
+  MEDIUM: "bg-[linear-gradient(90deg,rgba(6,6,5,0.82)_0%,rgba(6,6,5,0.64)_39%,rgba(6,6,5,0.25)_72%,rgba(6,6,5,0.38)_100%)]",
+  DARK: "bg-[linear-gradient(90deg,rgba(6,6,5,0.96)_0%,rgba(6,6,5,0.80)_39%,rgba(6,6,5,0.31)_72%,rgba(6,6,5,0.48)_100%)]",
+} as const;
 
 function AnimatedTitle() {
   return (
@@ -58,24 +66,24 @@ function AnimatedTitle() {
   );
 }
 
-export function HeroSection() {
+export function HeroSection({ background }: { background: PageBackgroundVisual }) {
   const { scrollY } = useScroll();
   const imageY = useTransform(scrollY, [0, 760], [0, 96]);
 
   return (
     <section className="dark-band relative isolate flex min-h-[720px] overflow-hidden text-white lg:min-h-[780px]">
       <motion.div style={{ y: imageY }} className="absolute inset-0 -z-20">
-        <Image
-          src="https://images.unsplash.com/photo-1630409346824-4f0e7b080087?auto=format&fit=crop&w=2000&q=88"
+        {/* eslint-disable-next-line @next/next/no-img-element -- admin can choose a secure external background URL. */}
+        <img
+          src={background.imageUrl}
           alt="Freshly prepared Indian tiffin meal served in a steel bowl"
-          fill
-          priority
-          className="object-cover object-[62%_center]"
-          sizes="100vw"
+          className="size-full object-cover"
+          style={{ objectPosition: `${background.focalPoint.toLowerCase()} center` }}
+          fetchPriority="high"
         />
       </motion.div>
-      <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(6,6,5,0.96)_0%,rgba(6,6,5,0.8)_39%,rgba(6,6,5,0.31)_72%,rgba(6,6,5,0.48)_100%)]" />
-      <div className="absolute inset-x-0 bottom-0 -z-10 h-[42%] bg-gradient-to-t from-black/88 via-black/34 to-transparent" />
+      <div className={cn("absolute inset-0 -z-10", heroOverlay[background.overlay])} />
+      <div className="absolute inset-x-0 bottom-0 -z-10 h-[42%] bg-gradient-to-t from-black/80 via-black/28 to-transparent" />
       <div className="absolute inset-x-0 top-0 -z-10 h-36 bg-gradient-to-b from-black/64 to-transparent" />
 
       <div className="section-shell flex w-full flex-col justify-center pb-16 pt-36 lg:pt-40">

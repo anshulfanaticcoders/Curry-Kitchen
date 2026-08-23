@@ -18,6 +18,7 @@ import {
   Utensils,
 } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
+import type { PageBackgroundVisual } from "@/lib/page-backgrounds";
 import { cn } from "@/lib/utils";
 
 const easeOut: Transition["ease"] = [0.16, 1, 0.3, 1];
@@ -279,7 +280,7 @@ function RouteCard({
   );
 }
 
-function StoryHero() {
+function StoryHero({ background }: { background: PageBackgroundVisual }) {
   const reduceMotion = useReducedMotion();
   const { scrollY } = useScroll();
   const imageY = useTransform(scrollY, [0, 700], [0, reduceMotion ? 0 : 105]);
@@ -288,16 +289,23 @@ function StoryHero() {
   return (
     <section className="dark-band relative isolate min-h-screen overflow-hidden">
       <motion.div style={{ y: imageY }} className="absolute inset-0 -z-20">
-        <Image
-          src="https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=1900&q=82"
+        {/* eslint-disable-next-line @next/next/no-img-element -- this background is selected by an admin and may be hosted externally. */}
+        <img
+          src={background.imageUrl}
           alt="Fresh food being prepared in a warm kitchen"
-          fill
-          priority
-          className="object-cover"
-          sizes="100vw"
+          className="size-full object-cover"
+          style={{ objectPosition: `${background.focalPoint.toLowerCase()} center` }}
+          fetchPriority="high"
         />
       </motion.div>
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_68%_22%,rgba(255,122,26,0.28),transparent_30%),linear-gradient(90deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.78)_47%,rgba(0,0,0,0.4)_100%)]" />
+      <div
+        className={cn(
+          "absolute inset-0 -z-10 bg-[radial-gradient(circle_at_68%_22%,rgba(255,122,26,0.28),transparent_30%),linear-gradient(90deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.78)_47%,rgba(0,0,0,0.4)_100%)]",
+          background.overlay === "NONE" && "opacity-55",
+          background.overlay === "LIGHT" && "opacity-70",
+          background.overlay === "MEDIUM" && "opacity-85",
+        )}
+      />
       <div className="absolute inset-x-0 top-0 -z-10 h-56 bg-gradient-to-b from-black/88 to-transparent" />
       <FloatingIngredient className="left-[8%] top-[24%]" delay={0.9}>
         Fresh every morning
@@ -356,10 +364,10 @@ function StoryHero() {
   );
 }
 
-export function OurStoryExperience() {
+export function OurStoryExperience({ background }: { background: PageBackgroundVisual }) {
   return (
     <main className="overflow-hidden bg-white text-ink">
-      <StoryHero />
+      <StoryHero background={background} />
 
       <section className="relative bg-white py-20 lg:py-28">
         <div className="section-shell grid items-center gap-12 lg:grid-cols-[0.9fr_1.1fr]">

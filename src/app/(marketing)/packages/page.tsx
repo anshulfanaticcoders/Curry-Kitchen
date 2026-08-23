@@ -7,6 +7,7 @@ import { AnimatedSection } from "@/components/ui/animated-section";
 import { ButtonLink } from "@/components/ui/button";
 import { getPackagePlans } from "@/lib/server/catalog";
 import { parsePackageCart } from "@/lib/package-cart";
+import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
 import { formatCurrency } from "@/lib/utils";
 import { getMarketingMetadata, getPackagesSchemas } from "@/lib/server/seo";
 
@@ -25,7 +26,7 @@ export default async function PackagesPage({
     edit?: string | string[];
   }>;
 }) {
-  const [params, packagePlans] = await Promise.all([searchParams, getPackagePlans()]);
+  const [params, packagePlans, backgrounds] = await Promise.all([searchParams, getPackagePlans(), getPageBackgrounds()]);
   const initialPlanId = Array.isArray(params.plan) ? params.plan[0] : params.plan;
   const cartParam = Array.isArray(params.cart) ? params.cart[0] : params.cart;
   const editLineId = Array.isArray(params.edit) ? params.edit[0] : params.edit;
@@ -38,8 +39,10 @@ export default async function PackagesPage({
       <PageHero
         eyebrow="Packages"
         title="Choose the tiffin rhythm that fits the week."
-        image="https://images.unsplash.com/photo-1630409346824-4f0e7b080087?auto=format&fit=crop&w=1400&q=80"
+        image={backgrounds["packages.hero"].imageUrl}
         imageAlt="Stacked tiffin meal containers"
+        focalPoint={backgrounds["packages.hero"].focalPoint}
+        overlay={backgrounds["packages.hero"].overlay}
         chips={["Weekly trial packages", "Monthly fixed packages", "Student and military packages"]}
         actions={
           <>

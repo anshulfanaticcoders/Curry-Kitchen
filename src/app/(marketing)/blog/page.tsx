@@ -7,6 +7,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { JsonLd } from "@/components/seo/json-ld";
 import { getMarketingMetadata, getSimplePageSchemas } from "@/lib/server/seo";
+import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
 
 const posts = [
   {
@@ -40,15 +41,17 @@ export function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function BlogPage() {
-  const schemas = await getSimplePageSchemas("/blog");
+  const [schemas, backgrounds] = await Promise.all([getSimplePageSchemas("/blog"), getPageBackgrounds()]);
   return (
     <main>
       <JsonLd data={schemas} />
       <PageHero
         eyebrow="Blog"
         title="Meal planning notes from the Curry Kitchen counter."
-        image="https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=1400&q=80"
+        image={backgrounds["blog.hero"].imageUrl}
         imageAlt="Fresh cooked food and vegetables"
+        focalPoint={backgrounds["blog.hero"].focalPoint}
+        overlay={backgrounds["blog.hero"].overlay}
         chips={["Meal planning", "Delivery clarity", "Student support"]}
         actions={
           <>

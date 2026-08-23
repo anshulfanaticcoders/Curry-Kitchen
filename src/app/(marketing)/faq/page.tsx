@@ -8,6 +8,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { buildFaqSchema } from "@/lib/seo-core.mjs";
 import { getMarketingMetadata, schemasEnabled } from "@/lib/server/seo";
+import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
 
 const faqGroups = [
   {
@@ -81,15 +82,18 @@ export function generateMetadata(): Promise<Metadata> {
 
 export default async function FaqPage() {
   const faqItems = faqGroups.flatMap((group) => group.questions);
-  const schemas = await schemasEnabled("/faq") ? [buildFaqSchema(faqItems)] : [];
+  const [backgrounds, seoEnabled] = await Promise.all([getPageBackgrounds(), schemasEnabled("/faq")]);
+  const schemas = seoEnabled ? [buildFaqSchema(faqItems)] : [];
   return (
     <main>
       <JsonLd data={schemas} />
       <PageHero
         eyebrow="FAQ"
         title="Clear answers before dinner is on the way."
-        image="https://images.unsplash.com/photo-1543353071-10c8ba85a904?auto=format&fit=crop&w=1400&q=80"
+        image={backgrounds["faq.hero"].imageUrl}
         imageAlt="Fresh Indian meal bowls on a table"
+        focalPoint={backgrounds["faq.hero"].focalPoint}
+        overlay={backgrounds["faq.hero"].overlay}
         chips={["Package pricing", "Delivery zones", "Student and military plans"]}
         actions={
           <>

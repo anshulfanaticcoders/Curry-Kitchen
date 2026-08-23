@@ -28,6 +28,19 @@ enum SeoTargetType {
   PACKAGE
 }
 
+enum PageBackgroundFocalPoint {
+  LEFT
+  CENTER
+  RIGHT
+}
+
+enum PageBackgroundOverlay {
+  NONE
+  LIGHT
+  MEDIUM
+  DARK
+}
+
 enum OrderStatus {
   PENDING_PAYMENT
   PAID
@@ -338,6 +351,18 @@ model MediaAsset {
   @@index([createdAt])
   @@index([folder])
   @@map("media_assets")
+}
+
+model PageBackground {
+  id          String                   @id @default(cuid())
+  slot        String                   @unique
+  imageUrl    String                   @db.VarChar(600)
+  focalPoint  PageBackgroundFocalPoint @default(CENTER)
+  overlay     PageBackgroundOverlay    @default(DARK)
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  @@map("page_backgrounds")
 }
 
 model MenuUpload {

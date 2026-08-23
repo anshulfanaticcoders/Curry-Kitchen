@@ -4,6 +4,7 @@ import type {
   AdminCustomPackageItemRecord,
   AdminCustomerOption,
   AdminMediaAsset,
+  AdminPageBackground,
   AdminMenuUpload,
   AdminPackageRecord,
   AdminSettings,
@@ -15,6 +16,7 @@ import type {
 } from "@/lib/types";
 import { db } from "@/lib/db";
 import { DEFAULT_MEDIA_FOLDERS } from "@/lib/media";
+import { PAGE_BACKGROUND_SLOTS } from "@/lib/page-backgrounds";
 import { STATIC_SEO_ROUTES } from "@/lib/seo-core.mjs";
 import { DEFAULT_SEO_SETTINGS, getSeoSettings, getSiteOrigin } from "@/lib/server/seo";
 
@@ -382,6 +384,26 @@ export async function getAdminMediaLibrary(): Promise<{
       }).format(asset.createdAt),
     })),
   };
+}
+
+export async function getAdminPageBackgrounds(): Promise<AdminPageBackground[]> {
+  const savedBackgrounds = await db.pageBackground.findMany();
+  const bySlot = new Map(savedBackgrounds.map((background) => [background.slot, background]));
+
+  return PAGE_BACKGROUND_SLOTS.map((entry) => {
+    const saved = bySlot.get(entry.slot);
+
+    return {
+      slot: entry.slot,
+      page: entry.page,
+      section: entry.section,
+      imageUrl: saved?.imageUrl ?? entry.fallbackImageUrl,
+      focalPoint: saved?.focalPoint ?? entry.focalPoint,
+      overlay: saved?.overlay ?? entry.overlay,
+      isCustom: Boolean(saved),
+      updatedAt: saved?.updatedAt.toISOString() ?? null,
+    };
+  });
 }
 
 export async function getAdminCouponManagerData(): Promise<Coupon[]> {

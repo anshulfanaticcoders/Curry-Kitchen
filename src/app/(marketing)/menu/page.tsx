@@ -6,6 +6,7 @@ import { PageHero } from "@/components/sections/page-hero";
 import { RevealItem, StaggerGroup } from "@/components/ui/animated-section";
 import { ButtonLink } from "@/components/ui/button";
 import { getActiveMenuUploads, getWeeklyMenu } from "@/lib/server/catalog";
+import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
 import { getMarketingMetadata, getMenuSchemas } from "@/lib/server/seo";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +34,7 @@ const menuSteps = [
 ];
 
 export default async function MenuPage() {
-  const [weeklyMenu, menuUploads] = await Promise.all([getWeeklyMenu(), getActiveMenuUploads()]);
+  const [weeklyMenu, menuUploads, backgrounds] = await Promise.all([getWeeklyMenu(), getActiveMenuUploads(), getPageBackgrounds()]);
   const schemas = await getMenuSchemas(weeklyMenu);
   const heroChips = menuUploads.length
     ? menuUploads.slice(0, 3).map((menu) => menu.dateRangeLabel)
@@ -46,8 +47,10 @@ export default async function MenuPage() {
       <PageHero
         eyebrow="Weekly menu"
         title="A meal calendar worth checking every Monday."
-        image="https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=1400&q=80"
+        image={backgrounds["menu.hero"].imageUrl}
         imageAlt="Indian thali menu"
+        focalPoint={backgrounds["menu.hero"].focalPoint}
+        overlay={backgrounds["menu.hero"].overlay}
         chips={heroChips}
         actions={
           <>

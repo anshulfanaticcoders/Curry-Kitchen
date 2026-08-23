@@ -15,6 +15,7 @@ import {
   type PackageCartItemInput,
 } from "@/lib/package-cart";
 import { nextEligiblePackageStartInput } from "@/lib/package-schedule";
+import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Checkout", robots: { index: false, follow: false } };
@@ -24,13 +25,14 @@ export default async function CheckoutPage({
 }: {
   searchParams: Promise<{ package?: string; cart?: string }>;
 }) {
-  const [params, packagePlans, customPackageItems, customerProfile, adminSettings] =
+  const [params, packagePlans, customPackageItems, customerProfile, adminSettings, backgrounds] =
     await Promise.all([
       searchParams,
       getPackagePlans(),
       getCustomPackageItems(),
       getCustomerProfileDetails(),
       getAdminSettings(),
+      getPageBackgrounds(),
     ]);
   let initialItems = parsePackageCart(params.cart);
 
@@ -54,8 +56,10 @@ export default async function CheckoutPage({
       <PageHero
         eyebrow="Checkout"
         title="One checkout for every tiffin plan."
-        image="https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=1400&q=80"
+        image={backgrounds["checkout.hero"].imageUrl}
         imageAlt="Fresh Indian food packed for delivery"
+        focalPoint={backgrounds["checkout.hero"].focalPoint}
+        overlay={backgrounds["checkout.hero"].overlay}
         chips={["Plan", "Delivery", "Payment"]}
         actions={
           <>

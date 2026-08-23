@@ -3,6 +3,7 @@ import { CustomPackageBuilder } from "@/components/sections/custom-package-build
 import { PageHero } from "@/components/sections/page-hero";
 import { getAdminSettings } from "@/lib/server/admin";
 import { getCustomPackageItems } from "@/lib/server/catalog";
+import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
 import { getMarketingMetadata } from "@/lib/server/seo";
 
 export const dynamic = "force-dynamic";
@@ -20,10 +21,11 @@ export default async function BuildPackagePage({
 }: {
   searchParams: Promise<{ edit?: string | string[] }>;
 }) {
-  const [params, customItems, adminSettings] = await Promise.all([
+  const [params, customItems, adminSettings, backgrounds] = await Promise.all([
     searchParams,
     getCustomPackageItems(),
     getAdminSettings(),
+    getPageBackgrounds(),
   ]);
 
   return (
@@ -31,8 +33,10 @@ export default async function BuildPackagePage({
       <PageHero
         eyebrow="Custom package"
         title="Build a tiffin around your appetite."
-        image="https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=1400&q=80"
+        image={backgrounds["packages.build.hero"].imageUrl}
         imageAlt="Indian thali with roti, rice, dal and sabzi"
+        focalPoint={backgrounds["packages.build.hero"].focalPoint}
+        overlay={backgrounds["packages.build.hero"].overlay}
         chips={["Pay per portion", "Monthly delivery", "Same morning delivery"]}
       >
         Pick the exact portions you want. We price each item per unit, then multiply by the

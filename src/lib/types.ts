@@ -270,6 +270,17 @@ export type AdminMediaAsset = {
   uploadedAt: string;
 };
 
+export type AdminPageBackground = {
+  slot: string;
+  page: string;
+  section: string;
+  imageUrl: string;
+  focalPoint: "LEFT" | "CENTER" | "RIGHT";
+  overlay: "NONE" | "LIGHT" | "MEDIUM" | "DARK";
+  isCustom: boolean;
+  updatedAt: string | null;
+};
+
 export type AdminMenuUpload = {
   id: string;
   title: string;
