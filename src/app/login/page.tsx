@@ -6,6 +6,7 @@ import { LoginForm } from "@/components/auth/login-form";
 import { getBusinessRules } from "@/lib/business-rules";
 
 export const metadata: Metadata = { title: "Sign in", robots: { index: false, follow: false } };
+export const dynamic = "force-dynamic";
 
 export default async function LoginPage({
   searchParams,

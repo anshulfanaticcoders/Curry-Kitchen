@@ -7,6 +7,7 @@ import { RegisterForm } from "@/components/auth/register-form";
 import { getBusinessRules } from "@/lib/business-rules";
 
 export const metadata: Metadata = { title: "Create account", robots: { index: false, follow: false } };
+export const dynamic = "force-dynamic";
 
 export default async function RegisterPage({
   searchParams,
