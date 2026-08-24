@@ -63,7 +63,7 @@ export function PageHero({
       <div className={cn("absolute inset-0", verticalOverlay[overlay])} />
       <div className="absolute inset-x-0 top-0 h-1 bg-saffron" />
 
-      <div className="section-shell relative grid min-h-[64vh] items-center gap-10 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:py-24">
+      <div className="section-shell relative grid min-h-[64vh] items-center gap-10 pb-16 pt-28 lg:grid-cols-[1.1fr_0.9fr] lg:pb-24 lg:pt-32">
         <div className="max-w-2xl">
           <p className="text-sm font-black uppercase tracking-[0.18em] text-saffron">{eyebrow}</p>
           <h1 className="mt-4 font-display text-4xl font-black leading-[1.12] md:text-5xl lg:text-6xl">

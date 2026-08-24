@@ -101,7 +101,7 @@ export function NotificationsClient({ initialItems }: { initialItems: Notificati
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="font-extrabold">{item.title}</p>
+                    <p className="truncate font-extrabold">{item.title}</p>
                     {!item.read ? <span className="size-2 rounded-full bg-masala" /> : null}
                   </div>
                   <p className="mt-0.5 text-sm leading-6 text-ink/60">{item.body}</p>

@@ -25,8 +25,8 @@ export default async function CustomerPaymentsPage() {
 
       <Card className="mb-6 p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <span className="grid size-12 place-items-center rounded-button bg-saffron/15 text-masala">
+          <div className="flex min-w-0 items-center gap-4">
+            <span className="grid size-12 shrink-0 place-items-center rounded-button bg-saffron/15 text-masala">
               <CreditCard size={22} />
             </span>
             <div>
@@ -46,6 +46,27 @@ export default async function CustomerPaymentsPage() {
 
       <Card>
         <CardHeader title="Billing history" description={`${myTransactions.length} payment records`} />
+        <div className="divide-y divide-ink/8 md:hidden">
+          {myTransactions.length ? (
+            myTransactions.map((tx) => (
+              <div key={tx.id} className="grid gap-2 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-extrabold">{tx.orderId}</p>
+                  <StatusPill tone={statusTone(tx.status)}>{tx.status}</StatusPill>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-ink/60">{tx.method} · {tx.date}</span>
+                  <span className="font-black">{formatCurrency(tx.amount)}</span>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="p-6 text-center text-sm font-bold text-ink/45">
+              No payment records yet. Completed checkout payments will appear here.
+            </p>
+          )}
+        </div>
+        <div className="hidden md:block">
         <Table>
           <thead>
             <tr>
@@ -78,6 +99,7 @@ export default async function CustomerPaymentsPage() {
             )}
           </tbody>
         </Table>
+        </div>
       </Card>
     </div>
   );

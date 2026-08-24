@@ -31,7 +31,7 @@ import { signOut, useSession } from "next-auth/react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
-type NavItem = { href: string; label: string; icon: LucideIcon };
+type NavItem = { href: string; label: string; icon: LucideIcon; short?: string };
 
 const adminNav: NavItem[] = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
@@ -51,11 +51,11 @@ const adminNav: NavItem[] = [
 ];
 
 const customerNav: NavItem[] = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Overview", icon: LayoutDashboard, short: "Home" },
   { href: "/dashboard/orders", label: "Orders", icon: ShoppingBag },
   { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/dashboard/payments", label: "Payments", icon: CreditCard },
-  { href: "/dashboard/notifications", label: "Notifications", icon: Bell },
+  { href: "/dashboard/notifications", label: "Notifications", icon: Bell, short: "Alerts" },
   { href: "/dashboard/profile", label: "Profile", icon: User },
 ];
 
@@ -199,7 +199,7 @@ export function DashboardShell({
       <div className="lg:pl-64">
         {/* Topbar */}
         <header className="sticky top-0 z-30 border-b border-ink/6 bg-frost/90 backdrop-blur-xl">
-          <div className="flex h-16 items-center gap-4 px-4 md:px-8">
+          <div className="flex h-14 items-center gap-3 px-4 md:h-16 md:gap-4 md:px-8">
             <button
               className="grid size-10 place-items-center rounded-xl border border-ink/10 bg-white lg:hidden"
               onClick={() => setOpen(true)}
@@ -207,7 +207,7 @@ export function DashboardShell({
             >
               <Menu size={20} />
             </button>
-            <p className="font-display text-xl font-black tracking-tight">{current?.label ?? "Dashboard"}</p>
+            <p className="truncate font-display text-lg font-black tracking-tight md:text-xl">{current?.label ?? "Dashboard"}</p>
             <div className="ml-auto flex items-center gap-3">
               <span className="hidden text-sm font-bold text-ink/45 md:block">{persona.name}</span>
               <span className="grid size-10 place-items-center rounded-full bg-ink text-sm font-black text-saffron">
@@ -217,8 +217,43 @@ export function DashboardShell({
           </div>
         </header>
 
-        <main className="p-4 md:p-8">{children}</main>
+        <main className={cn("p-4 md:p-8", role === "customer" && "pb-28 lg:pb-8")}>{children}</main>
       </div>
+
+      {/* Mobile bottom tab bar (customer only) — app-style primary navigation */}
+      {role === "customer" ? (
+        <nav
+          aria-label="Dashboard sections"
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-ink/8 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden"
+        >
+          <div className="grid grid-cols-6">
+            {nav.map((item) => {
+              const active = isActive(pathname, item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex min-h-14 flex-col items-center justify-center gap-1 px-1 text-[10px] font-extrabold transition-colors",
+                    active ? "text-saffron" : "text-ink/45 hover:text-ink",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "grid h-7 w-11 place-items-center rounded-full transition-colors",
+                      active && "bg-saffron/15",
+                    )}
+                  >
+                    <item.icon size={19} strokeWidth={active ? 2.4 : 2} />
+                  </span>
+                  {item.short ?? item.label}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      ) : null}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { ButtonLink, buttonStyles } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { getMarketingMetadata, getSimplePageSchemas } from "@/lib/server/seo";
 import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
+import { cn } from "@/lib/utils";
 
 const contactCards = [
   {
@@ -84,12 +85,12 @@ export default async function ContactPage() {
             visible before payment.
           </SectionHeading>
 
-          <div className="mt-10 grid gap-6 md:grid-cols-3">
+          <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {contactCards.map((card) => (
               <RevealItem
                 key={card.title}
                 as="article"
-                className="rounded-lg border border-ink/10 bg-white p-7 shadow-soft"
+                className="min-w-0 rounded-lg border border-ink/10 bg-white p-7 shadow-soft md:last:col-span-2 lg:last:col-span-1"
               >
                 <span className="grid size-12 place-items-center rounded-button bg-saffron text-ink">
                   <card.icon size={22} />
@@ -97,7 +98,14 @@ export default async function ContactPage() {
                 <p className="mt-5 text-sm font-black uppercase tracking-[0.16em] text-masala">
                   {card.title}
                 </p>
-                <h2 className="mt-2 font-display text-2xl font-black">{card.value}</h2>
+                <h2
+                  className={cn(
+                    "mt-2 break-words font-display font-black",
+                    card.value.includes("@") ? "text-xl lg:text-lg xl:text-xl" : "text-2xl",
+                  )}
+                >
+                  {card.value}
+                </h2>
                 <p className="mt-3 text-sm font-medium leading-6 text-ink/62">{card.copy}</p>
               </RevealItem>
             ))}

@@ -1,11 +1,12 @@
-import { Mail, Phone, QrCode } from "lucide-react";
+import { Mail, Phone } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminPackageControl } from "@/components/dashboard/admin-package-control";
 import { DashboardCalendar } from "@/components/dashboard/dashboard-calendar";
+import { PackingLabel } from "@/components/dashboard/packing-label";
 import { Card } from "@/components/dashboard/primitives";
-import { ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import { getAppUrl } from "@/lib/app-url";
 import { getAdminCustomers } from "@/lib/server/catalog";
 import { getCustomerCalendarData } from "@/lib/server/calendar";
 import { formatCurrency } from "@/lib/utils";
@@ -46,11 +47,15 @@ export default async function AdminCustomerDetailPage({
         <div className="flex flex-wrap items-center gap-3">
           <StatusPill tone={statusTone(customer.status)}>{customer.status}</StatusPill>
           <AdminPackageControl customer={customer} />
-          <ButtonLink href={`/admin/packing/${customer.id}`} variant="dark">
-            <QrCode size={18} />
-            Packing label
-          </ButtonLink>
         </div>
+      </div>
+
+      <div className="mb-6">
+        <PackingLabel
+          customerId={customer.id}
+          customerName={customer.name}
+          lookupUrl={`${getAppUrl()}/admin/packing/${customer.id}`}
+        />
       </div>
 
       <div className="mb-6 grid gap-4 lg:grid-cols-[1.2fr_2fr]">

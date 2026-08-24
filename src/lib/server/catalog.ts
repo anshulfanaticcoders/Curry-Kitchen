@@ -23,13 +23,13 @@ import type {
 } from "@/lib/types";
 import { getCurrentSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasDatabaseUrl } from "@/lib/server/data-source";
+import { hasDatabaseUrl, shouldUseMockData } from "@/lib/server/data-source";
 
 type DecimalLike = { toNumber: () => number } | number | string | null | undefined;
 
 // Mock content is a dev/demo convenience only. Production must never serve
 // fabricated packages, menus, or testimonials — fail empty instead.
-const allowMockContent = process.env.NODE_ENV !== "production";
+const allowMockContent = process.env.NODE_ENV !== "production" || shouldUseMockData();
 
 export type Testimonial = {
   name: string;

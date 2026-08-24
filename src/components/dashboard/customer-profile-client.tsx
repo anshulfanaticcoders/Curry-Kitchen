@@ -78,11 +78,11 @@ export function CustomerProfileClient({ profile }: { profile: CustomerProfileDet
               <Field label="ZIP / postal code">
                 <Input name="postalCode" defaultValue={profile.postalCode} required />
               </Field>
-              <div className="md:col-span-2 flex justify-end gap-3">
-                <Button variant="secondary" type="reset" disabled={pending}>
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end md:col-span-2">
+                <Button variant="secondary" type="reset" disabled={pending} className="w-full sm:w-auto">
                   Reset
                 </Button>
-                <Button type="submit" disabled={pending}>
+                <Button type="submit" disabled={pending} className="w-full sm:w-auto">
                   {pending ? <Loader2 className="animate-spin" size={18} /> : null}
                   {pending ? "Saving" : "Save details"}
                 </Button>

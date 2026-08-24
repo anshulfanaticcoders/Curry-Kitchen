@@ -145,24 +145,29 @@ export default async function MenuPage() {
                         href={menu.fileUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="grid min-h-56 place-items-center bg-ivory transition hover:bg-rose/45"
+                        className="flex items-center gap-4 bg-ink px-5 py-6 text-white transition hover:bg-[#1f1a16]"
                       >
-                        <span className="grid place-items-center gap-3 p-10 text-center">
-                          <span className="grid size-14 place-items-center rounded-full bg-saffron text-ink">
-                            <FileText size={26} />
-                          </span>
-                          <span className="text-sm font-extrabold text-ink/70">Open menu (PDF)</span>
+                        <span className="grid size-12 shrink-0 place-items-center rounded-full bg-saffron text-ink">
+                          <FileText size={22} />
                         </span>
+                        <span className="min-w-0">
+                          <span className="block text-[11px] font-extrabold uppercase tracking-[0.15em] text-saffron">PDF menu</span>
+                          <span className="mt-1 block text-sm font-extrabold">Open the full menu in a new tab</span>
+                        </span>
+                        <ArrowRight size={18} className="ml-auto shrink-0 text-white/60" />
                       </a>
                     ) : (
-                      <a href={menu.fileUrl} target="_blank" rel="noreferrer" className="block bg-ivory">
+                      <a href={menu.fileUrl} target="_blank" rel="noreferrer" className="group relative block aspect-[4/3] overflow-hidden bg-ink">
                         {/* eslint-disable-next-line @next/next/no-img-element -- admin-uploaded file of unknown dimensions served from our own API route */}
                         <img
                           src={menu.fileUrl}
                           alt={`${menu.title} — Curry Kitchen weekly menu`}
                           loading="lazy"
-                          className="h-auto w-full"
+                          className="absolute inset-0 h-full w-full object-cover object-top transition duration-700 group-hover:scale-105"
                         />
+                        <span className="absolute bottom-4 right-4 grid size-10 place-items-center rounded-full bg-white/90 text-ink opacity-0 transition duration-300 group-hover:opacity-100">
+                          <ArrowRight size={18} />
+                        </span>
                       </a>
                     )}
                     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ink/10 bg-white px-5 py-4">

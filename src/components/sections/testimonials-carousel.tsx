@@ -1,9 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import useEmblaCarousel from "embla-carousel-react";
-import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Quote, Star } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowLeft, ArrowRight, Star } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { Testimonial } from "@/lib/server/catalog";
 import { cn } from "@/lib/utils";
@@ -15,138 +14,175 @@ const reviewImages = [
   "https://images.unsplash.com/photo-1604329760661-e71dc83f8f26?auto=format&fit=crop&w=1200&q=84",
 ];
 
-export function TestimonialsCarousel({ items }: { items: Testimonial[] }) {
-  const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", loop: true });
-  const [selectedIndex, setSelectedIndex] = useState(0);
+// Fixed fan angles instead of Math.random(): stable across SSR/hydration and re-renders.
+const fanRotations = [-9, 7, -5, 10, -7, 5];
+const AUTOPLAY_MS = 6000;
 
-  const updateSelected = useCallback(() => {
-    if (emblaApi) setSelectedIndex(emblaApi.selectedScrollSnap());
-  }, [emblaApi]);
+export function TestimonialsCarousel({ items }: { items: Testimonial[] }) {
+  const [active, setActive] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const count = items.length;
+
+  const next = useCallback(() => setActive((i) => (i + 1) % count), [count]);
+  const prev = useCallback(() => setActive((i) => (i - 1 + count) % count), [count]);
 
   useEffect(() => {
-    if (!emblaApi) return;
-    emblaApi.on("select", updateSelected);
-    emblaApi.on("reInit", updateSelected);
-    updateSelected();
+    if (paused || count < 2) return;
+    const id = setInterval(next, AUTOPLAY_MS);
+    return () => clearInterval(id);
+  }, [paused, count, next]);
 
-    return () => {
-      emblaApi.off("select", updateSelected);
-      emblaApi.off("reInit", updateSelected);
-    };
-  }, [emblaApi, updateSelected]);
+  if (!count) return null;
 
-  if (!items.length) return null;
+  const current = items[active];
 
   return (
-    <section id="reviews" className="section overflow-hidden bg-[#f8f0e7] text-ink">
+    <section id="reviews" className="section texture overflow-hidden bg-[#f8f0e7] text-ink">
       <div className="section-shell">
-        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-          <div className="max-w-2xl">
-            <h2 className="font-display text-4xl font-black leading-[1.08] sm:text-5xl">
-              People who miss Ghar Ka Khana.
-            </h2>
-            <p className="mt-5 max-w-xl text-base leading-7 text-ink/60">
-              The best review is a tiffin that feels familiar on a day that needed to be easier.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              aria-label="Previous testimonial"
-              onClick={() => emblaApi?.scrollPrev()}
-              className="grid size-12 place-items-center rounded-full border border-ink/14 bg-white text-ink transition hover:border-saffron hover:text-saffron focus:outline-none focus-visible:ring-2 focus-visible:ring-saffron"
-            >
-              <motion.span whileHover={{ x: -3 }} whileTap={{ x: -1 }} transition={{ type: "spring", stiffness: 520, damping: 22 }}>
-                <ArrowLeft size={20} strokeWidth={2} />
-              </motion.span>
-            </button>
-            <button
-              type="button"
-              aria-label="Next testimonial"
-              onClick={() => emblaApi?.scrollNext()}
-              className="grid size-12 place-items-center rounded-full bg-saffron text-ink shadow-lift transition hover:bg-[#ff8f33] focus:outline-none focus-visible:ring-2 focus-visible:ring-saffron focus-visible:ring-offset-2 focus-visible:ring-offset-[#f8f0e7]"
-            >
-              <motion.span whileHover={{ x: 3 }} whileTap={{ x: 1 }} transition={{ type: "spring", stiffness: 520, damping: 22 }}>
-                <ArrowRight size={20} strokeWidth={2.2} />
-              </motion.span>
-            </button>
-          </div>
+        <div className="max-w-2xl">
+          <p className="mb-6 flex items-center gap-3 text-[11px] font-extrabold uppercase tracking-[0.2em] text-masala">
+            <span className="h-px w-9 bg-saffron" />
+            Loved in San Diego
+          </p>
+          <h2 className="font-display text-4xl font-black leading-[1.08] sm:text-5xl">
+            People who miss <span className="text-saffron">Ghar Ka Khana.</span>
+          </h2>
         </div>
 
-        <div className="mt-11 overflow-hidden" ref={emblaRef}>
-          <div className="flex">
-            {items.map((item, index) => (
-              <article key={`${item.name}-${index}`} className="min-w-0 flex-[0_0_100%]">
-                <div className="grid overflow-hidden rounded-lg bg-white shadow-[0_24px_60px_rgba(30,18,8,0.1)] lg:grid-cols-[0.86fr_1.14fr]">
-                  <div className="relative min-h-[280px] lg:min-h-[410px]">
-                    <Image
-                      src={reviewImages[index % reviewImages.length]}
-                      alt="Fresh Curry Kitchen meal served at home"
-                      fill
-                      className="object-cover"
-                      sizes="(min-width: 1024px) 42vw, 100vw"
+        <div
+          className="mt-12 grid gap-12 md:grid-cols-2 md:gap-16 lg:gap-24"
+          onMouseEnter={() => setPaused(true)}
+          onMouseLeave={() => setPaused(false)}
+          onFocusCapture={() => setPaused(true)}
+          onBlurCapture={() => setPaused(false)}
+        >
+          {/* Fanned image stack */}
+          <div className="relative mx-auto h-72 w-full max-w-md sm:h-80 md:h-[420px] md:max-w-none">
+            <AnimatePresence>
+              {items.map((item, index) => {
+                const isActive = index === active;
+                const rotate = fanRotations[index % fanRotations.length];
+                return (
+                  <motion.div
+                    key={`${item.name}-${index}`}
+                    initial={{ opacity: 0, scale: 0.9, rotate }}
+                    animate={{
+                      opacity: isActive ? 1 : 0.7,
+                      scale: isActive ? 1 : 0.95,
+                      rotate: isActive ? 0 : rotate,
+                      zIndex: isActive ? 40 : count + 2 - index,
+                      y: isActive ? [0, -60, 0] : 0,
+                    }}
+                    exit={{ opacity: 0, scale: 0.9, rotate }}
+                    transition={{ duration: 0.4, ease: "easeInOut" }}
+                    className="absolute inset-0 origin-bottom"
+                  >
+                    <div className="relative h-full w-full overflow-hidden rounded-lg shadow-[0_24px_60px_rgba(30,18,8,0.18)]">
+                      <Image
+                        src={reviewImages[index % reviewImages.length]}
+                        alt={`Curry Kitchen meal enjoyed by ${item.name}`}
+                        fill
+                        draggable={false}
+                        className="object-cover object-center"
+                        sizes="(min-width: 768px) 45vw, 100vw"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                      <motion.div
+                        animate={{ opacity: isActive ? 1 : 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="absolute bottom-5 left-5 right-5 text-white"
+                      >
+                        <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/70">
+                          From {item.area}
+                        </p>
+                        <p className="mt-1 font-display text-xl font-black">{item.role}</p>
+                      </motion.div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+
+          {/* Quote */}
+          <div className="flex flex-col justify-between py-2">
+            <motion.div
+              key={active}
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+            >
+              <div className="flex gap-1 text-saffron" aria-label={`${current.rating} star rating`}>
+                {Array.from({ length: 5 }).map((_, starIndex) => (
+                  <motion.span
+                    key={starIndex}
+                    initial={{ opacity: 0, scale: 0.45 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.1 + starIndex * 0.06, type: "spring", stiffness: 360, damping: 18 }}
+                  >
+                    <Star size={17} fill="currentColor" />
+                  </motion.span>
+                ))}
+              </div>
+              <h3 className="mt-6 font-display text-2xl font-black">{current.name}</h3>
+              <p className="mt-1 text-sm font-semibold text-ink/55">{current.role}</p>
+              <blockquote className="mt-8 font-display text-2xl font-bold leading-[1.3] text-ink/85 sm:text-3xl">
+                {current.quote.split(" ").map((word, index) => (
+                  <motion.span
+                    key={`${active}-${index}`}
+                    initial={{ filter: "blur(10px)", opacity: 0, y: 5 }}
+                    animate={{ filter: "blur(0px)", opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2, ease: "easeInOut", delay: 0.02 * index }}
+                    className="inline-block"
+                  >
+                    {word}&nbsp;
+                  </motion.span>
+                ))}
+              </blockquote>
+            </motion.div>
+
+            <div className="mt-10 flex items-center justify-between gap-5 border-t border-ink/10 pt-6">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  aria-label="Previous testimonial"
+                  onClick={prev}
+                  className="group/button grid size-12 place-items-center rounded-full border border-ink/14 bg-white text-ink transition hover:border-saffron hover:text-saffron focus:outline-none focus-visible:ring-2 focus-visible:ring-saffron"
+                >
+                  <ArrowLeft size={20} strokeWidth={2} className="transition-transform duration-300 group-hover/button:rotate-12" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Next testimonial"
+                  onClick={next}
+                  className="group/button grid size-12 place-items-center rounded-full bg-saffron text-ink shadow-lift transition hover:bg-[#ff8f33] focus:outline-none focus-visible:ring-2 focus-visible:ring-saffron focus-visible:ring-offset-2 focus-visible:ring-offset-[#f8f0e7]"
+                >
+                  <ArrowRight size={20} strokeWidth={2.2} className="transition-transform duration-300 group-hover/button:-rotate-12" />
+                </button>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2" role="tablist" aria-label="Testimonials">
+                  {items.map((item, index) => (
+                    <button
+                      key={`${item.name}-dot`}
+                      type="button"
+                      role="tab"
+                      aria-label={`Show testimonial ${index + 1}`}
+                      aria-selected={active === index}
+                      onClick={() => setActive(index)}
+                      className={cn(
+                        "h-1.5 rounded-full transition-all duration-300",
+                        active === index ? "w-8 bg-saffron" : "w-3 bg-ink/16 hover:bg-ink/35",
+                      )}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/68 via-transparent to-transparent" />
-                    <div className="absolute bottom-7 left-7 right-7 text-white">
-                      <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/64">
-                        From {item.area}
-                      </p>
-                      <p className="mt-2 font-display text-2xl font-black">{item.role}</p>
-                    </div>
-                  </div>
-
-                  <div className="dark-band relative flex min-h-[360px] flex-col justify-between px-7 py-8 text-white sm:px-10 sm:py-10 lg:min-h-[410px] lg:px-14 lg:py-12">
-                    <div className="absolute right-8 top-8 text-saffron/24 sm:right-12 sm:top-10">
-                      <Quote size={76} strokeWidth={1.3} />
-                    </div>
-                    <div className="relative">
-                      <div className="flex gap-1 text-saffron" aria-label={`${item.rating} star rating`}>
-                        {Array.from({ length: 5 }).map((_, starIndex) => (
-                          <motion.span
-                            key={starIndex}
-                            initial={{ opacity: 0, scale: 0.45 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.1 + starIndex * 0.06, type: "spring", stiffness: 360, damping: 18 }}
-                          >
-                            <Star size={17} fill="currentColor" />
-                          </motion.span>
-                        ))}
-                      </div>
-                      <blockquote className="mt-9 max-w-2xl font-display text-3xl font-black leading-[1.18] sm:text-4xl">
-                        &ldquo;{item.quote}&rdquo;
-                      </blockquote>
-                    </div>
-                    <div className="relative mt-10 flex items-end justify-between gap-5 border-t border-white/14 pt-5">
-                      <div>
-                        <p className="font-display text-xl font-black">{item.name}</p>
-                        <p className="mt-1 text-sm font-medium text-white/56">Curry Kitchen customer</p>
-                      </div>
-                      <span className="text-sm font-black text-saffron">
-                        {String(index + 1).padStart(2, "0")} / {String(items.length).padStart(2, "0")}
-                      </span>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              </article>
-            ))}
+                <span className="text-sm font-black text-saffron">
+                  {String(active + 1).padStart(2, "0")} / {String(count).padStart(2, "0")}
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
-
-        <div className="mt-6 flex items-center gap-2" role="tablist" aria-label="Testimonials">
-          {items.map((item, index) => (
-            <button
-              key={`${item.name}-dot`}
-              type="button"
-              role="tab"
-              aria-label={`Show testimonial ${index + 1}`}
-              aria-selected={selectedIndex === index}
-              onClick={() => emblaApi?.scrollTo(index)}
-              className={cn(
-                "h-1.5 rounded-full transition-all duration-300",
-                selectedIndex === index ? "w-10 bg-saffron" : "w-4 bg-ink/16 hover:bg-ink/35",
-              )}
-            />
-          ))}
         </div>
       </div>
     </section>

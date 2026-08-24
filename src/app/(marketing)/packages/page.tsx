@@ -93,7 +93,7 @@ export default async function PackagesPage({
             </h2>
           </div>
           <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] backdrop-blur-sm">
-            <div className="grid grid-cols-[1.1fr_0.8fr_0.8fr_1fr] gap-4 border-b border-white/10 bg-white/[0.04] px-5 py-4 text-xs font-black uppercase tracking-[0.14em] text-white/55">
+            <div className="hidden grid-cols-[1.1fr_0.8fr_0.8fr_1fr] gap-4 border-b border-white/10 bg-white/[0.04] px-5 py-4 sm:grid text-xs font-black uppercase tracking-[0.14em] text-white/55">
               <span>Plan</span>
               <span>Price</span>
               <span>Delivery days</span>
@@ -102,12 +102,12 @@ export default async function PackagesPage({
             {packagePlans.map((plan) => (
               <div
                 key={plan.id}
-                className="grid grid-cols-[1.1fr_0.8fr_0.8fr_1fr] items-center gap-4 border-b border-white/8 px-5 py-5 text-sm transition last:border-0 hover:bg-white/[0.04]"
+                className="grid grid-cols-2 items-center gap-x-4 gap-y-2 border-b border-white/8 px-5 py-5 sm:grid-cols-[1.1fr_0.8fr_0.8fr_1fr] sm:gap-4 text-sm transition last:border-0 hover:bg-white/[0.04]"
               >
                 <span className="font-extrabold">{plan.name}</span>
-                <span className="font-black text-saffron">{formatCurrency(plan.price)}</span>
+                <span className="text-right font-black text-saffron sm:text-left">{formatCurrency(plan.price)}</span>
                 <span className="text-white/60">{plan.cadence}</span>
-                <span className="text-white/60">{plan.bestFor}</span>
+                <span className="text-right text-white/60 sm:text-left">{plan.bestFor}</span>
               </div>
             ))}
           </div>

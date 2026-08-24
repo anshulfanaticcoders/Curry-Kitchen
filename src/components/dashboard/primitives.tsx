@@ -48,9 +48,9 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 className="font-display text-3xl font-black leading-tight tracking-tight">{title}</h1>
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-4 md:mb-6">
+      <div className="min-w-0">
+        <h1 className="font-display text-2xl font-black leading-tight tracking-tight md:text-3xl">{title}</h1>
         {description ? <p className="mt-2 max-w-2xl text-sm leading-6 text-ink/58">{description}</p> : null}
       </div>
       {action}
@@ -74,13 +74,13 @@ export function StatCard({
   const deltaTone =
     tone === "good" ? "text-leaf" : tone === "watch" ? "text-masala" : "text-ink/50";
   return (
-    <Card className="p-5">
+    <Card className="min-w-0 p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-ink/45">{label}</p>
+        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-ink/45 sm:text-xs">{label}</p>
         {icon ? <span className="text-saffron">{icon}</span> : null}
       </div>
-      <p className="mt-4 font-display text-3xl font-black tracking-tight">{value}</p>
-      {delta ? <p className={cn("mt-2 text-xs font-bold", deltaTone)}>{delta}</p> : null}
+      <p className="mt-3 truncate font-display text-2xl font-black tracking-tight sm:mt-4 sm:text-3xl">{value}</p>
+      {delta ? <p className={cn("mt-1.5 line-clamp-2 text-xs font-bold sm:mt-2", deltaTone)}>{delta}</p> : null}
     </Card>
   );
 }

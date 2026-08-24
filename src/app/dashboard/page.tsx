@@ -54,7 +54,7 @@ export default async function CustomerOverviewPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard
           label="Current packages"
           value={livePackages.length ? String(livePackages.length) : "None"}
@@ -189,6 +189,28 @@ export default async function CustomerOverviewPage() {
 
       <Card className="mt-6">
         <CardHeader title="Recent orders" />
+        <div className="divide-y divide-ink/8 md:hidden">
+          {recentOrders.length ? (
+            recentOrders.map((order) => (
+              <div key={order.id} className="grid gap-2 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-extrabold">{order.id}</p>
+                  <StatusPill tone={statusTone(order.status)}>{order.status}</StatusPill>
+                </div>
+                <p className="text-sm text-ink/70">{order.plan}</p>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-ink/55">{order.date}</span>
+                  <span className="font-black">{formatCurrency(order.total)}</span>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="p-6 text-center text-sm font-bold text-ink/45">
+              No orders yet. Your first order will appear here after checkout.
+            </p>
+          )}
+        </div>
+        <div className="hidden md:block">
         <Table>
           <thead>
             <tr>
@@ -221,6 +243,7 @@ export default async function CustomerOverviewPage() {
             )}
           </tbody>
         </Table>
+        </div>
       </Card>
     </div>
   );

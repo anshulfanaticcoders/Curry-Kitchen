@@ -68,8 +68,8 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
   const activePlan = data.packages.find((plan) => plan.status === "Active") ?? data.packages[0];
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
-      <Card className="p-6">
+    <div className="grid gap-4 md:gap-6 xl:grid-cols-[1.6fr_1fr]">
+      <Card className="p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="font-display text-2xl font-black tracking-tight">{monthLabel}</p>
           <div className="flex items-center gap-2">
@@ -120,7 +120,7 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
           </p>
         ) : null}
 
-        <div className="mt-6 grid grid-cols-7 gap-1.5">
+        <div className="mt-5 grid grid-cols-7 gap-1 sm:mt-6 sm:gap-1.5">
           {WEEKDAY_LABELS.map((label) => (
             <p key={label} className="pb-2 text-center text-[11px] font-black uppercase tracking-[0.12em] text-ink/40">
               {label}
@@ -193,7 +193,7 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
       </Card>
 
       <div className="grid content-start gap-4">
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <p className="text-[11px] font-black uppercase tracking-[0.14em] text-ink/40">Selected day</p>
           <p className="mt-2 font-display text-xl font-black tracking-tight">
             {new Intl.DateTimeFormat("en-US", {
@@ -225,7 +225,7 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
         </Card>
 
         {data.packages.length ? (
-          <Card className="p-6">
+          <Card className="p-4 sm:p-6">
             <p className="text-[11px] font-black uppercase tracking-[0.14em] text-ink/40">Plans on this calendar</p>
             <div className="mt-3 grid gap-3">
               {data.packages.map((plan, index) => (

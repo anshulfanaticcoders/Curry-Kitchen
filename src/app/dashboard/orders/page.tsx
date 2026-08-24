@@ -31,14 +31,41 @@ export default async function CustomerOrdersPage() {
         }
       />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         <StatCard label="Total orders" value={String(recentOrders.length)} />
         <StatCard label="Accepted" value={String(accepted)} tone="good" />
-        <StatCard label="Total spent" value={formatCurrency(spent)} />
+        <div className="col-span-2 sm:col-span-1">
+          <StatCard label="Total spent" value={formatCurrency(spent)} />
+        </div>
       </div>
 
       <Card>
         <CardHeader title="Order history" />
+        <div className="divide-y divide-ink/8 md:hidden">
+          {recentOrders.length ? (
+            recentOrders.map((order) => (
+              <div key={order.id} className="grid gap-2 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-extrabold">{order.id}</p>
+                  <StatusPill tone={statusTone(order.status)}>{order.status}</StatusPill>
+                </div>
+                <p className="text-sm text-ink/70">{order.plan}</p>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-ink/55">{order.date}</span>
+                  <span className="font-black">{formatCurrency(order.total)}</span>
+                </div>
+                <ButtonLink href="/dashboard/payments" variant="secondary" className="mt-1 h-10 w-full">
+                  Receipt
+                </ButtonLink>
+              </div>
+            ))
+          ) : (
+            <p className="p-6 text-center text-sm font-bold text-ink/45">
+              No orders yet. Start with a package and your history will appear here.
+            </p>
+          )}
+        </div>
+        <div className="hidden md:block">
         <Table>
           <thead>
             <tr>
@@ -79,6 +106,7 @@ export default async function CustomerOrdersPage() {
             )}
           </tbody>
         </Table>
+        </div>
       </Card>
     </div>
   );
