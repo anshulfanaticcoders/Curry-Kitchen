@@ -104,9 +104,9 @@ ${CUSTOMER_FOOTER}`,
 **Amount due:** {{total}}
 
 **How to pay**
-Open your banking app, choose Zelle, and send **{{total}}** using the Zelle details shown at checkout. Add your order number **{{orderNumber}}** in the memo so we can match it quickly.
+Open your banking app, choose Zelle, and send **{{total}}** to **info@currykitcheninc.com**. Put your order number **{{orderNumber}}** in the memo so we can match it quickly.
 
-We confirm Zelle payments during business hours and email you the moment your plan is active. Your order stays reserved for 48 hours.
+Please send it today if you can — deliveries only start once your payment is confirmed, so a quick transfer means no delay to your first tiffin. We confirm Zelle payments during business hours and email you the moment your plan is active.
 
 ${CUSTOMER_FOOTER}`,
       ctaLabel: "View your orders",

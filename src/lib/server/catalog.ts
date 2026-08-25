@@ -602,6 +602,7 @@ export async function getCustomerOrders(): Promise<Order[]> {
       include: {
         customer: true,
         items: { include: { package: true } },
+        payments: { select: { method: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 20,
@@ -613,6 +614,8 @@ export async function getCustomerOrders(): Promise<Order[]> {
       date: formatDate(order.createdAt),
       total: toNumber(order.total),
       status: mapOrderStatus(order.status),
+      awaitingZelle:
+        order.status === "PENDING_PAYMENT" && order.payments.some((payment) => payment.method === "ZELLE"),
     }));
   } catch {
     return [];

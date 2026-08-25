@@ -1,4 +1,4 @@
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, Wallet } from "lucide-react";
 import { Card, CardHeader, PageHeader, StatCard, Table, Td, Th } from "@/components/dashboard/primitives";
 import { ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -17,6 +17,7 @@ export default async function CustomerOrdersPage() {
   const recentOrders = await getCustomerOrders();
   const accepted = recentOrders.filter((order) => order.status === "Accepted").length;
   const spent = recentOrders.reduce((total, order) => total + order.total, 0);
+  const zelleDue = recentOrders.filter((order) => order.awaitingZelle);
 
   return (
     <div>
@@ -30,6 +31,30 @@ export default async function CustomerOrdersPage() {
           </ButtonLink>
         }
       />
+
+      {zelleDue.length ? (
+        <div className="mb-6 rounded-2xl border border-saffron/40 bg-rose p-5">
+          <div className="flex items-start gap-3">
+            <Wallet className="mt-0.5 shrink-0 text-masala" size={22} />
+            <div className="min-w-0">
+              <p className="font-extrabold text-ink">Complete your Zelle payment to start deliveries</p>
+              <p className="mt-1 text-sm text-ink/70">
+                Send{" "}
+                {zelleDue.map((order, index) => (
+                  <span key={order.id}>
+                    {index > 0 ? " and " : ""}
+                    <strong className="text-ink">{formatCurrency(order.total)}</strong> for order{" "}
+                    <strong className="text-ink">{order.id}</strong>
+                  </span>
+                ))}{" "}
+                via Zelle to <strong className="text-masala">info@currykitcheninc.com</strong>. Put the order number in
+                the memo. We confirm transfers during business hours and email you as soon as your plan is active — the
+                sooner you send it, the sooner your first tiffin arrives.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         <StatCard label="Total orders" value={String(recentOrders.length)} />

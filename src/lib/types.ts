@@ -136,6 +136,8 @@ export type Order = {
   date: string;
   total: number;
   status: OrderDecision;
+  // True while a Zelle order is still waiting for the customer's transfer.
+  awaitingZelle?: boolean;
 };
 
 export type Delivery = {
