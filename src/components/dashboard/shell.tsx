@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   Loader2,
   LogOut,
+  Mail,
   type LucideIcon,
   Menu,
   Package,
@@ -47,6 +48,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/students", label: "Verifications", icon: ShieldCheck },
   { href: "/admin/payments", label: "Payments", icon: CreditCard },
   { href: "/admin/seo", label: "SEO", icon: Search },
+  { href: "/admin/emails", label: "Emails", icon: Mail },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 

@@ -44,7 +44,7 @@ export async function GET(request: Request) {
 
       const { sent } = await sendTransactionalEmail({
         to: customerPackage.customer.email,
-        email: createRenewalReminderEmail({
+        email: await createRenewalReminderEmail({
           customerName: customerPackage.customer.name,
           planName: customerPackage.package.name,
           endDate: customerPackage.endDate,
@@ -88,7 +88,7 @@ export async function GET(request: Request) {
     ) {
       await sendTransactionalEmail({
         to: customerPackage.customer.email,
-        email: createSubscriptionEndedEmail({
+        email: await createSubscriptionEndedEmail({
           customerName: customerPackage.customer.name,
           planName: customerPackage.package.name,
           endDate: customerPackage.endDate,
@@ -139,7 +139,7 @@ export async function GET(request: Request) {
       if (settings.packageCompletedEmails && customerPackage.customer?.email) {
         await sendTransactionalEmail({
           to: customerPackage.customer.email,
-          email: createSubscriptionEndedEmail({
+          email: await createSubscriptionEndedEmail({
             customerName: customerPackage.customer.name,
             planName: customerPackage.package.name,
             endDate: pause.endDate,
@@ -158,7 +158,7 @@ export async function GET(request: Request) {
     ) {
       const { sent } = await sendTransactionalEmail({
         to: customerPackage.customer.email,
-        email: createPauseExpiryReminderEmail({
+        email: await createPauseExpiryReminderEmail({
           customerName: customerPackage.customer.name,
           planName: customerPackage.package.name,
           remainingDays,

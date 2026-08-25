@@ -48,7 +48,7 @@ export async function notifyAdminNewSignup({
     const adminEmail = await getAdminAlertEmail();
     await sendTransactionalEmail({
       to: adminEmail,
-      email: createAdminNewSignupEmail({ name, email, phone }),
+      email: await createAdminNewSignupEmail({ name, email, phone }),
       idempotencyKey: `new-user/${userId}`,
     });
   } catch (error) {
@@ -71,7 +71,7 @@ export async function sendOrderPaidEmails(order: PaidOrderForEmail) {
     if (settings.orderConfirmationEmails && customerEmail) {
       await sendTransactionalEmail({
         to: customerEmail,
-        email: createOrderConfirmationEmail({
+        email: await createOrderConfirmationEmail({
           customerName,
           orderNumber: order.orderNumber,
           planNames,
@@ -86,7 +86,7 @@ export async function sendOrderPaidEmails(order: PaidOrderForEmail) {
     const adminEmail = await getAdminAlertEmail();
     await sendTransactionalEmail({
       to: adminEmail,
-      email: createAdminOrderAlertEmail({
+      email: await createAdminOrderAlertEmail({
         customerName,
         customerEmail: customerEmail ?? "unknown",
         orderNumber: order.orderNumber,
@@ -121,7 +121,7 @@ export async function sendZelleOrderEmails({
 
     await sendTransactionalEmail({
       to: customerEmail,
-      email: createZelleOrderReceivedEmail({
+      email: await createZelleOrderReceivedEmail({
         customerName,
         orderNumber,
         planNames,
@@ -134,7 +134,7 @@ export async function sendZelleOrderEmails({
     const adminEmail = await getAdminAlertEmail();
     await sendTransactionalEmail({
       to: adminEmail,
-      email: createAdminZelleOrderAlertEmail({
+      email: await createAdminZelleOrderAlertEmail({
         customerName,
         customerEmail,
         orderNumber,
@@ -174,9 +174,9 @@ export async function sendVerificationDecisionEmail({
 
     await sendTransactionalEmail({
       to: verification.customer.email,
-      email: approved
+      email: await (approved
         ? createVerificationApprovedEmail(input)
-        : createVerificationRejectedEmail(input),
+        : createVerificationRejectedEmail(input)),
       idempotencyKey: `verification-${approved ? "approved" : "rejected"}/${verificationId}`,
     });
   } catch (error) {

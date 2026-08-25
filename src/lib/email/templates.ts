@@ -1,51 +1,17 @@
+import "server-only";
+
 import { getAppUrl } from "@/lib/app-url";
+import { getEmailTemplateOverrides } from "@/lib/email/template-overrides";
+import {
+  EMAIL_TEMPLATES,
+  type EmailBrand,
+  type EmailTemplateId,
+  renderEmailTemplate,
+  type TransactionalEmail,
+} from "@/lib/email/template-registry";
+import { getAdminSettings } from "@/lib/server/admin";
 
-export type TransactionalEmail = {
-  subject: string;
-  text: string;
-  html: string;
-};
-
-type OrderConfirmationInput = {
-  customerName: string;
-  orderNumber: string;
-  planNames: string[];
-  total: number;
-  currency: string;
-  startDate: Date;
-};
-
-type AdminOrderAlertInput = {
-  customerName: string;
-  customerEmail: string;
-  orderNumber: string;
-  planNames: string[];
-  total: number;
-  currency: string;
-  dashboardUrl?: string;
-};
-
-type SubscriptionLifecycleInput = {
-  customerName: string;
-  planName: string;
-  endDate: Date;
-  renewUrl?: string;
-};
-
-
-function escapeHtml(value: string) {
-  return value.replace(/[&<>'"]/g, (character) => {
-    const entities: Record<string, string> = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      "'": "&#39;",
-      '"': "&quot;",
-    };
-
-    return entities[character];
-  });
-}
+export type { TransactionalEmail } from "@/lib/email/template-registry";
 
 function formatMoney(value: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -63,128 +29,107 @@ function formatDate(value: Date) {
   }).format(value);
 }
 
-function route(path: string) {
-  return new URL(path, getAppUrl()).toString();
+// "08:00" -> "8:00 AM"
+function formatClock(value: string) {
+  const [hours, minutes] = value.split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return value;
+  const suffix = hours >= 12 ? "PM" : "AM";
+  return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${suffix}`;
 }
 
-function emailLayout({
-  heading,
-  intro,
-  content,
-  cta,
-}: {
-  heading: string;
-  intro: string;
-  content: string;
-  cta?: { label: string; url: string };
+// Business details from admin settings, used in the footer and as {{variables}}.
+async function getEmailBrand(): Promise<Partial<EmailBrand>> {
+  try {
+    const settings = await getAdminSettings();
+    return {
+      businessName: settings.businessName.replace(/\s+inc\.?$/i, ""),
+      supportEmail: settings.supportEmail,
+      phone: settings.phone,
+      deliveryWindow: `${formatClock(settings.deliveryWindowStart)} – ${formatClock(settings.deliveryWindowEnd)}`,
+      deliveryDays: settings.deliveryDays,
+      serviceAreas: settings.serviceAreas,
+    };
+  } catch {
+    return {};
+  }
+}
+
+// Admin edits (stored in the settings table) win over the built-in copy.
+async function render(id: EmailTemplateId, variables: Record<string, string>): Promise<TransactionalEmail> {
+  const [overrides, brand] = await Promise.all([getEmailTemplateOverrides(), getEmailBrand()]);
+
+  return renderEmailTemplate({
+    id,
+    variables,
+    ctaUrl: new URL(EMAIL_TEMPLATES[id].ctaPath, getAppUrl()).toString(),
+    fields: overrides[id],
+    brand,
+  });
+}
+
+export function createOrderConfirmationEmail(input: {
+  customerName: string;
+  orderNumber: string;
+  planNames: string[];
+  total: number;
+  currency: string;
+  startDate: Date;
 }) {
-  const button = cta
-    ? `<p style="margin:28px 0 8px"><a href="${escapeHtml(cta.url)}" style="display:inline-block;border-radius:999px;background:#d95d39;color:#fffaf2;padding:12px 20px;font-weight:700;text-decoration:none">${escapeHtml(cta.label)}</a></p>`
-    : "";
-
-  return `<!doctype html>
-<html lang="en">
-  <body style="margin:0;background:#fff7ed;color:#29231e;font-family:Arial,sans-serif;line-height:1.55">
-    <main style="max-width:620px;margin:0 auto;padding:28px 16px">
-      <section style="overflow:hidden;border:1px solid #ead8c6;border-radius:20px;background:#fffdf9">
-        <header style="padding:24px 28px;background:#2f5d50;color:#fffaf2">
-          <p style="margin:0 0 4px;font-size:14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">Curry Kitchen</p>
-          <h1 style="margin:0;font-family:Georgia,serif;font-size:28px;line-height:1.2">${escapeHtml(heading)}</h1>
-        </header>
-        <div style="padding:28px">
-          <p style="margin-top:0">${escapeHtml(intro)}</p>
-          ${content}
-          ${button}
-        </div>
-      </section>
-      <p style="margin:18px 8px 0;color:#6a625b;font-size:12px">You received this service update from Curry Kitchen.</p>
-    </main>
-  </body>
-</html>`;
+  return render("orderConfirmation", {
+    customerName: input.customerName,
+    orderNumber: input.orderNumber,
+    plans: input.planNames.join(", "),
+    total: formatMoney(input.total, input.currency),
+    startDate: formatDate(input.startDate),
+  });
 }
 
-function planList(planNames: string[]) {
-  return `<ul style="margin:16px 0;padding-left:20px">${planNames
-    .map((plan) => `<li>${escapeHtml(plan)}</li>`)
-    .join("")}</ul>`;
+export function createAdminOrderAlertEmail(input: {
+  customerName: string;
+  customerEmail: string;
+  orderNumber: string;
+  planNames: string[];
+  total: number;
+  currency: string;
+}) {
+  return render("adminOrderAlert", {
+    customerName: input.customerName,
+    customerEmail: input.customerEmail,
+    orderNumber: input.orderNumber,
+    plans: input.planNames.join(", "),
+    total: formatMoney(input.total, input.currency),
+  });
 }
 
-export function createOrderConfirmationEmail(input: OrderConfirmationInput): TransactionalEmail {
-  const total = formatMoney(input.total, input.currency);
-  const startDate = formatDate(input.startDate);
-  const plans = input.planNames.join(", ");
-  const orderUrl = route("/dashboard/orders");
-
-  return {
-    subject: `Order confirmed — ${input.orderNumber}`,
-    text: `Hi ${input.customerName},\n\nYour Curry Kitchen order ${input.orderNumber} is confirmed.\nPlans: ${plans}\nTotal paid: ${total}\nFirst delivery: ${startDate}\n\nView your orders: ${orderUrl}`,
-    html: emailLayout({
-      heading: "Your order is confirmed",
-      intro: `Hi ${input.customerName}, thank you for choosing Curry Kitchen. Your payment has been received.`,
-      content: `<p><strong>Order:</strong> ${escapeHtml(input.orderNumber)}<br><strong>Total paid:</strong> ${escapeHtml(total)}<br><strong>First delivery:</strong> ${escapeHtml(startDate)}</p><p style="margin-bottom:0"><strong>Your plan${input.planNames.length === 1 ? "" : "s"}</strong></p>${planList(input.planNames)}`,
-      cta: { label: "View your orders", url: orderUrl },
-    }),
-  };
-}
-
-export function createAdminOrderAlertEmail(input: AdminOrderAlertInput): TransactionalEmail {
-  const total = formatMoney(input.total, input.currency);
-  const plans = input.planNames.join(", ");
-  const dashboardUrl = input.dashboardUrl ?? route("/admin/orders");
-
-  return {
-    subject: `New paid order — ${input.orderNumber}`,
-    text: `New paid Curry Kitchen order ${input.orderNumber}.\nCustomer: ${input.customerName} (${input.customerEmail})\nPlans: ${plans}\nTotal: ${total}\n\nOpen admin orders: ${dashboardUrl}`,
-    html: emailLayout({
-      heading: "A new order is paid",
-      intro: `${input.customerName} has completed checkout.`,
-      content: `<p><strong>Order:</strong> ${escapeHtml(input.orderNumber)}<br><strong>Customer:</strong> ${escapeHtml(input.customerName)}<br><strong>Email:</strong> ${escapeHtml(input.customerEmail)}<br><strong>Total:</strong> ${escapeHtml(total)}</p><p style="margin-bottom:0"><strong>Plans</strong></p>${planList(input.planNames)}`,
-      cta: { label: "Open admin orders", url: dashboardUrl },
-    }),
-  };
-}
-
-export function createRenewalReminderEmail(
-  input: SubscriptionLifecycleInput,
-): TransactionalEmail {
-  const endDate = formatDate(input.endDate);
-  const renewUrl = input.renewUrl ?? route("/packages");
-
-  return {
-    subject: "Your Curry Kitchen renewal reminder",
-    text: `Hi ${input.customerName},\n\nYour ${input.planName} plan ends on ${endDate}. Renew now to keep your tiffin deliveries going.\n\nRenew your plan: ${renewUrl}`,
-    html: emailLayout({
-      heading: "Time to renew your plan",
-      intro: `Hi ${input.customerName}, your ${input.planName} plan ends on ${endDate}.`,
-      content: "<p>Renew now to keep your tiffin deliveries going without a break.</p>",
-      cta: { label: "Renew your plan", url: renewUrl },
-    }),
-  };
-}
-
-export function createSubscriptionEndedEmail(
-  input: SubscriptionLifecycleInput,
-): TransactionalEmail {
-  const endDate = formatDate(input.endDate);
-  const renewUrl = input.renewUrl ?? route("/packages");
-
-  return {
-    subject: "Your Curry Kitchen plan has ended",
-    text: `Hi ${input.customerName},\n\nYour ${input.planName} plan ended on ${endDate}. Renew whenever you are ready for more home-style meals.\n\nRenew your plan: ${renewUrl}`,
-    html: emailLayout({
-      heading: "Your plan has ended",
-      intro: `Hi ${input.customerName}, your ${input.planName} plan ended on ${endDate}.`,
-      content: "<p>Whenever you are ready for more home-style meals, choose a new plan and we will take care of the rest.</p>",
-      cta: { label: "Renew your plan", url: renewUrl },
-    }),
-  };
-}
-
-type AdminNewSignupInput = {
-  name: string;
-  email: string;
-  phone?: string;
+type SubscriptionLifecycleInput = {
+  customerName: string;
+  planName: string;
+  endDate: Date;
 };
+
+export function createRenewalReminderEmail(input: SubscriptionLifecycleInput) {
+  return render("renewalReminder", {
+    customerName: input.customerName,
+    planName: input.planName,
+    endDate: formatDate(input.endDate),
+  });
+}
+
+export function createSubscriptionEndedEmail(input: SubscriptionLifecycleInput) {
+  return render("subscriptionEnded", {
+    customerName: input.customerName,
+    planName: input.planName,
+    endDate: formatDate(input.endDate),
+  });
+}
+
+export function createAdminNewSignupEmail(input: { name: string; email: string; phone?: string }) {
+  return render("adminNewSignup", {
+    name: input.name,
+    email: input.email,
+    phone: input.phone ?? "",
+  });
+}
 
 type ZelleOrderReceivedInput = {
   customerName: string;
@@ -194,9 +139,26 @@ type ZelleOrderReceivedInput = {
   currency: string;
 };
 
-type AdminZelleOrderAlertInput = ZelleOrderReceivedInput & {
-  customerEmail: string;
-};
+export function createZelleOrderReceivedEmail(input: ZelleOrderReceivedInput) {
+  return render("zelleOrderReceived", {
+    customerName: input.customerName,
+    orderNumber: input.orderNumber,
+    plans: input.planNames.join(", "),
+    total: formatMoney(input.total, input.currency),
+  });
+}
+
+export function createAdminZelleOrderAlertEmail(
+  input: ZelleOrderReceivedInput & { customerEmail: string },
+) {
+  return render("adminZelleOrderAlert", {
+    customerName: input.customerName,
+    customerEmail: input.customerEmail,
+    orderNumber: input.orderNumber,
+    plans: input.planNames.join(", "),
+    total: formatMoney(input.total, input.currency),
+  });
+}
 
 type VerificationDecisionInput = {
   customerName: string;
@@ -204,150 +166,48 @@ type VerificationDecisionInput = {
   adminNote?: string;
 };
 
-function verificationLabel(type: VerificationDecisionInput["verificationType"]) {
-  return type === "MILITARY" ? "military" : "student";
-}
-
-export function createAdminNewSignupEmail(input: AdminNewSignupInput): TransactionalEmail {
-  const customersUrl = route("/admin/customers");
-  const phoneLine = input.phone ? `\nPhone: ${input.phone}` : "";
-  const phoneHtml = input.phone ? `<br><strong>Phone:</strong> ${escapeHtml(input.phone)}` : "";
-
+function verificationVariables(input: VerificationDecisionInput) {
   return {
-    subject: `New customer signup — ${input.name}`,
-    text: `A new customer just created a Curry Kitchen account.\n\nName: ${input.name}\nEmail: ${input.email}${phoneLine}\n\nOpen admin customers: ${customersUrl}`,
-    html: emailLayout({
-      heading: "A new customer signed up",
-      intro: `${input.name} just created an account.`,
-      content: `<p><strong>Name:</strong> ${escapeHtml(input.name)}<br><strong>Email:</strong> ${escapeHtml(input.email)}${phoneHtml}</p>`,
-      cta: { label: "Open admin customers", url: customersUrl },
-    }),
+    customerName: input.customerName,
+    verificationType: input.verificationType === "MILITARY" ? "military" : "student",
+    adminNote: input.adminNote ?? "",
   };
 }
 
-export function createZelleOrderReceivedEmail(input: ZelleOrderReceivedInput): TransactionalEmail {
-  const total = formatMoney(input.total, input.currency);
-  const plans = input.planNames.join(", ");
-  const ordersUrl = route("/dashboard/orders");
-
-  return {
-    subject: `Order received — complete your Zelle payment for ${input.orderNumber}`,
-    text: `Hi ${input.customerName},\n\nWe received your Curry Kitchen order ${input.orderNumber}.\nPlans: ${plans}\nAmount due: ${total}\n\nSend your Zelle transfer for ${total} to activate your plan. We will confirm your payment and start your deliveries.\n\nView your orders: ${ordersUrl}`,
-    html: emailLayout({
-      heading: "We received your order",
-      intro: `Hi ${input.customerName}, your order is saved and waiting on your Zelle transfer.`,
-      content: `<p><strong>Order:</strong> ${escapeHtml(input.orderNumber)}<br><strong>Amount due:</strong> ${escapeHtml(total)}</p><p>Send your Zelle transfer for <strong>${escapeHtml(total)}</strong> to activate your plan. We confirm payments during business hours and your deliveries start right after.</p><p style="margin-bottom:0"><strong>Your plan${input.planNames.length === 1 ? "" : "s"}</strong></p>${planList(input.planNames)}`,
-      cta: { label: "View your orders", url: ordersUrl },
-    }),
-  };
+export function createVerificationApprovedEmail(input: VerificationDecisionInput) {
+  return render("verificationApproved", verificationVariables(input));
 }
 
-export function createAdminZelleOrderAlertEmail(
-  input: AdminZelleOrderAlertInput,
-): TransactionalEmail {
-  const total = formatMoney(input.total, input.currency);
-  const plans = input.planNames.join(", ");
-  const paymentsUrl = route("/admin/payments");
-
-  return {
-    subject: `Zelle order awaiting payment — ${input.orderNumber}`,
-    text: `A Zelle order is waiting for payment confirmation.\n\nOrder: ${input.orderNumber}\nCustomer: ${input.customerName} (${input.customerEmail})\nPlans: ${plans}\nAmount: ${total}\n\nMark it paid once the transfer arrives: ${paymentsUrl}`,
-    html: emailLayout({
-      heading: "Zelle order awaiting payment",
-      intro: `${input.customerName} placed an order and will pay by Zelle.`,
-      content: `<p><strong>Order:</strong> ${escapeHtml(input.orderNumber)}<br><strong>Customer:</strong> ${escapeHtml(input.customerName)}<br><strong>Email:</strong> ${escapeHtml(input.customerEmail)}<br><strong>Amount:</strong> ${escapeHtml(total)}</p><p>Once the transfer arrives, mark the payment as paid to activate the plan.</p><p style="margin-bottom:0"><strong>Plans</strong></p>${planList(input.planNames)}`,
-      cta: { label: "Open admin payments", url: paymentsUrl },
-    }),
-  };
+export function createVerificationRejectedEmail(input: VerificationDecisionInput) {
+  return render("verificationRejected", verificationVariables(input));
 }
 
-export function createVerificationApprovedEmail(
-  input: VerificationDecisionInput,
-): TransactionalEmail {
-  const label = verificationLabel(input.verificationType);
-  const ordersUrl = route("/dashboard/orders");
-
-  return {
-    subject: "You're verified — your Curry Kitchen plan is active",
-    text: `Hi ${input.customerName},\n\nYour ${label} verification is approved and your plan is now active. Your delivery schedule is ready in your dashboard.\n\nView your orders: ${ordersUrl}`,
-    html: emailLayout({
-      heading: "Your verification is approved",
-      intro: `Hi ${input.customerName}, your ${label} verification is approved and your plan is now active.`,
-      content: "<p>Your delivery schedule is ready in your dashboard. We look forward to serving you.</p>",
-      cta: { label: "View your orders", url: ordersUrl },
-    }),
-  };
-}
-
-export function createVerificationRejectedEmail(
-  input: VerificationDecisionInput,
-): TransactionalEmail {
-  const label = verificationLabel(input.verificationType);
-  const ordersUrl = route("/dashboard/orders");
-  const noteText = input.adminNote ? `\nReason: ${input.adminNote}` : "";
-  const noteHtml = input.adminNote
-    ? `<p><strong>Reason:</strong> ${escapeHtml(input.adminNote)}</p>`
-    : "";
-
-  return {
-    subject: "We could not verify your Curry Kitchen plan",
-    text: `Hi ${input.customerName},\n\nWe could not approve your ${label} verification.${noteText}\n\nPlease reply to this email or upload a clearer ID so we can activate your plan.\n\nView your orders: ${ordersUrl}`,
-    html: emailLayout({
-      heading: "We could not verify your ID",
-      intro: `Hi ${input.customerName}, we could not approve your ${label} verification.`,
-      content: `${noteHtml}<p>Please reply to this email or upload a clearer ID so we can activate your plan.</p>`,
-      cta: { label: "View your orders", url: ordersUrl },
-    }),
-  };
-}
-
-type PauseExpiryReminderInput = {
+export function createPauseExpiryReminderEmail(input: {
   customerName: string;
   planName: string;
   remainingDays: number;
   resumeBy: Date;
-};
-
-export function createPauseExpiryReminderEmail(
-  input: PauseExpiryReminderInput,
-): TransactionalEmail {
-  const resumeBy = formatDate(input.resumeBy);
-  const dashboardUrl = route("/dashboard");
-  const daysLabel = `${input.remainingDays} delivery ${input.remainingDays === 1 ? "day" : "days"}`;
-
-  return {
-    subject: `Your ${input.planName} pause ends ${resumeBy}`,
-    text: `Hi ${input.customerName},\n\nYour ${input.planName} is still paused with ${daysLabel} saved.\nResume by ${resumeBy} to use them — after that the package ends.\n\nResume from your dashboard: ${dashboardUrl}`,
-    html: emailLayout({
-      heading: "Your saved delivery days are waiting",
-      intro: `Hi ${input.customerName}, your ${input.planName} is still paused with ${daysLabel} saved.`,
-      content: `<p>Resume by <strong>${escapeHtml(resumeBy)}</strong> to use them — after that the package ends.</p>`,
-      cta: { label: "Resume my package", url: dashboardUrl },
-    }),
-  };
+}) {
+  return render("pauseExpiryReminder", {
+    customerName: input.customerName,
+    planName: input.planName,
+    remainingDays: `${input.remainingDays} delivery ${input.remainingDays === 1 ? "day" : "days"}`,
+    resumeBy: formatDate(input.resumeBy),
+  });
 }
 
-type OrderCancelledInput = {
+export function createOrderCancelledEmail(input: {
   customerName: string;
   orderNumber: string;
   reason?: string;
-};
+}) {
+  return render("orderCancelled", {
+    customerName: input.customerName,
+    orderNumber: input.orderNumber,
+    reason: input.reason ?? "",
+  });
+}
 
-export function createOrderCancelledEmail(input: OrderCancelledInput): TransactionalEmail {
-  const ordersUrl = route("/dashboard/orders");
-  const reasonText = input.reason ? `\nReason: ${input.reason}` : "";
-  const reasonHtml = input.reason
-    ? `<p><strong>Reason:</strong> ${escapeHtml(input.reason)}</p>`
-    : "";
-
-  return {
-    subject: `Your Curry Kitchen order ${input.orderNumber} was cancelled`,
-    text: `Hi ${input.customerName},\n\nYour order ${input.orderNumber} has been cancelled.${reasonText}\n\nIf you already paid, we will arrange your refund. Reply to this email with any questions.\n\nView your orders: ${ordersUrl}`,
-    html: emailLayout({
-      heading: "Your order was cancelled",
-      intro: `Hi ${input.customerName}, your order ${escapeHtml(input.orderNumber)} has been cancelled.`,
-      content: `${reasonHtml}<p>If you already paid, we will arrange your refund. Reply to this email with any questions.</p>`,
-      cta: { label: "View your orders", url: ordersUrl },
-    }),
-  };
+export function createContactMessageEmail(input: { name: string; email: string; message: string }) {
+  return render("contactMessage", input);
 }

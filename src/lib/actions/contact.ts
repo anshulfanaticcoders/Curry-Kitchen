@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { getAdminAlertEmail, sendTransactionalEmail } from "@/lib/email/send";
+import { createContactMessageEmail } from "@/lib/email/templates";
 
 const contactSchema = z.object({
   name: z.string().trim().min(2, "Please share your name."),
@@ -11,20 +12,6 @@ const contactSchema = z.object({
   // Honeypot: real visitors never fill this hidden field.
   company: z.string().max(0).optional().or(z.literal("")),
 });
-
-function escapeHtml(value: string) {
-  return value.replace(/[&<>'"]/g, (character) => {
-    const entities: Record<string, string> = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      "'": "&#39;",
-      '"': "&quot;",
-    };
-
-    return entities[character];
-  });
-}
 
 export async function submitContactMessageAction(
   formData: FormData,
@@ -45,11 +32,7 @@ export async function submitContactMessageAction(
 
   const { sent } = await sendTransactionalEmail({
     to: adminEmail,
-    email: {
-      subject: `Website message from ${name}`,
-      text: `Name: ${name}\nEmail: ${email}\n\n${message}`,
-      html: `<p><strong>Name:</strong> ${escapeHtml(name)}</p><p><strong>Email:</strong> ${escapeHtml(email)}</p><p>${escapeHtml(message).replace(/\n/g, "<br />")}</p>`,
-    },
+    email: await createContactMessageEmail({ name, email, message }),
   });
 
   if (!sent) {

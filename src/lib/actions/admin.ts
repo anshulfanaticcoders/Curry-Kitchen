@@ -9,6 +9,12 @@ import { getBusinessRules } from "@/lib/business-rules";
 import { db } from "@/lib/db";
 import { sendVerificationDecisionEmail } from "@/lib/email/notifications";
 import { sendTransactionalEmail } from "@/lib/email/send";
+import {
+  EMAIL_TEMPLATES_SETTING_KEY,
+  type EmailTemplateOverrides,
+  emailTemplateOverridesFromValue,
+} from "@/lib/email/template-overrides";
+import { isEmailTemplateId } from "@/lib/email/template-registry";
 import { createOrderCancelledEmail } from "@/lib/email/templates";
 import { calculateDeliveryDates, nextEligiblePackageStartDate } from "@/lib/package-schedule";
 import { isPageBackgroundSlot } from "@/lib/page-backgrounds";
@@ -1115,7 +1121,7 @@ export async function cancelOrderAction(orderId: string, reason?: string) {
     if (customerEmail) {
       await sendTransactionalEmail({
         to: customerEmail,
-        email: createOrderCancelledEmail({
+        email: await createOrderCancelledEmail({
           customerName: order.customer?.name ?? order.guestName ?? "there",
           orderNumber: order.orderNumber,
           reason: trimmedReason,
@@ -1354,5 +1360,74 @@ export async function archiveReviewAction(reviewId: string) {
     return ok({ id: review.id }, "Review removed from public site.");
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Review could not be removed.");
+  }
+}
+
+const emailTemplateSchema = z.object({
+  templateId: z.string().refine(isEmailTemplateId, "Unknown email template."),
+  subject: z.string().trim().min(1, "Subject is required.").max(200),
+  heading: z.string().trim().max(200),
+  intro: z.string().trim().max(1000),
+  body: z.string().trim().max(5000),
+  ctaLabel: z.string().trim().max(80),
+});
+
+async function writeEmailTemplateOverrides(
+  adminId: string,
+  update: (current: EmailTemplateOverrides) => EmailTemplateOverrides,
+) {
+  const record = await db.setting.findUnique({ where: { key: EMAIL_TEMPLATES_SETTING_KEY } });
+  const value = update(emailTemplateOverridesFromValue(record?.value));
+
+  await db.setting.upsert({
+    where: { key: EMAIL_TEMPLATES_SETTING_KEY },
+    create: { key: EMAIL_TEMPLATES_SETTING_KEY, value },
+    update: { value },
+  });
+  await db.auditLog.create({
+    data: {
+      userId: adminId,
+      action: "email_templates.updated",
+      entity: "setting",
+      entityId: EMAIL_TEMPLATES_SETTING_KEY,
+    },
+  });
+  revalidatePath("/admin/emails");
+}
+
+export async function saveEmailTemplateAction(formData: FormData) {
+  try {
+    const admin = await requireAdmin();
+    const parsed = emailTemplateSchema.safeParse(formObject(formData));
+
+    if (!parsed.success) {
+      return fail("Please check the template fields.", parsed.error.flatten().fieldErrors);
+    }
+
+    const { templateId, ...fields } = parsed.data;
+    await writeEmailTemplateOverrides(admin.id, (current) => ({ ...current, [templateId]: fields }));
+    return ok(fields, "Email template saved.");
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "The email template could not be saved.");
+  }
+}
+
+export async function resetEmailTemplateAction(formData: FormData) {
+  try {
+    const admin = await requireAdmin();
+    const templateId = formData.get("templateId");
+
+    if (!isEmailTemplateId(templateId)) {
+      return fail("Unknown email template.");
+    }
+
+    await writeEmailTemplateOverrides(admin.id, (current) => {
+      const next = { ...current };
+      delete next[templateId];
+      return next;
+    });
+    return ok(undefined, "Template restored to the built-in copy.");
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "The email template could not be reset.");
   }
 }
