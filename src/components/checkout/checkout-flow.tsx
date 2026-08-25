@@ -137,6 +137,7 @@ export function CheckoutFlow({
   initialItems,
   customerProfile,
   taxRate,
+  zelleEmail,
 }: {
   plans: PackagePlan[];
   customItems: CustomPackageItemOption[];
@@ -147,6 +148,7 @@ export function CheckoutFlow({
   initialItems: PackageCartItemInput[];
   customerProfile: CustomerProfileDetails;
   taxRate: number;
+  zelleEmail: string;
 }) {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -1016,7 +1018,7 @@ export function CheckoutFlow({
                     <li>Place the order — your packages are reserved with payment pending.</li>
                     <li>
                       Send the order total via Zelle to{" "}
-                      <span className="font-black text-masala">info@currykitcheninc.com</span> with your
+                      <span className="font-black text-masala">{zelleEmail}</span> with your
                       order number in the memo.
                     </li>
                     <li>Our team confirms the transfer and activates your deliveries.</li>

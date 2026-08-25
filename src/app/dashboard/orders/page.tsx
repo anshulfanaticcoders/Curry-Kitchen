@@ -2,6 +2,7 @@ import { RotateCcw, Wallet } from "lucide-react";
 import { Card, CardHeader, PageHeader, StatCard, Table, Td, Th } from "@/components/dashboard/primitives";
 import { ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import { getAdminSettings } from "@/lib/server/admin";
 import { getCustomerOrders } from "@/lib/server/catalog";
 import { formatCurrency } from "@/lib/utils";
 
@@ -14,7 +15,7 @@ function statusTone(status: string) {
 export const dynamic = "force-dynamic";
 
 export default async function CustomerOrdersPage() {
-  const recentOrders = await getCustomerOrders();
+  const [recentOrders, settings] = await Promise.all([getCustomerOrders(), getAdminSettings()]);
   const accepted = recentOrders.filter((order) => order.status === "Accepted").length;
   const spent = recentOrders.reduce((total, order) => total + order.total, 0);
   const zelleDue = recentOrders.filter((order) => order.awaitingZelle);
@@ -47,7 +48,7 @@ export default async function CustomerOrdersPage() {
                     <strong className="text-ink">{order.id}</strong>
                   </span>
                 ))}{" "}
-                via Zelle to <strong className="text-masala">info@currykitcheninc.com</strong>. Put the order number in
+                via Zelle to <strong className="text-masala">{settings.supportEmail}</strong>. Put the order number in
                 the memo. We confirm transfers during business hours and email you as soon as your plan is active — the
                 sooner you send it, the sooner your first tiffin arrives.
               </p>

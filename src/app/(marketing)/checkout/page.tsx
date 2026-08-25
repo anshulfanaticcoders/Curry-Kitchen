@@ -97,6 +97,7 @@ export default async function CheckoutPage({
         initialItems={initialItems}
         customerProfile={customerProfile}
         taxRate={adminSettings.taxRate}
+        zelleEmail={adminSettings.supportEmail}
       />
     </main>
   );
