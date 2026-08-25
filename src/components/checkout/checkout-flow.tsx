@@ -483,6 +483,9 @@ export function CheckoutFlow({
         throw new Error(payload.error ?? "Checkout could not be created.");
       }
 
+      // The order now exists server-side; the cart has done its job.
+      replaceCart([]);
+
       if (paymentMethod === "ZELLE") {
         toast.success("Order placed", {
           description:
