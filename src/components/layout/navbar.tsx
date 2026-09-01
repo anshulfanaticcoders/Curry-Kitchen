@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import type { CustomPackageConfig } from "@/lib/cart-lines";
 import type { CustomPackageItemOption } from "@/lib/custom-package";
 import type { PackagePlan } from "@/lib/types";
+import type { PackageScheduleAvailability } from "@/lib/package-schedule";
 
 const links = [
   { href: "/", label: "Home" },
@@ -50,14 +51,23 @@ export function Navbar({
   plans,
   customItems,
   customConfig,
+  availability,
 }: {
   plans: PackagePlan[];
   customItems: CustomPackageItemOption[];
   customConfig: CustomPackageConfig;
+  availability: PackageScheduleAvailability;
 }) {
   const pathname = usePathname();
   const { data: session, status } = useSession();
-  const { items: cartItems, openCart, pulseKey, registerPlans, registerCustomItems } = usePackageCart();
+  const {
+    items: cartItems,
+    openCart,
+    pulseKey,
+    registerPlans,
+    registerCustomItems,
+    registerAvailability,
+  } = usePackageCart();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -83,6 +93,10 @@ export function Navbar({
   useEffect(() => {
     registerCustomItems(customItems, customConfig);
   }, [customConfig, customItems, registerCustomItems]);
+
+  useEffect(() => {
+    registerAvailability(availability);
+  }, [availability, registerAvailability]);
 
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {

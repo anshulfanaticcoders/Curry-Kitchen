@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, ChevronLeft, ChevronRight, Pause, X } from "lucide-react";
+import { CalendarDays, CalendarOff, ChevronLeft, ChevronRight, Pause, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/dashboard/primitives";
 import type { CalendarEvent, CalendarEventType, CustomerCalendarData } from "@/lib/types";
@@ -11,6 +11,7 @@ const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const EVENT_CHIPS: Record<CalendarEventType, string> = {
   delivery: "bg-rose text-masala",
   pause: "bg-amber-50 text-amber-700",
+  holiday: "bg-rose text-masala",
   "package-start": "bg-basil-soft text-basil",
   "package-end": "bg-chili-soft text-chili",
 };
@@ -136,6 +137,7 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
             const isStart = events.some((event) => event.type === "package-start");
             const isEnd = events.some((event) => event.type === "package-end");
             const hasPause = events.some((event) => event.type === "pause");
+            const hasHoliday = events.some((event) => event.type === "holiday");
             const hasDelivery = events.some((event) => event.type === "delivery");
 
             // Fill colors carry meaning: green start, red end, saffron delivery,
@@ -144,7 +146,9 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
               ? "border-basil bg-basil text-white"
               : isEnd
                 ? "border-chili bg-chili text-white"
-                : hasPause
+                : hasHoliday
+                  ? "border-masala/30 bg-rose text-masala"
+                  : hasPause
                   ? "border-amber-200 bg-amber-100 text-amber-800"
                   : hasDelivery
                     ? "border-saffron bg-saffron text-white"
@@ -165,11 +169,14 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
                 )}
               >
                 {cell.date.getDate()}
-                {isOffDay && !isStart && !isEnd && !hasDelivery && !hasPause ? (
+                {isOffDay && !isStart && !isEnd && !hasDelivery && !hasPause && !hasHoliday ? (
                   <X size={11} className="absolute bottom-1.5 text-chili/50" strokeWidth={3} />
                 ) : null}
                 {hasPause ? (
                   <Pause size={11} className="absolute bottom-1.5 text-amber-700" strokeWidth={3} />
+                ) : null}
+                {hasHoliday ? (
+                  <CalendarOff size={11} className="absolute bottom-1.5 text-masala" strokeWidth={3} />
                 ) : null}
               </button>
             );
@@ -182,6 +189,7 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
             { swatch: "bg-chili", label: "Package ends" },
             { swatch: "bg-saffron", label: "Delivery day" },
             { swatch: "bg-amber-300", label: "Paused" },
+            { swatch: "bg-rose border border-masala/30", label: "Kitchen holiday" },
             { swatch: "bg-chili-soft border border-chili/30", label: "Off day (no delivery)" },
           ].map((item) => (
             <span key={item.label} className="inline-flex items-center gap-2 text-xs font-bold text-ink/55">

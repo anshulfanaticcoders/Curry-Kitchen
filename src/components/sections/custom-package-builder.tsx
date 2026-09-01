@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { CalendarDays, Minus, Plus, ShoppingBag } from "lucide-react";
 import { usePackageCart } from "@/components/providers/package-cart-provider";
 import { Button } from "@/components/ui/button";
+import { HolidayAvailabilityNotice } from "@/components/schedule/holiday-availability-notice";
 import type { CustomPackageConfig } from "@/lib/cart-lines";
 import {
   belowMinimumItems,
@@ -18,7 +19,7 @@ import {
   makePackageCartLineId,
   type PackageCartItemInput,
 } from "@/lib/package-cart";
-import { nextEligiblePackageStartInput, packageStartDateIssue } from "@/lib/package-schedule";
+import { packageStartDateIssue, type PackageScheduleAvailability } from "@/lib/package-schedule";
 import { formatCurrency } from "@/lib/utils";
 
 function initialRequiredQuantities(items: CustomPackageItemOption[]) {
@@ -39,10 +40,12 @@ export function CustomPackageBuilder({
   items,
   config,
   editLineId,
+  availability,
 }: {
   items: CustomPackageItemOption[];
   config: CustomPackageConfig;
   editLineId?: string;
+  availability: PackageScheduleAvailability;
 }) {
   const router = useRouter();
   const { items: cartItems, hydrated, registerCustomItems, addItem, updateItem, openCart } =
@@ -50,7 +53,7 @@ export function CustomPackageBuilder({
   const [quantities, setQuantities] = useState<Record<string, number>>(() =>
     initialRequiredQuantities(items),
   );
-  const [startDate, setStartDate] = useState(nextEligiblePackageStartInput());
+  const [startDate, setStartDate] = useState(availability.earliestStartDate);
   const [loadedEdit, setLoadedEdit] = useState(false);
 
   useEffect(() => {
@@ -75,7 +78,12 @@ export function CustomPackageBuilder({
   const deliveryDayCount = customDeliveryDayCount(config.customMonthlyDays);
   const pricing = priceCustomPackage(selections, items, deliveryDayCount);
   const minimumFailures = belowMinimumItems(selections, items);
-  const startDateError = packageStartDateIssue(startDate);
+  const startDateError = packageStartDateIssue(
+    startDate,
+    availability.deliveryWeekdays,
+    availability.holidays,
+    availability.earliestStartDate,
+  );
 
   function setQuantity(itemId: string, value: number) {
     setQuantities((current) => ({
@@ -262,6 +270,7 @@ export function CustomPackageBuilder({
 
         <div className="rounded-lg border border-ink/10 bg-ink p-6 text-ivory shadow-soft lg:sticky lg:top-24 lg:p-8">
           <h2 className="font-display text-2xl font-black">Monthly custom package</h2>
+          <HolidayAvailabilityNotice availability={availability} tone="dark" className="mt-5" />
           <div className="mt-5 rounded-lg border border-white/15 bg-white/10 p-4">
             <p className="font-display text-lg font-black">{deliveryDayCount} delivery days</p>
             <p className="mt-1 text-xs font-bold text-ivory/60">
@@ -280,7 +289,7 @@ export function CustomPackageBuilder({
               id="custom-start-date"
               type="date"
               value={startDate}
-              min={nextEligiblePackageStartInput()}
+              min={availability.earliestStartDate}
               onChange={(event) => setStartDate(event.target.value)}
               className="mt-2 h-11 w-full rounded-button border border-white/15 bg-white/10 px-3 text-sm font-extrabold text-ivory"
             />

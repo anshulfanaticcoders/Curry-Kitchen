@@ -29,7 +29,7 @@ type PaidOrderForEmail = {
   total: DecimalLike;
   guestName: string | null;
   guestEmail: string | null;
-  customer: { name: string; email: string } | null;
+  customer: { name: string; email: string; emailReceipts?: boolean } | null;
   customerPackages: Array<{ startDate: Date | null; package: { name: string } }>;
 };
 
@@ -68,7 +68,7 @@ export async function sendOrderPaidEmails(order: PaidOrderForEmail) {
       .sort((a, b) => a.getTime() - b.getTime());
     const total = toNumber(order.total);
 
-    if (settings.orderConfirmationEmails && customerEmail) {
+    if (settings.orderConfirmationEmails && customerEmail && order.customer?.emailReceipts !== false) {
       await sendTransactionalEmail({
         to: customerEmail,
         email: await createOrderConfirmationEmail({
@@ -108,6 +108,7 @@ export async function sendZelleOrderEmails({
   customerEmail,
   planNames,
   total,
+  sendCustomerReceipt = true,
 }: {
   orderId: string;
   orderNumber: string;
@@ -115,21 +116,24 @@ export async function sendZelleOrderEmails({
   customerEmail: string;
   planNames: string[];
   total: number;
+  sendCustomerReceipt?: boolean;
 }) {
   try {
     const settings = await getAdminSettings();
 
-    await sendTransactionalEmail({
-      to: customerEmail,
-      email: await createZelleOrderReceivedEmail({
-        customerName,
-        orderNumber,
-        planNames,
-        total,
-        currency: settings.currency,
-      }),
-      idempotencyKey: `zelle-received/${orderId}`,
-    });
+    if (sendCustomerReceipt) {
+      await sendTransactionalEmail({
+        to: customerEmail,
+        email: await createZelleOrderReceivedEmail({
+          customerName,
+          orderNumber,
+          planNames,
+          total,
+          currency: settings.currency,
+        }),
+        idempotencyKey: `zelle-received/${orderId}`,
+      });
+    }
 
     const adminEmail = await getAdminAlertEmail();
     await sendTransactionalEmail({

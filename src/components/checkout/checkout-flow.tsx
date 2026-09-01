@@ -26,10 +26,12 @@ import { toast } from "sonner";
 import { usePackageCart } from "@/components/providers/package-cart-provider";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import { HolidayAvailabilityNotice } from "@/components/schedule/holiday-availability-notice";
 import { type PackageCartItemInput } from "@/lib/package-cart";
 import { cartLineEditHref, resolveCartLine } from "@/lib/cart-lines";
 import type { CustomPackageItemOption } from "@/lib/custom-package";
-import { packageStartDateIssue } from "@/lib/package-schedule";
+import { calculateOrderTotals } from "@/lib/order-totals";
+import { packageStartDateIssue, type PackageScheduleAvailability } from "@/lib/package-schedule";
 import type { CustomerProfileDetails, PackagePlan } from "@/lib/types";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -138,6 +140,7 @@ export function CheckoutFlow({
   customerProfile,
   taxRate,
   zelleEmail,
+  availability,
 }: {
   plans: PackagePlan[];
   customItems: CustomPackageItemOption[];
@@ -149,6 +152,7 @@ export function CheckoutFlow({
   customerProfile: CustomerProfileDetails;
   taxRate: number;
   zelleEmail: string;
+  availability: PackageScheduleAvailability;
 }) {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -157,6 +161,7 @@ export function CheckoutFlow({
     hydrated: cartHydrated,
     registerPlans,
     registerCustomItems,
+    registerAvailability,
     replaceCart,
     removeItem,
   } = usePackageCart();
@@ -170,7 +175,7 @@ export function CheckoutFlow({
   const [customer, setCustomer] = useState(() => customerFormValues(customerProfile));
   const [address, setAddress] = useState({
     line1: customerProfile.line1,
-    line2: "",
+    line2: customerProfile.line2,
     city: customerProfile.city,
     state: customerProfile.state || "CA",
     postalCode: customerProfile.postalCode,
@@ -207,6 +212,10 @@ export function CheckoutFlow({
   }, [customConfig, customItems, registerCustomItems]);
 
   useEffect(() => {
+    registerAvailability(availability);
+  }, [availability, registerAvailability]);
+
+  useEffect(() => {
     if (!cartHydrated || initialCartApplied.current) return;
 
     // Only import a legacy ?cart= URL snapshot into an empty stored cart —
@@ -228,9 +237,16 @@ export function CheckoutFlow({
 
         if (!line.valid) return [];
 
-        return [{ ...line, valid: !packageStartDateIssue(item.startDate) }];
+        const startDateError = packageStartDateIssue(
+          item.startDate,
+          availability.deliveryWeekdays,
+          availability.holidays,
+          availability.earliestStartDate,
+        );
+
+        return [{ ...line, valid: !startDateError, startDateError }];
       }),
-    [cartItems, customConfig, customItems, plans],
+    [availability, cartItems, customConfig, customItems, plans],
   );
 
   const subtotal = resolvedItems.reduce((total, line) => total + line.subtotal, 0);
@@ -245,9 +261,13 @@ export function CheckoutFlow({
         ),
   )
     : 0;
-  const taxAmount = (subtotal - discountAmount) * taxRate;
   const deliveryFee = deliveryChargeEnabled ? deliveryCharge : 0;
-  const total = subtotal - discountAmount + taxAmount + deliveryFee;
+  const { taxAmount, total } = calculateOrderTotals({
+    subtotal,
+    discountAmount,
+    deliveryFee,
+    taxRate,
+  });
   const requiresStudent = resolvedItems.some((line) => line.isStudent);
   const deliveryErrors = {
     firstName: customer.firstName.trim() ? "" : "Enter your first name.",
@@ -617,9 +637,11 @@ export function CheckoutFlow({
               <ButtonLink href={packagesHref} variant="secondary">Add another package</ButtonLink>
             </div>
 
+            <HolidayAvailabilityNotice availability={availability} className="mt-5" />
+
             {resolvedItems.length ? (
               <div className="mt-6 divide-y divide-ink/10 overflow-hidden rounded-lg border border-ink/10 bg-ivory">
-                {resolvedItems.map(({ item, plan, name, detail, subtotal: lineSubtotal, valid }, index) => {
+                {resolvedItems.map(({ item, plan, name, detail, subtotal: lineSubtotal, valid, startDateError }, index) => {
                   const editHref = cartLineEditHref(item);
 
                   return (
@@ -637,10 +659,16 @@ export function CheckoutFlow({
                           </div>
                           <h3 className="mt-3 font-display text-2xl font-black">{name}</h3>
                           <p className="mt-2 text-sm font-bold text-ink/58">{detail}</p>
-                          <p className="mt-2 flex items-center gap-2 text-sm font-extrabold text-leaf">
+                          <p className={cn("mt-2 flex items-center gap-2 text-sm font-extrabold", startDateError ? "text-masala" : "text-leaf")}>
                             <CalendarDays size={16} />
                             Starts {displayStartDate(item.startDate)}
                           </p>
+                          {startDateError ? (
+                            <p role="alert" className="mt-2 flex items-start gap-2 rounded-button bg-rose px-3 py-2 text-xs font-bold leading-5 text-masala">
+                              <CircleAlert className="mt-0.5 shrink-0" size={14} />
+                              {startDateError}
+                            </p>
+                          ) : null}
                         </div>
                         <div className="flex items-center justify-between gap-4 sm:block sm:text-right">
                           <p className="text-xl font-black">{formatCurrency(lineSubtotal)}</p>
@@ -674,7 +702,7 @@ export function CheckoutFlow({
 
             <Button
               className="mt-6"
-              disabled={!resolvedItems.length}
+              disabled={!cartReady}
               onClick={() => {
                 if (!cartReady) {
                   toast.error("Cart needs attention", {
@@ -1070,14 +1098,16 @@ export function CheckoutFlow({
         </div>
 
         <div className="relative mt-7 max-h-72 divide-y divide-white/10 overflow-y-auto border-y border-white/10">
-          {resolvedItems.map(({ item, name, detail, subtotal: lineSubtotal }) => (
+          {resolvedItems.map(({ item, name, detail, subtotal: lineSubtotal, startDateError }) => (
             <div key={item.lineId} className="py-4">
               <div className="flex justify-between gap-4 text-sm font-extrabold">
                 <span>{name}</span>
                 <span>{formatCurrency(lineSubtotal)}</span>
               </div>
               <p className="mt-1 text-xs font-bold text-ivory/55">{detail}</p>
-              <p className="mt-1 text-xs font-bold text-saffron">Starts {displayStartDate(item.startDate)}</p>
+              <p className={cn("mt-1 text-xs font-bold", startDateError ? "text-red-300" : "text-saffron")}>
+                {startDateError ? "Start date unavailable" : `Starts ${displayStartDate(item.startDate)}`}
+              </p>
             </div>
           ))}
         </div>

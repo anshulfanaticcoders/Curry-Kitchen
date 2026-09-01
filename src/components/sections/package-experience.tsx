@@ -18,6 +18,7 @@ import { PackageCard } from "@/components/food/package-card";
 import { usePackageCart } from "@/components/providers/package-cart-provider";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import { HolidayAvailabilityNotice } from "@/components/schedule/holiday-availability-notice";
 import {
   makePackageCartLineId,
   MAX_PACKAGE_CART_ITEMS,
@@ -25,8 +26,8 @@ import {
   type PackageCartItemInput,
 } from "@/lib/package-cart";
 import {
-  nextEligiblePackageStartInput,
   packageStartDateIssue,
+  type PackageScheduleAvailability,
 } from "@/lib/package-schedule";
 import type { PackagePlan } from "@/lib/types";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -40,11 +41,13 @@ export function PackageExperience({
   initialPlanId,
   initialCartItems = [],
   initialEditLineId,
+  availability,
 }: {
   plans: PackagePlan[];
   initialPlanId?: string;
   initialCartItems?: PackageCartItemInput[];
   initialEditLineId?: string;
+  availability: PackageScheduleAvailability;
 }) {
   const router = useRouter();
   const {
@@ -65,7 +68,7 @@ export function PackageExperience({
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [editingLineId, setEditingLineId] = useState<string | undefined>();
-  const [startDate, setStartDate] = useState(nextEligiblePackageStartInput());
+  const [startDate, setStartDate] = useState(availability.earliestStartDate);
   const appliedInitialCartKey = useRef<string | null>(null);
   const handledRouteKey = useRef<string | null>(null);
 
@@ -75,8 +78,13 @@ export function PackageExperience({
   );
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId);
   const draftTotal = selectedPlan?.price ?? 0;
-  const startDateError = packageStartDateIssue(startDate);
-  const minimumStartDate = nextEligiblePackageStartInput();
+  const startDateError = packageStartDateIssue(
+    startDate,
+    availability.deliveryWeekdays,
+    availability.holidays,
+    availability.earliestStartDate,
+  );
+  const minimumStartDate = availability.earliestStartDate;
   const initialCartKey = validInitialCart.length ? packageCartQuery(validInitialCart) : "";
   const routeKey = `${initialPlanId ?? ""}:${initialEditLineId ?? ""}:${initialCartKey}`;
 
@@ -117,7 +125,7 @@ export function PackageExperience({
 
       setSelectedPlanId(plan.id);
       setEditingLineId(editItem?.lineId);
-      setStartDate(editItem?.startDate ?? nextEligiblePackageStartInput());
+      setStartDate(editItem?.startDate ?? availability.earliestStartDate);
       setModalOpen(true);
       handledRouteKey.current = routeKey;
     }, 0);
@@ -130,6 +138,7 @@ export function PackageExperience({
     plans,
     routeKey,
     validInitialCart,
+    availability.earliestStartDate,
   ]);
 
   useEffect(() => {
@@ -146,7 +155,7 @@ export function PackageExperience({
   function openPlan(plan: PackagePlan, item?: PackageCartItemInput) {
     setSelectedPlanId(plan.id);
     setEditingLineId(item?.lineId);
-    setStartDate(item?.startDate ?? nextEligiblePackageStartInput());
+    setStartDate(item?.startDate ?? availability.earliestStartDate);
     setModalOpen(true);
   }
 
@@ -250,7 +259,7 @@ export function PackageExperience({
               <p className="mt-4 max-w-xl text-base font-medium leading-8 text-ivory/65">
                 Choose exactly how much roti, rice, dal, sabzi, raita, and salad you want in a
                 day&rsquo;s tiffin. We price each item per unit, then multiply by the delivery days
-                in your weekly or monthly plan.
+                in your monthly plan.
               </p>
               <div className="mt-7">
                 <ButtonLink href="/packages/build">
@@ -263,7 +272,7 @@ export function PackageExperience({
               {[
                 "Pay only for the portions you eat",
                 "Mark your must-have items every day",
-                "Switch between weekly and monthly",
+                "One consistent monthly schedule",
               ].map((point) => (
                 <li key={point} className="flex gap-3 text-sm font-bold text-ivory/80">
                   <span className="grid size-6 shrink-0 place-items-center rounded-full bg-saffron text-ink">
@@ -358,6 +367,7 @@ export function PackageExperience({
                   </div>
 
                   <div>
+                    <HolidayAvailabilityNotice availability={availability} className="mb-5" />
                     <p className="text-sm font-extrabold">When should it start?</p>
                     <p className="mt-1 text-xs font-bold text-ink/48">Choose your first eligible delivery date.</p>
                     <label className="mt-5 grid gap-2 text-sm font-extrabold">
@@ -376,7 +386,7 @@ export function PackageExperience({
                         />
                       </span>
                       <span className={cn("text-xs font-bold", startDateError ? "text-masala" : "text-ink/48")}>
-                        {startDateError || "Starts tomorrow or later. Weekend delivery is unavailable."}
+                        {startDateError || `First available start: ${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(`${availability.earliestStartDate}T12:00:00`))}.`}
                       </span>
                     </label>
                   </div>
@@ -392,11 +402,16 @@ export function PackageExperience({
                   <span className="font-display text-3xl font-black">{formatCurrency(draftTotal)}</span>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Button variant="secondary" className="w-full" onClick={selectAnotherPlan}>
+                  <Button
+                    variant="secondary"
+                    className="w-full"
+                    onClick={selectAnotherPlan}
+                    disabled={Boolean(startDateError)}
+                  >
                     <PackagePlus size={18} />
                     {editingLineId ? "Update cart" : "Add to cart"}
                   </Button>
-                  <Button className="w-full" onClick={proceedToPayment}>
+                  <Button className="w-full" onClick={proceedToPayment} disabled={Boolean(startDateError)}>
                     <ShoppingBag size={18} />
                     Proceed to payment
                     <ArrowRight size={17} />

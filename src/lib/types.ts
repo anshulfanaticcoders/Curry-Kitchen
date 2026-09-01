@@ -73,6 +73,19 @@ export type AdminSettings = {
   weeklyMenuEmails: boolean;
 };
 
+export type AdminBusinessHoliday = {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  startDateInput: string;
+  endDateInput: string;
+  note: string;
+  status: "Active" | "Draft" | "Archived";
+  affectedPackages: number;
+  creditedDeliveries: number;
+};
+
 export type AdminSeoRecord = {
   id?: string;
   targetType: "STATIC_PAGE" | "PACKAGE";
@@ -162,6 +175,7 @@ export type CustomerProfileDetails = CustomerProfile & {
   smsUpdates: boolean;
   addressId?: string;
   line1: string;
+  line2: string;
   city: string;
   state: string;
   postalCode: string;
@@ -169,6 +183,7 @@ export type CustomerProfileDetails = CustomerProfile & {
 
 export type CustomerPackageSummary = {
   id?: string;
+  packageId?: string;
   plan: string;
   quantity: number;
   status: "Active" | "Paused" | "Pending payment" | "Needs student approval" | "Cancelled" | "Expired" | "No active plan";
@@ -179,6 +194,15 @@ export type CustomerPackageSummary = {
   canSelfPause: boolean;
   startDate: string;
   endDate: string;
+  scheduledPause?: { startDate: string; endDate: string };
+  holidayImpacts?: Array<{
+    id: string;
+    name: string;
+    startDate: string;
+    endDate: string;
+    note: string;
+    creditedDeliveries: number;
+  }>;
 };
 
 export type AdminMetric = {
@@ -239,6 +263,7 @@ export type MenuUploadView = {
 export type CalendarEventType =
   | "delivery"
   | "pause"
+  | "holiday"
   | "package-start"
   | "package-end";
 

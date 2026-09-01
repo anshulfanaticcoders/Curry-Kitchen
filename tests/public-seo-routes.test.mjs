@@ -28,10 +28,10 @@ assert.match(detail, /generateMetadata/);
 assert.match(detail, /notFound\(\)/);
 assert.match(detail, /getPackageSchemas/);
 assert.match(detail, /Breadcrumb/);
-assert.match(card, /View plan details/);
+assert.match(card, /router\.push\(`\/packages\?plan=/);
 assert.match(faq, /buildFaqSchema/);
-assert.match(serverSeo, /mockPackagePlans/);
-assert.match(catalog, /catch \{\s*return mockPackagePlans\.find\(\(plan\) => plan\.slug === slug\) \?\? null;/);
+assert.match(serverSeo, /const allowMockSeoContent = process\.env\.NODE_ENV !== "production"/);
+assert.doesNotMatch(catalog, /return mockPackagePlans/);
 
 for (const path of [
   "../src/app/(marketing)/page.tsx",

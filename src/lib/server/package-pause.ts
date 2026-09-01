@@ -3,6 +3,7 @@ import "server-only";
 import { getBusinessRules } from "@/lib/business-rules";
 import { db } from "@/lib/db";
 import { calculateDeliveryDates, nextEligiblePackageStartDate } from "@/lib/package-schedule";
+import { getActiveHolidayDateRanges } from "@/lib/server/delivery-schedule-adjustments";
 
 // A package is a bundle of delivery-day credits. Pausing freezes the unused
 // credits; resuming spends them from the next delivery day onward. Remaining
@@ -73,7 +74,7 @@ export async function pausePackage({
 // Reactivate the package: spend the remaining credits starting from the next
 // eligible delivery day and rebuild the schedule + end date around them.
 export async function resumePackage(customerPackageId: string) {
-  const rules = await getBusinessRules();
+  const [rules, holidayRanges] = await Promise.all([getBusinessRules(), getActiveHolidayDateRanges()]);
   const customerPackage = await db.customerPackage.findUnique({
     where: { id: customerPackageId },
     include: { package: true },
@@ -104,7 +105,8 @@ export async function resumePackage(customerPackageId: string) {
   }
 
   const startDate = nextEligiblePackageStartDate(new Date(), rules.deliveryWeekdays);
-  const deliveryDates = calculateDeliveryDates(remainingDays, startDate, rules.deliveryWeekdays);
+  const deliveryDates = calculateDeliveryDates(remainingDays, startDate, rules.deliveryWeekdays, holidayRanges);
+  const effectiveStartDate = deliveryDates[0] ?? startDate;
 
   await db.$transaction([
     db.customerPackage.update({
@@ -112,7 +114,7 @@ export async function resumePackage(customerPackageId: string) {
       data: {
         status: "ACTIVE",
         // A package that never delivered anything effectively starts now.
-        ...(customerPackage.usedDeliveryDays === 0 ? { startDate } : {}),
+        ...(customerPackage.usedDeliveryDays === 0 ? { startDate: effectiveStartDate } : {}),
         endDate: deliveryDates.at(-1) ?? null,
         // Resuming clears the renewal-reminder stamp so the cron can remind
         // about the recomputed end date.
@@ -134,5 +136,5 @@ export async function resumePackage(customerPackageId: string) {
     }),
   ]);
 
-  return { remainingDays, startDate, endDate: deliveryDates.at(-1) ?? null };
+  return { remainingDays, startDate: effectiveStartDate, endDate: deliveryDates.at(-1) ?? null };
 }

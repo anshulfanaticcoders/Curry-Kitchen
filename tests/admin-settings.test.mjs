@@ -16,7 +16,8 @@ assert.match(loader, /db\.setting\.findMany/);
 assert.match(client, /saveAdminSettingsAction/);
 assert.match(client, /isPending/);
 assert.match(client, /toast\.success/);
-assert.match(client, /EmptyState/);
+assert.match(client, /deliveryChargeEnabled/);
+assert.match(client, /deliveryChargeNote/);
 assert.match(page, /getAdminSettings/);
 
 console.log("✓ admin settings use authenticated persistence and actionable UI states");

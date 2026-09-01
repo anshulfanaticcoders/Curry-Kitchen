@@ -22,6 +22,10 @@ import {
   type PackageCartItemInput,
 } from "@/lib/package-cart";
 import type { PackagePlan } from "@/lib/types";
+import {
+  nextEligiblePackageStartInput,
+  type PackageScheduleAvailability,
+} from "@/lib/package-schedule";
 
 // v2: the stored cart carries an owner ("guest" or a user id) so one
 // account's cart never leaks into another account in the same browser.
@@ -31,6 +35,12 @@ const STORAGE_KEY = "currykitchen-package-cart-v3";
 const STORAGE_EVENT = "currykitchen-package-cart-change";
 const EMPTY_CART: PackageCartItemInput[] = [];
 const GUEST_OWNER = "guest";
+const DEFAULT_AVAILABILITY: PackageScheduleAvailability = {
+  earliestStartDate: nextEligiblePackageStartInput(),
+  deliveryWeekdays: [1, 2, 3, 4, 5],
+  holidays: [],
+  orderCutoff: "Noon",
+};
 
 type CartEnvelope = { owner: string; items: PackageCartItemInput[] };
 
@@ -55,9 +65,11 @@ type PackageCartContextValue = {
   hydrated: boolean;
   cartOpen: boolean;
   pulseKey: number;
+  availability: PackageScheduleAvailability;
   checkoutHref: string;
   registerPlans: (plans: PackagePlan[]) => void;
   registerCustomItems: (items: CustomPackageItemOption[], config: CustomPackageConfig) => void;
+  registerAvailability: (availability: PackageScheduleAvailability) => void;
   replaceCart: (items: PackageCartItemInput[]) => void;
   addItem: (item: PackageCartItemInput) => boolean;
   updateItem: (item: PackageCartItemInput) => void;
@@ -224,6 +236,7 @@ export function PackageCartProvider({ children }: { children: ReactNode }) {
   const [customConfig, setCustomConfig] = useState<CustomPackageConfig>(DEFAULT_CUSTOM_CONFIG);
   const [customItemsLoaded, setCustomItemsLoaded] = useState(false);
   const [catalogReady, setCatalogReady] = useState(false);
+  const [availability, setAvailability] = useState(DEFAULT_AVAILABILITY);
   const hydrated = useSyncExternalStore(
     subscribeToHydration,
     getClientHydrationState,
@@ -289,6 +302,10 @@ export function PackageCartProvider({ children }: { children: ReactNode }) {
     setCatalogReady(true);
   }, []);
 
+  const registerAvailability = useCallback((nextAvailability: PackageScheduleAvailability) => {
+    setAvailability(nextAvailability);
+  }, []);
+
   const replaceCart = useCallback((nextItems: PackageCartItemInput[]) => {
     persistCart(nextItems);
   }, []);
@@ -327,9 +344,11 @@ export function PackageCartProvider({ children }: { children: ReactNode }) {
       hydrated,
       cartOpen,
       pulseKey,
+      availability,
       checkoutHref,
       registerPlans,
       registerCustomItems,
+      registerAvailability,
       replaceCart,
       addItem,
       updateItem,
@@ -339,6 +358,7 @@ export function PackageCartProvider({ children }: { children: ReactNode }) {
     }),
     [
       addItem,
+      availability,
       cartOpen,
       catalogReady,
       checkoutHref,
@@ -350,6 +370,7 @@ export function PackageCartProvider({ children }: { children: ReactNode }) {
       plansById,
       pulseKey,
       registerCustomItems,
+      registerAvailability,
       registerPlans,
       removeItem,
       replaceCart,

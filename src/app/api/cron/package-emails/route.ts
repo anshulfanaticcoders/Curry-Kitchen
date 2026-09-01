@@ -5,6 +5,7 @@ import {
   createRenewalReminderEmail,
   createSubscriptionEndedEmail,
 } from "@/lib/email/templates";
+import { businessDateInput, inputToDate } from "@/lib/package-schedule";
 import { getAdminSettings } from "@/lib/server/admin";
 
 export const runtime = "nodejs";
@@ -23,8 +24,16 @@ export async function GET(request: Request) {
 
   const settings = await getAdminSettings();
   const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfToday = inputToDate(businessDateInput(now));
   const reminderCutoff = new Date(now.getTime() + REMINDER_LEAD_DAYS * 24 * 60 * 60 * 1000);
+  const scheduledPausesEnded = await db.pauseRequest.updateMany({
+    where: {
+      status: "ACTIVE",
+      endDate: { lt: startOfToday },
+      customerPackage: { status: "ACTIVE" },
+    },
+    data: { status: "ENDED" },
+  });
 
   let remindersSent = 0;
   let expired = 0;
@@ -177,5 +186,11 @@ export async function GET(request: Request) {
     }
   }
 
-  return Response.json({ remindersSent, expired, pauseRemindersSent, pausesExpired });
+  return Response.json({
+    remindersSent,
+    expired,
+    pauseRemindersSent,
+    pausesExpired,
+    scheduledPausesEnded: scheduledPausesEnded.count,
+  });
 }

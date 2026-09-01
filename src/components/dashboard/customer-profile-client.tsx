@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
-import { type FormEvent, useTransition } from "react";
+import { type FormEvent, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardHeader, Field, Input, PageHeader } from "@/components/dashboard/primitives";
@@ -15,6 +15,8 @@ import type { CustomerProfileDetails } from "@/lib/types";
 export function CustomerProfileClient({ profile }: { profile: CustomerProfileDetails }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [emailReceipts, setEmailReceipts] = useState(profile.emailReceipts);
+  const [smsUpdates, setSmsUpdates] = useState(profile.smsUpdates);
 
   function savePreferences(emailReceipts: boolean, smsUpdates: boolean) {
     startTransition(async () => {
@@ -68,6 +70,9 @@ export function CustomerProfileClient({ profile }: { profile: CustomerProfileDet
               </Field>
               <Field label="Street address">
                 <Input name="line1" defaultValue={profile.line1} required />
+              </Field>
+              <Field label="Apartment / suite (optional)">
+                <Input name="line2" defaultValue={profile.line2} />
               </Field>
               <Field label="City">
                 <Input name="city" defaultValue={profile.city} required />
@@ -132,8 +137,24 @@ export function CustomerProfileClient({ profile }: { profile: CustomerProfileDet
           <Card>
             <CardHeader title="Account preferences" />
             <div className="grid gap-3 p-5">
-              <Toggle label="Email receipts" description="Get a receipt after each order." defaultChecked={profile.emailReceipts} onCheckedChange={(emailReceipts) => savePreferences(emailReceipts, profile.smsUpdates)} />
-              <Toggle label="SMS updates" description="Delivery texts on the day." defaultChecked={profile.smsUpdates} onCheckedChange={(smsUpdates) => savePreferences(profile.emailReceipts, smsUpdates)} />
+              <Toggle
+                label="Email receipts"
+                description="Get a receipt after each order."
+                defaultChecked={emailReceipts}
+                onCheckedChange={(nextEmailReceipts) => {
+                  setEmailReceipts(nextEmailReceipts);
+                  savePreferences(nextEmailReceipts, smsUpdates);
+                }}
+              />
+              <Toggle
+                label="SMS updates"
+                description="Save your preference for delivery texts when SMS service is enabled."
+                defaultChecked={smsUpdates}
+                onCheckedChange={(nextSmsUpdates) => {
+                  setSmsUpdates(nextSmsUpdates);
+                  savePreferences(emailReceipts, nextSmsUpdates);
+                }}
+              />
             </div>
           </Card>
         </div>

@@ -6,13 +6,15 @@ import { fail, ok } from "@/lib/action-result";
 import { getCurrentSession } from "@/lib/auth";
 import { getBusinessRules } from "@/lib/business-rules";
 import { db } from "@/lib/db";
-import { pausePackage, resumePackage } from "@/lib/server/package-pause";
+import { scheduleCustomerPause } from "@/lib/server/delivery-schedule-adjustments";
+import { resumePackage } from "@/lib/server/package-pause";
 
 const profileSchema = z.object({
   name: z.string().min(2),
   phone: z.string().optional(),
   addressId: z.string().optional(),
   line1: z.string().min(4),
+  line2: z.string().optional(),
   city: z.string().min(2),
   state: z.string().min(2).default("CA"),
   postalCode: z.string().min(5),
@@ -37,7 +39,7 @@ export async function saveCustomerProfileAction(formData: FormData) {
       return fail("Please fix the profile fields.", parsed.error.flatten().fieldErrors);
     }
 
-    const { addressId, line1, city, state, postalCode, ...data } = parsed.data;
+    const { addressId, line1, line2, city, state, postalCode, ...data } = parsed.data;
     const customer = await db.customer.upsert({
       where: { userId: user.id },
       create: {
@@ -60,7 +62,7 @@ export async function saveCustomerProfileAction(formData: FormData) {
     if (addressId) {
       await db.address.updateMany({
         where: { id: addressId, customerId: customer.id },
-        data: { line1, city, state, postalCode, isDefault: true },
+        data: { line1, line2: line2 || null, city, state, postalCode, isDefault: true },
       });
     } else {
       await db.address.create({
@@ -68,6 +70,7 @@ export async function saveCustomerProfileAction(formData: FormData) {
           customerId: customer.id,
           name: data.name,
           line1,
+          line2: line2 || null,
           city,
           state,
           postalCode,
@@ -84,7 +87,23 @@ export async function saveCustomerProfileAction(formData: FormData) {
   }
 }
 
-export async function requestCustomerPauseAction(customerPackageId: string, reason?: string) {
+const pauseScheduleSchema = z
+  .object({
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a valid pause start date."),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a valid pause end date."),
+    reason: z.string().trim().max(300).optional(),
+  })
+  .refine((value) => value.endDate >= value.startDate, {
+    message: "Pause end date must be on or after its start date.",
+    path: ["endDate"],
+  });
+
+export async function requestCustomerPauseAction(
+  customerPackageId: string,
+  startDate: string,
+  endDate: string,
+  reason?: string,
+) {
   try {
     const user = await getSessionUser();
     const rules = await getBusinessRules();
@@ -108,38 +127,40 @@ export async function requestCustomerPauseAction(customerPackageId: string, reas
       return fail("This package has already used its one customer pause.");
     }
 
-    const { remainingDays, resumeBy } = await pausePackage({
+    const parsed = pauseScheduleSchema.safeParse({ startDate, endDate, reason });
+    if (!parsed.success) {
+      return fail(parsed.error.issues[0]?.message ?? "Choose a valid pause range.");
+    }
+
+    const result = await scheduleCustomerPause({
       customerPackageId,
       requestedByUserId: user.id,
-      reason,
+      startDateInput: parsed.data.startDate,
+      endDateInput: parsed.data.endDate,
+      reason: parsed.data.reason,
     });
 
-    const resumeByLabel = new Intl.DateTimeFormat("en-US", {
+    const formatDate = (date: Date) => new Intl.DateTimeFormat("en-US", {
       month: "long",
       day: "numeric",
-    }).format(resumeBy);
+      year: "numeric",
+    }).format(date);
 
-    await db.$transaction([
-      db.customerPackage.update({
-        where: { id: customerPackageId },
-        data: { customerPauseUsed: true },
-      }),
-      db.notification.create({
-        data: {
-          userId: user.id,
-          type: "SYSTEM",
-          title: "Package paused",
-          body: `Your ${remainingDays} remaining delivery days are saved. Resume by ${resumeByLabel} or they expire.`,
-        },
-      }),
-    ]);
+    await db.notification.create({
+      data: {
+        userId: user.id,
+        type: "SYSTEM",
+        title: "Package pause scheduled",
+        body: `Deliveries are paused ${formatDate(result.startDate)}–${formatDate(result.endDate)}. ${result.creditedDays} ${result.creditedDays === 1 ? "day was" : "days were"} moved to the end of your package.`,
+      },
+    });
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/orders");
     revalidatePath("/dashboard/calendar");
     return ok(
-      { id: customerPackageId },
-      `Package paused. Resume by ${resumeByLabel} to use your remaining ${remainingDays} delivery days.`,
+      { id: customerPackageId, creditedDays: result.creditedDays },
+      `Pause scheduled. Deliveries automatically resume ${formatDate(result.resumeDate)}.`,
     );
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Package could not be paused.");

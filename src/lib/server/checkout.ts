@@ -6,9 +6,13 @@ import { businessRulesFromValue, getBusinessRules, isAfterOrderCutoff } from "@/
 import { db } from "@/lib/db";
 import { sendOrderPaidEmails, sendZelleOrderEmails } from "@/lib/email/notifications";
 import {
+  buildPackageScheduleAvailability,
+  businessDateInput,
   calculateDeliveryDates,
+  dateToInput,
+  inputToDate,
   nextEligiblePackageStartDate,
-  validatePackageStartInput,
+  packageStartDateIssue,
 } from "@/lib/package-schedule";
 import {
   belowMinimumItems,
@@ -19,9 +23,11 @@ import {
   type CustomPackageItemOption,
 } from "@/lib/custom-package";
 import { MAX_CUSTOM_ITEM_QUANTITY } from "@/lib/package-cart";
+import { calculateOrderTotals } from "@/lib/order-totals";
 import { CouponError, findValidCoupon } from "@/lib/server/coupons";
 import { shouldUseMockData } from "@/lib/server/data-source";
 import { getStripe } from "@/lib/stripe";
+import { getActiveHolidayDateRanges } from "@/lib/server/delivery-schedule-adjustments";
 
 const startDateField = z
   .string()
@@ -154,7 +160,7 @@ export function globalDeliveryChargeFromValue(value: unknown) {
 }
 
 export async function markOrderPaidAndActivate(orderId: string, stripePaymentId?: string) {
-  const rules = await getBusinessRules();
+  const [rules, holidayRanges] = await Promise.all([getBusinessRules(), getActiveHolidayDateRanges()]);
   const order = await db.order.findUnique({
     where: { id: orderId },
     include: {
@@ -193,16 +199,24 @@ export async function markOrderPaidAndActivate(orderId: string, stripePaymentId?
       const startDate = customerPackage.startDate ?? nextEligiblePackageStartDate(new Date(), rules.deliveryWeekdays);
       const deliveryDates = requiresStudentApproval
         ? []
-        : calculateDeliveryDates(customerPackage.totalDeliveryDays, startDate, rules.deliveryWeekdays);
+        : calculateDeliveryDates(customerPackage.totalDeliveryDays, startDate, rules.deliveryWeekdays, holidayRanges);
+      const effectiveStartDate = deliveryDates[0] ?? startDate;
 
       await tx.customerPackage.update({
         where: { id: customerPackage.id },
         data: {
           status: nextStatus,
-          startDate,
+          startDate: effectiveStartDate,
           endDate: deliveryDates.at(-1) ?? null,
         },
       });
+
+      if (customerPackage.orderItemId && effectiveStartDate.getTime() !== startDate.getTime()) {
+        await tx.orderItem.update({
+          where: { id: customerPackage.orderItemId },
+          data: { startDate: effectiveStartDate },
+        });
+      }
 
       if (!requiresStudentApproval && customerPackage.deliveryDays.length === 0) {
         await tx.packageDeliveryDay.createMany({
@@ -218,7 +232,14 @@ export async function markOrderPaidAndActivate(orderId: string, stripePaymentId?
     }
   });
 
-  await sendOrderPaidEmails(order);
+  const activatedOrder = await db.order.findUnique({
+    where: { id: order.id },
+    include: {
+      customer: true,
+      customerPackages: { include: { package: true } },
+    },
+  });
+  if (activatedOrder) await sendOrderPaidEmails(activatedOrder);
 }
 
 export async function createCheckoutOrder(rawInput: unknown) {
@@ -246,6 +267,26 @@ export async function createCheckoutOrder(rawInput: unknown) {
   const created = await db.$transaction(async (tx) => {
     const settings = await tx.setting.findUnique({ where: { key: "admin_settings" } });
     const rules = businessRulesFromValue(settings?.value);
+    const checkoutNow = new Date();
+    const today = inputToDate(businessDateInput(checkoutNow));
+    const activeHolidays = await tx.businessHoliday.findMany({
+      where: { status: "ACTIVE", endDate: { gte: today } },
+      orderBy: { startDate: "asc" },
+      select: { id: true, name: true, startDate: true, endDate: true, note: true },
+    });
+    const availability = buildPackageScheduleAvailability({
+      now: checkoutNow,
+      deliveryWeekdays: rules.deliveryWeekdays,
+      orderCutoff: rules.orderCutoff,
+      orderCutoffPassed: isAfterOrderCutoff(rules.orderCutoff, checkoutNow),
+      holidays: activeHolidays.map((holiday) => ({
+        id: holiday.id,
+        name: holiday.name,
+        startDate: dateToInput(holiday.startDate),
+        endDate: dateToInput(holiday.endDate),
+        note: holiday.note ?? "",
+      })),
+    });
 
     if (rules.maintenanceMode) {
       throw new CheckoutError(
@@ -384,11 +425,16 @@ export async function createCheckoutOrder(rawInput: unknown) {
         throw new CheckoutError("Weekly trial packages are not available right now.", 409, "WEEKLY_TRIALS_DISABLED");
       }
 
-      const startDate = validatePackageStartInput(item.startDate, rules.deliveryWeekdays);
-      const nextDeliveryDate = nextEligiblePackageStartDate(new Date(), rules.deliveryWeekdays);
-      if (isAfterOrderCutoff(rules.orderCutoff) && startDate.getTime() === nextDeliveryDate.getTime()) {
-        throw new CheckoutError("Today’s order cut-off has passed. Choose the following delivery day.", 409, "ORDER_CUTOFF_PASSED");
+      const startDateError = packageStartDateIssue(
+        item.startDate,
+        availability.deliveryWeekdays,
+        availability.holidays,
+        availability.earliestStartDate,
+      );
+      if (startDateError) {
+        throw new CheckoutError(startDateError, 409, "START_DATE_UNAVAILABLE");
       }
+      const startDate = inputToDate(item.startDate);
       const packageTotal = toNumber(plan.price);
 
       return {
@@ -452,8 +498,12 @@ export async function createCheckoutOrder(rawInput: unknown) {
         : toNumber(coupon.value)
       : 0;
     const discountAmount = Math.min(subtotal, Math.max(0, rawDiscount));
-    const taxAmount = (subtotal - discountAmount) * globalTaxRateFromValue(settings?.value);
-    const total = roundMoney(subtotal - discountAmount + taxAmount + deliveryFee);
+    const { taxAmount, total } = calculateOrderTotals({
+      subtotal,
+      discountAmount,
+      deliveryFee,
+      taxRate: globalTaxRateFromValue(settings?.value),
+    });
 
     const address = await tx.address.create({
       data: {
@@ -545,6 +595,7 @@ export async function createCheckoutOrder(rawInput: unknown) {
       orderNumber: order.orderNumber,
       planNames: pricedItems.map((item) => item.plan.name),
       total,
+      emailReceipts: customer.emailReceipts,
     };
   }, {
     // Materialising custom packages adds writes to an already long
@@ -562,6 +613,7 @@ export async function createCheckoutOrder(rawInput: unknown) {
       customerEmail: input.customer.email,
       planNames: created.planNames,
       total: created.total,
+      sendCustomerReceipt: created.emailReceipts,
     });
 
     return {

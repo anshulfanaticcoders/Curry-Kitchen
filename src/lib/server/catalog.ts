@@ -681,9 +681,23 @@ export async function getCustomerPackageSummaries(): Promise<CustomerPackageSumm
       return [];
     }
 
+    const now = new Date();
     const packages = await db.customerPackage.findMany({
       where: { customerId: customer.id },
-      include: { package: true, deliveryDays: true },
+      include: {
+        package: true,
+        deliveryDays: true,
+        pauseRequests: {
+          where: { status: "ACTIVE", endDate: { gte: now } },
+          orderBy: { startDate: "asc" },
+          take: 1,
+        },
+        holidayCredits: {
+          where: { businessHoliday: { status: "ACTIVE", endDate: { gte: now } } },
+          include: { businessHoliday: true },
+          orderBy: { originalDeliveryDate: "asc" },
+        },
+      },
       orderBy: { createdAt: "desc" },
       take: 20,
     });
@@ -691,7 +705,6 @@ export async function getCustomerPackageSummaries(): Promise<CustomerPackageSumm
     return packages.map((customerPackage) => {
       // Deliveries happen every morning, so a delivery day is "used" once its
       // date has passed — no per-day status tracking.
-      const now = new Date();
       const elapsedDays = customerPackage.deliveryDays.filter(
         (day) => day.status !== "CANCELLED" && day.deliveryDate < now,
       ).length;
@@ -701,9 +714,28 @@ export async function getCustomerPackageSummaries(): Promise<CustomerPackageSumm
         0,
       );
       const status = mapCustomerPackageStatus(customerPackage.status);
+      const holidayImpacts = new Map<string, NonNullable<CustomerPackageSummary["holidayImpacts"]>[number]>();
+
+      for (const credit of customerPackage.holidayCredits) {
+        const existing = holidayImpacts.get(credit.businessHolidayId);
+        if (existing) {
+          existing.creditedDeliveries += 1;
+          continue;
+        }
+
+        holidayImpacts.set(credit.businessHolidayId, {
+          id: credit.businessHolidayId,
+          name: credit.businessHoliday.name,
+          startDate: formatDate(credit.businessHoliday.startDate),
+          endDate: formatDate(credit.businessHoliday.endDate),
+          note: credit.businessHoliday.note ?? "",
+          creditedDeliveries: 1,
+        });
+      }
 
       return {
         id: customerPackage.id,
+        packageId: customerPackage.packageId,
         plan: customerPackage.package.name,
         quantity: customerPackage.quantity,
         status,
@@ -714,6 +746,13 @@ export async function getCustomerPackageSummaries(): Promise<CustomerPackageSumm
         canSelfPause: status === "Active" && !customerPackage.customerPauseUsed,
         startDate: customerPackage.startDate ? formatDate(customerPackage.startDate) : "Not started",
         endDate: customerPackage.endDate ? formatDate(customerPackage.endDate) : "Not scheduled",
+        scheduledPause: customerPackage.pauseRequests[0]
+          ? {
+              startDate: formatDate(customerPackage.pauseRequests[0].startDate),
+              endDate: formatDate(customerPackage.pauseRequests[0].endDate),
+            }
+          : undefined,
+        holidayImpacts: Array.from(holidayImpacts.values()),
       };
     });
   } catch {
@@ -777,6 +816,7 @@ export async function getCustomerProfileDetails(): Promise<CustomerProfileDetail
         address: "No default address",
         preferences: [],
         line1: "",
+        line2: "",
         city: "",
         state: "CA",
         postalCode: "",
@@ -793,7 +833,9 @@ export async function getCustomerProfileDetails(): Promise<CustomerProfileDetail
     });
 
     const address = fullCustomer?.addresses[0];
-    const currentPackage = fullCustomer?.packages[0];
+    const currentPackage =
+      fullCustomer?.packages.find((item) => ["ACTIVE", "PAUSED", "PENDING_PAYMENT", "PENDING_STUDENT_VERIFICATION"].includes(item.status)) ??
+      fullCustomer?.packages[0];
     const preferenceText = fullCustomer?.orders[0]?.foodPreferences ?? "";
 
     return {
@@ -813,6 +855,7 @@ export async function getCustomerProfileDetails(): Promise<CustomerProfileDetail
         .filter(Boolean),
       addressId: address?.id,
       line1: address?.line1 ?? "",
+      line2: address?.line2 ?? "",
       city: address?.city ?? "",
       state: address?.state ?? "CA",
       postalCode: address?.postalCode ?? "",
@@ -831,6 +874,7 @@ export async function getCustomerProfileDetails(): Promise<CustomerProfileDetail
       address: "No default address",
       preferences: [],
       line1: "",
+      line2: "",
       city: "",
       state: "CA",
       postalCode: "",

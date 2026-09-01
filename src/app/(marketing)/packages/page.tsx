@@ -1,15 +1,14 @@
-import { ArrowRight, ListChecks } from "lucide-react";
 import type { Metadata } from "next";
 import { JsonLd } from "@/components/seo/json-ld";
 import { PageHero } from "@/components/sections/page-hero";
 import { PackageExperience } from "@/components/sections/package-experience";
 import { AnimatedSection } from "@/components/ui/animated-section";
-import { ButtonLink } from "@/components/ui/button";
 import { getPackagePlans } from "@/lib/server/catalog";
 import { parsePackageCart } from "@/lib/package-cart";
 import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
 import { formatCurrency } from "@/lib/utils";
 import { getMarketingMetadata, getPackagesSchemas } from "@/lib/server/seo";
+import { getPackageScheduleAvailability } from "@/lib/server/delivery-schedule-adjustments";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +25,12 @@ export default async function PackagesPage({
     edit?: string | string[];
   }>;
 }) {
-  const [params, packagePlans, backgrounds] = await Promise.all([searchParams, getPackagePlans(), getPageBackgrounds()]);
+  const [params, packagePlans, backgrounds, availability] = await Promise.all([
+    searchParams,
+    getPackagePlans(),
+    getPageBackgrounds(),
+    getPackageScheduleAvailability(),
+  ]);
   const initialPlanId = Array.isArray(params.plan) ? params.plan[0] : params.plan;
   const cartParam = Array.isArray(params.cart) ? params.cart[0] : params.cart;
   const editLineId = Array.isArray(params.edit) ? params.edit[0] : params.edit;
@@ -43,19 +47,6 @@ export default async function PackagesPage({
         imageAlt="Stacked tiffin meal containers"
         focalPoint={backgrounds["packages.hero"].focalPoint}
         overlay={backgrounds["packages.hero"].overlay}
-        chips={["Weekly trial packages", "Monthly fixed packages", "Student and military packages"]}
-        actions={
-          <>
-            <ButtonLink href="#build-plan">
-              Build your plan
-              <ArrowRight size={18} />
-            </ButtonLink>
-            <ButtonLink href="#comparison" variant="secondary">
-              <ListChecks size={18} />
-              Compare plans
-            </ButtonLink>
-          </>
-        }
         imageCaption={
           <>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-saffron">
@@ -79,6 +70,7 @@ export default async function PackagesPage({
             initialPlanId={initialPlanId}
             initialCartItems={initialCartItems}
             initialEditLineId={editLineId}
+            availability={availability}
           />
         </AnimatedSection>
       </section>
@@ -110,12 +102,6 @@ export default async function PackagesPage({
                 <span className="text-right text-white/60 sm:text-left">{plan.bestFor}</span>
               </div>
             ))}
-          </div>
-          <div className="mt-8">
-            <ButtonLink href="#build-plan">
-              Build your plan
-              <ArrowRight size={18} />
-            </ButtonLink>
           </div>
         </AnimatedSection>
       </section>

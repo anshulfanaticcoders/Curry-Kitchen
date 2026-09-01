@@ -22,7 +22,7 @@ const {
 
 assert.deepEqual(
   STATIC_SEO_ROUTES.map((route) => route.path),
-  ["/", "/packages", "/menu", "/about", "/faq", "/blog", "/contact"],
+  ["/", "/packages", "/packages/build", "/menu", "/about", "/faq", "/blog", "/contact"],
   "the registry should contain every public marketing route exactly once",
 );
 
@@ -33,7 +33,7 @@ assert.deepEqual(
 );
 
 assert.equal(canonicalUrl("https://currykitchen.ca/ignored/path", "/packages"), "https://currykitchen.ca/packages");
-assert.equal(siteOrigin("http://localhost:3000"), "https://currykitchen.ca");
+assert.equal(siteOrigin("http://localhost:3000"), "http://localhost:3000");
 assert.equal(validateHttpsImageUrl("https://cdn.example.com/social.jpg"), true);
 assert.equal(validateHttpsImageUrl("http://cdn.example.com/social.jpg"), false);
 assert.equal(validateHttpsImageUrl("/social.jpg"), true);

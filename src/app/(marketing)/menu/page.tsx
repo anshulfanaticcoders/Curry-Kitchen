@@ -117,7 +117,7 @@ export default async function MenuPage() {
 
       {menuUploads.length ? (
         /* Uploaded weekly menus — LIGHT (white), up to 4 scheduled menus */
-        <section className="section relative bg-white">
+        <section id="monthly-menus" className="section relative scroll-mt-28 bg-white">
           <StaggerGroup className="section-shell">
             <div className="mb-9 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
               <div>
@@ -142,9 +142,7 @@ export default async function MenuPage() {
                   <article className="overflow-hidden rounded-lg border border-ink/10 bg-white shadow-soft">
                     {menu.isPdf ? (
                       <a
-                        href={menu.fileUrl}
-                        target="_blank"
-                        rel="noreferrer"
+                        href={`/menu/view/${menu.id}`}
                         className="flex items-center gap-4 bg-ink px-5 py-6 text-white transition hover:bg-[#1f1a16]"
                       >
                         <span className="grid size-12 shrink-0 place-items-center rounded-full bg-saffron text-ink">
@@ -157,13 +155,13 @@ export default async function MenuPage() {
                         <ArrowRight size={18} className="ml-auto shrink-0 text-white/60" />
                       </a>
                     ) : (
-                      <a href={menu.fileUrl} target="_blank" rel="noreferrer" className="group relative block aspect-[4/3] overflow-hidden bg-ink">
+                      <a href={`/menu/view/${menu.id}`} className="group relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-[#f7f1e9]">
                         {/* eslint-disable-next-line @next/next/no-img-element -- admin-uploaded file of unknown dimensions served from our own API route */}
                         <img
                           src={menu.fileUrl}
                           alt={`${menu.title} — Curry Kitchen weekly menu`}
                           loading="lazy"
-                          className="absolute inset-0 h-full w-full object-cover object-top transition duration-700 group-hover:scale-105"
+                          className="h-full w-full object-contain object-center transition duration-700 group-hover:scale-[1.025]"
                         />
                         <span className="absolute bottom-4 right-4 grid size-10 place-items-center rounded-full bg-white/90 text-ink opacity-0 transition duration-300 group-hover:opacity-100">
                           <ArrowRight size={18} />

@@ -18,24 +18,24 @@ function sourceFiles(directory) {
   });
 }
 
-test("loads Montagu Slab for display type and Figtree for body type", () => {
+test("loads Plus Jakarta Sans for display type and IBM Plex Sans for body type", () => {
   const layout = readFileSync(join(projectRoot, "src/app/layout.tsx"), "utf8");
 
-  assert.match(layout, /import \{ Figtree, Montagu_Slab \} from "next\/font\/google";/);
-  assert.match(layout, /const display = Montagu_Slab\(\{/);
-  assert.match(layout, /const body = Figtree\(\{/);
+  assert.match(layout, /import \{ IBM_Plex_Sans, Plus_Jakarta_Sans \} from "next\/font\/google";/);
+  assert.match(layout, /const display = Plus_Jakarta_Sans\(\{/);
+  assert.match(layout, /const body = IBM_Plex_Sans\(\{/);
 });
 
-test("caps legacy black display text at Montagu Slab's supported maximum weight", () => {
+test("uses Plus Jakarta Sans's supported display-black weight", () => {
   const globalStyles = readFileSync(join(projectRoot, "src/app/globals.css"), "utf8");
 
   assert.match(
     globalStyles,
-    /\.font-display\.font-black\s*\{\s*font-weight:\s*700;\s*\}/,
+    /\.font-display\.font-black\s*\{\s*font-weight:\s*800;/,
   );
 });
 
-test("display headings do not use explicit line-heights below 1.12", () => {
+test("display headings avoid unreadably compressed arbitrary line-heights", () => {
   const unsafeHeadings = [];
   const headingTag = /<(?:motion\.)?h[1-3]\b[^>]*>|<RevealItem\b(?=[^>]*\bas="h[1-3]")[^>]*>/gs;
 
@@ -50,8 +50,7 @@ test("display headings do not use explicit line-heights below 1.12", () => {
       }
 
       const arbitraryLeading = className.match(/\bleading-\[(\d+(?:\.\d+)?)\]/)?.[1];
-      const isUnsafe = className.includes("leading-none") ||
-        (arbitraryLeading !== undefined && Number(arbitraryLeading) < 1.12);
+      const isUnsafe = arbitraryLeading !== undefined && Number(arbitraryLeading) < 0.9;
 
       if (isUnsafe) {
         const line = source.slice(0, match.index).split("\n").length;

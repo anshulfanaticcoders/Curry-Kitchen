@@ -561,6 +561,7 @@ model CustomerPackage {
   package       Package              @relation(fields: [packageId], references: [id], onDelete: Restrict)
   deliveryDays  PackageDeliveryDay[]
   pauseRequests PauseRequest[]
+  holidayCredits HolidayDeliveryCredit[]
 
   @@index([customerId])
   @@index([status])
@@ -599,6 +600,43 @@ model PauseRequest {
   @@index([customerPackageId])
   @@index([status])
   @@map("pause_requests")
+}
+
+model BusinessHoliday {
+  id              String       @id @default(cuid())
+  name            String
+  startDate       DateTime
+  endDate         DateTime
+  note            String?      @db.Text
+  status          RecordStatus @default(ACTIVE)
+  createdByUserId String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  credits HolidayDeliveryCredit[]
+
+  @@index([status, startDate, endDate])
+  @@map("business_holidays")
+}
+
+model HolidayDeliveryCredit {
+  id                       String   @id @default(cuid())
+  businessHolidayId        String
+  customerPackageId        String
+  originalDeliveryDayId    String
+  replacementDeliveryDayId String
+  originalDeliveryDate     DateTime
+  replacementDeliveryDate  DateTime
+  originalMenuSummary      String?  @db.Text
+  createdAt                DateTime @default(now())
+
+  businessHoliday BusinessHoliday @relation(fields: [businessHolidayId], references: [id], onDelete: Cascade)
+  customerPackage CustomerPackage @relation(fields: [customerPackageId], references: [id], onDelete: Cascade)
+
+  @@unique([businessHolidayId, originalDeliveryDayId], map: "holiday_credit_original_day_key")
+  @@index([customerPackageId])
+  @@index([replacementDeliveryDayId])
+  @@map("holiday_delivery_credits")
 }
 
 enum StudentVerificationType {

@@ -19,6 +19,14 @@ function packageStatusLabel(status: string) {
   return "Cancelled";
 }
 
+function formatFullDate(date: Date) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
 // Every dated event for one customer's packages: deliveries, pauses, and
 // package start/end boundaries. Off days are derived client-side from
 // deliveryWeekdays so every non-delivery weekday is marked, not just stored rows.
@@ -35,6 +43,7 @@ export async function getCustomerCalendarData(
             package: { select: { name: true } },
             deliveryDays: { orderBy: { deliveryDate: "asc" } },
             pauseRequests: { where: { status: { in: ["APPROVED", "ACTIVE", "ENDED"] } } },
+            holidayCredits: { include: { businessHoliday: true } },
           },
         },
       },
@@ -48,6 +57,9 @@ export async function getCustomerCalendarData(
 
   for (const customerPackage of customer.packages) {
     const planName = customerPackage.package.name;
+    const holidayCreditByOriginalDay = new Map(
+      customerPackage.holidayCredits.map((credit) => [credit.originalDeliveryDayId, credit]),
+    );
 
     if (customerPackage.startDate) {
       events.push({
@@ -66,18 +78,26 @@ export async function getCustomerCalendarData(
     }
 
     for (const day of customerPackage.deliveryDays) {
+      const holidayCredit = holidayCreditByOriginalDay.get(day.id);
       const paused = day.status === "PAUSED" || day.status === "CANCELLED";
+      const coveredByPause = customerPackage.pauseRequests.some(
+        (pause) => day.deliveryDate >= pause.startDate && day.deliveryDate <= pause.endDate,
+      );
+      if (!holidayCredit && paused && coveredByPause) continue;
+
       events.push({
         date: toDateKey(day.deliveryDate),
-        type: paused ? "pause" : "delivery",
-        label: paused
-          ? `${planName} — delivery paused`
+        type: holidayCredit ? "holiday" : paused ? "pause" : "delivery",
+        label: holidayCredit
+          ? `${holidayCredit.businessHoliday.name} — kitchen closed; delivery credited to ${formatFullDate(holidayCredit.replacementDeliveryDate)}`
+          : paused
+            ? `${planName} — delivery paused`
           : `${planName} — morning delivery`,
       });
     }
 
     for (const pause of customerPackage.pauseRequests) {
-      // Expand the pause range into per-day markers (self-pauses are one week).
+      // Expand the scheduled pause range into per-day markers.
       const cursor = new Date(pause.startDate);
       cursor.setHours(0, 0, 0, 0);
       const end = new Date(pause.endDate);
@@ -96,8 +116,6 @@ export async function getCustomerCalendarData(
     }
   }
 
-  const formatFullDate = (date: Date) =>
-    new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
   const now = new Date();
 
   return {

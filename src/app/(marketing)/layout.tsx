@@ -3,6 +3,7 @@ import { MaintenanceScreen } from "@/components/layout/maintenance-screen";
 import { Navbar } from "@/components/layout/navbar";
 import { getBusinessRules } from "@/lib/business-rules";
 import { getCustomPackageItems, getPackagePlans } from "@/lib/server/catalog";
+import { getPackageScheduleAvailability } from "@/lib/server/delivery-schedule-adjustments";
 
 export default async function MarketingLayout({ children }: { children: React.ReactNode }) {
   const rules = await getBusinessRules();
@@ -11,7 +12,11 @@ export default async function MarketingLayout({ children }: { children: React.Re
     return <MaintenanceScreen />;
   }
 
-  const [plans, customItems] = await Promise.all([getPackagePlans(), getCustomPackageItems()]);
+  const [plans, customItems, availability] = await Promise.all([
+    getPackagePlans(),
+    getCustomPackageItems(),
+    getPackageScheduleAvailability(),
+  ]);
 
   return (
     <div className="min-h-screen texture">
@@ -21,6 +26,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
         customConfig={{
           customMonthlyDays: rules.customMonthlyDays,
         }}
+        availability={availability}
       />
       {children}
       <Footer />

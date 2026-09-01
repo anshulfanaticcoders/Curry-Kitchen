@@ -2,6 +2,7 @@ import "server-only";
 
 import type {
   AdminCustomPackageItemRecord,
+  AdminBusinessHoliday,
   AdminCustomerOption,
   AdminMediaAsset,
   AdminPageBackground,
@@ -107,6 +108,33 @@ export async function getAdminSettings(): Promise<AdminSettings> {
     return adminSettingsFromValue(records[0]?.value);
   } catch {
     return defaultAdminSettings;
+  }
+}
+
+export async function getAdminBusinessHolidays(): Promise<AdminBusinessHoliday[]> {
+  try {
+    const holidays = await db.businessHoliday.findMany({
+      include: { credits: { select: { customerPackageId: true } } },
+      orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
+      take: 100,
+    });
+    const format = (date: Date) =>
+      new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
+
+    return holidays.map((holiday) => ({
+      id: holiday.id,
+      name: holiday.name,
+      startDate: format(holiday.startDate),
+      endDate: format(holiday.endDate),
+      startDateInput: toDateInputValue(holiday.startDate),
+      endDateInput: toDateInputValue(holiday.endDate),
+      note: holiday.note ?? "",
+      status: mapStatus(holiday.status),
+      affectedPackages: new Set(holiday.credits.map((credit) => credit.customerPackageId)).size,
+      creditedDeliveries: holiday.credits.length,
+    }));
+  } catch {
+    return [];
   }
 }
 

@@ -21,7 +21,7 @@ export default async function CustomerPaymentsPage() {
 
   return (
     <div>
-      <PageHeader title="Payments" description="Review checkout payments and receipts for your tiffin orders." />
+      <PageHeader title="Payments" description="Review payment status and billing history for your tiffin orders." />
 
       <Card className="mb-6 p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -31,7 +31,7 @@ export default async function CustomerPaymentsPage() {
             </span>
             <div>
               <p className="font-display text-2xl font-black">{formatCurrency(paidTotal)}</p>
-              <p className="text-sm font-bold text-ink/55">Collected through Stripe Checkout</p>
+              <p className="text-sm font-bold text-ink/55">Paid across completed orders</p>
             </div>
           </div>
           <ButtonLink href="/packages" variant="secondary">

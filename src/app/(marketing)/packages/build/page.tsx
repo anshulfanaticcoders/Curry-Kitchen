@@ -5,6 +5,7 @@ import { getAdminSettings } from "@/lib/server/admin";
 import { getCustomPackageItems } from "@/lib/server/catalog";
 import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
 import { getMarketingMetadata } from "@/lib/server/seo";
+import { getPackageScheduleAvailability } from "@/lib/server/delivery-schedule-adjustments";
 
 export const dynamic = "force-dynamic";
 
@@ -21,11 +22,12 @@ export default async function BuildPackagePage({
 }: {
   searchParams: Promise<{ edit?: string | string[] }>;
 }) {
-  const [params, customItems, adminSettings, backgrounds] = await Promise.all([
+  const [params, customItems, adminSettings, backgrounds, availability] = await Promise.all([
     searchParams,
     getCustomPackageItems(),
     getAdminSettings(),
     getPageBackgrounds(),
+    getPackageScheduleAvailability(),
   ]);
 
   return (
@@ -48,6 +50,7 @@ export default async function BuildPackagePage({
           customMonthlyDays: adminSettings.customMonthlyDays,
         }}
         editLineId={firstValue(params.edit)}
+        availability={availability}
       />
     </main>
   );

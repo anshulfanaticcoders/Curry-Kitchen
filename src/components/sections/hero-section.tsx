@@ -32,14 +32,14 @@ function AnimatedTitle() {
     <motion.h1
       variants={reveal}
       transition={{ staggerChildren: 0.035, delayChildren: 0.18 }}
-      className="flex flex-nowrap justify-center whitespace-nowrap font-display text-[clamp(2.45rem,10vw,4.2rem)] font-black leading-[0.94] tracking-[-0.045em] lg:text-[clamp(3rem,6vw,5.6rem)]"
+      className="flex flex-nowrap justify-center whitespace-nowrap font-display text-[clamp(2.35rem,9.5vw,4.2rem)] font-black leading-[0.94] tracking-normal lg:text-[clamp(3rem,6vw,5.6rem)]"
     >
       {"Curry".split("").map((character, index) => (
         <motion.span key={`curry-${index}`} variants={titleCharacter} className="inline-block">
           {character}
         </motion.span>
       ))}
-      <span className="inline-block w-[0.2em] lg:w-[0.23em]" aria-hidden />
+      <span className="inline-block w-[0.22em] lg:w-[0.25em]" aria-hidden />
       {"Kitchen".split("").map((character, index) =>
         character === "i" ? (
           <span key={`kitchen-${index}`} className="relative inline-block">
@@ -48,9 +48,9 @@ function AnimatedTitle() {
             </motion.span>
             <motion.span
               aria-hidden
-              className="pointer-events-none absolute -top-[0.55em] left-1/2 -translate-x-1/2 text-saffron"
-              initial={{ opacity: 0, rotate: -16, y: -16 }}
-              animate={{ opacity: 1, rotate: [0, 2, 0, -2, 0], y: [0, -5, 0, -4, 0] }}
+              className="pointer-events-none absolute -top-[0.46em] left-1/2 -translate-x-1/2 text-saffron"
+              initial={{ opacity: 0, rotate: -10, y: -12 }}
+              animate={{ opacity: 1, rotate: [7, 9, 7, 5, 7], y: [0, -3, 0, -2, 0] }}
               transition={{
                 opacity: { delay: 1, duration: 0.65, ease: [0.22, 1, 0.36, 1] },
                 rotate: { delay: 1.65, duration: 3.6, ease: "easeInOut", repeat: Infinity },
@@ -102,8 +102,8 @@ export function HeroSection({ background, facts }: { background: PageBackgroundV
       <div className="absolute inset-x-0 bottom-0 -z-10 h-[42%] bg-gradient-to-t from-black/80 via-black/28 to-transparent" />
       <div className="absolute inset-x-0 top-0 -z-10 h-36 bg-gradient-to-b from-black/64 to-transparent" />
 
-      <div className="section-shell flex w-full flex-1 flex-col justify-center py-28 sm:py-32 lg:pb-20 lg:pt-16">
-        <div className="flex flex-col items-center gap-12 text-center lg:gap-8">
+      <div className="section-shell flex w-full flex-1 flex-col justify-center pb-8 pt-28 sm:py-32 lg:pb-20 lg:pt-16">
+        <div className="flex flex-col items-center gap-8 text-center sm:gap-10 lg:gap-8">
         <motion.div
           initial="hidden"
           animate="show"
@@ -151,16 +151,16 @@ export function HeroSection({ background, facts }: { background: PageBackgroundV
           >
             The Curry Kitchen promise
           </motion.p>
-          <ul className="mt-4 flex flex-col border-y border-white/16 md:flex-row">
+          <ul className="mt-4 flex snap-x snap-mandatory overflow-x-auto border-y border-white/16 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:overflow-visible">
             {promises.map(([title, copy], index) => (
               <motion.li
                 key={title}
                 variants={reveal}
                 transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
                 className={cn(
-                  "py-5 text-left md:flex-1 md:px-7",
-                  index > 0 && "border-t border-white/14 md:border-l md:border-t-0",
-                  index === 0 && "md:pl-0",
+                  "min-w-[82%] snap-start px-5 py-4 text-left md:min-w-0 md:flex-1 md:px-7 md:py-5",
+                  index > 0 && "border-l border-white/14",
+                  index === 0 && "pl-0 md:pl-0",
                   index === promises.length - 1 && "md:pr-0",
                 )}
               >

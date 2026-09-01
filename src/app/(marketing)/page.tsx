@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import {
   ArrowRight,
+  CalendarRange,
   ClipboardCheck,
   CookingPot,
+  FileText,
   Truck,
 } from "lucide-react";
 import { PackageCard } from "@/components/food/package-card";
+import { MenuDayCard } from "@/components/food/menu-day-card";
 import { JsonLd } from "@/components/seo/json-ld";
 import { HeroSection } from "@/components/sections/hero-section";
 import { TestimonialsCarousel } from "@/components/sections/testimonials-carousel";
@@ -13,7 +16,7 @@ import { RevealItem, StaggerGroup } from "@/components/ui/animated-section";
 import { ButtonLink } from "@/components/ui/button";
 import { getBusinessRules } from "@/lib/business-rules";
 import { getAdminSettings } from "@/lib/server/admin";
-import { getPackagePlans, getTestimonials } from "@/lib/server/catalog";
+import { getActiveMenuUploads, getPackagePlans, getTestimonials, getWeeklyMenu } from "@/lib/server/catalog";
 import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
 import { getHomeSchemas, getMarketingMetadata } from "@/lib/server/seo";
 
@@ -56,15 +59,19 @@ const backgroundOverlay = {
 } as const;
 
 export default async function Home() {
-  const [packagePlans, testimonials, schemas, backgrounds, settings, rules] = await Promise.all([
+  const [packagePlans, testimonials, schemas, backgrounds, settings, rules, menuUploads, weeklyMenu] = await Promise.all([
     getPackagePlans(),
     getTestimonials(),
     getHomeSchemas(),
     getPageBackgrounds(),
     getAdminSettings(),
     getBusinessRules(),
+    getActiveMenuUploads(),
+    getWeeklyMenu(),
   ]);
   const featuredPlans = packagePlans.filter((plan) => plan.isFeatured).slice(0, 3);
+  const featuredMenus = menuUploads.slice(0, 3);
+  const featuredMenuDays = weeklyMenu.slice(0, 3);
   return (
     <main className="overflow-hidden bg-[#fffdf9] text-ink">
       <JsonLd data={schemas} />
@@ -115,6 +122,76 @@ export default async function Home() {
           </RevealItem>
         </StaggerGroup>
       </section>
+
+      {featuredMenus.length || featuredMenuDays.length ? (
+        <section className="dark-band relative overflow-hidden py-20 text-white lg:py-24">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_82%_18%,rgba(255,122,26,0.14),transparent_31%)]" />
+          <StaggerGroup className="section-shell relative">
+            <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+              <div className="max-w-2xl">
+                <RevealItem as="p" className="text-xs font-black uppercase tracking-[0.18em] text-saffron">
+                  Fresh from the kitchen
+                </RevealItem>
+                <RevealItem as="h2" className="mt-3 font-display text-4xl font-black leading-[1.08] sm:text-5xl">
+                  This month&apos;s menus, week by week.
+                </RevealItem>
+              </div>
+              <RevealItem>
+                <ButtonLink href="/menu" variant="secondary" className="rounded-full border-white/20 bg-transparent px-6 text-white hover:bg-white hover:text-ink">
+                  View full menu
+                  <ArrowRight size={18} />
+                </ButtonLink>
+              </RevealItem>
+            </div>
+
+            <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+              {featuredMenus.length
+                ? featuredMenus.map((menu) => (
+                    <RevealItem key={menu.id}>
+                      <a
+                        href={`/menu/view/${menu.id}`}
+                        className="group block overflow-hidden rounded-lg border border-white/12 bg-white text-ink transition duration-500 hover:-translate-y-1 hover:border-saffron/55 hover:shadow-[0_22px_65px_rgba(0,0,0,0.34)]"
+                      >
+                        <span className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-[#f7f1e9]">
+                          {menu.isPdf ? (
+                            <span className="flex flex-col items-center gap-3 text-center">
+                              <span className="grid size-14 place-items-center rounded-full bg-saffron text-ink">
+                                <FileText size={25} />
+                              </span>
+                              <span className="text-sm font-black">Open PDF menu</span>
+                            </span>
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element -- admin-uploaded menu artwork can have any dimensions.
+                            <img
+                              src={menu.fileUrl}
+                              alt={`${menu.title} Curry Kitchen menu`}
+                              loading="lazy"
+                              className="size-full object-contain object-center transition duration-700 group-hover:scale-[1.025]"
+                            />
+                          )}
+                        </span>
+                        <span className="flex items-center justify-between gap-4 px-5 py-4">
+                          <span>
+                            <span className="block font-display text-xl font-black">{menu.title}</span>
+                            <span className="mt-1 flex items-center gap-1.5 text-xs font-bold text-ink/55">
+                              <CalendarRange size={14} />
+                              {menu.dateRangeLabel}
+                            </span>
+                          </span>
+                          <ArrowRight className="shrink-0 transition duration-300 group-hover:translate-x-1" size={19} />
+                        </span>
+                      </a>
+                    </RevealItem>
+                  ))
+                : featuredMenuDays.map((item) => (
+                    <RevealItem key={item.day}>
+                      <MenuDayCard item={item} />
+                    </RevealItem>
+                  ))}
+            </div>
+          </StaggerGroup>
+        </section>
+      ) : null}
 
       <section className="section bg-[#f8f0e7]">
         <StaggerGroup className="section-shell">

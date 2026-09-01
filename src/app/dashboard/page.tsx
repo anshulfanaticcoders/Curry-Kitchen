@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { CalendarDays, Clock, PackageCheck, Settings2, Truck, Utensils } from "lucide-react";
+import { CalendarDays, CalendarOff, Clock, PackageCheck, RotateCcw, Settings2, Truck, Utensils } from "lucide-react";
 import { CustomerPauseButton } from "@/components/dashboard/customer-pause-button";
 import { Card, CardHeader, PageHeader, StatCard, Table, Td, Th } from "@/components/dashboard/primitives";
 import { ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getCurrentSession } from "@/lib/auth";
+import { getBusinessRules } from "@/lib/business-rules";
+import { nextEligiblePackageStartInput } from "@/lib/package-schedule";
 import {
   getCustomerOrders,
   getCustomerPackageSummaries,
@@ -21,17 +23,19 @@ function statusTone(status: string) {
 export const dynamic = "force-dynamic";
 
 export default async function CustomerOverviewPage() {
-  const [session, packageSummaries, recentOrders, upcomingDeliveries] = await Promise.all([
+  const [session, packageSummaries, recentOrders, upcomingDeliveries, rules] = await Promise.all([
     getCurrentSession(),
     getCustomerPackageSummaries(),
     getCustomerOrders(),
     getUpcomingDeliveries(),
+    getBusinessRules(),
   ]);
+  const earliestPauseDate = nextEligiblePackageStartInput(new Date(), rules.deliveryWeekdays);
   const firstName = session?.user?.name?.split(" ")[0] ?? "there";
-  const currentPackage = packageSummaries[0];
   const livePackages = packageSummaries.filter((item) =>
     ["Active", "Paused", "Pending payment", "Needs student approval"].includes(item.status),
   );
+  const currentPackage = livePackages[0] ?? packageSummaries[0];
   const remainingDeliveryDays = livePackages.reduce(
     (total, item) => total + item.remainingDeliveryDays,
     0,
@@ -105,6 +109,18 @@ export default async function CustomerOverviewPage() {
                     <p className="mt-2 text-sm font-bold text-ink/55">
                       Starts {item.startDate} · One tiffin each delivery day
                     </p>
+                    {item.holidayImpacts?.map((holiday) => (
+                      <div key={holiday.id} className="mt-3 flex items-start gap-3 rounded-lg border border-saffron/25 bg-rose px-4 py-3">
+                        <CalendarOff className="mt-0.5 shrink-0 text-masala" size={17} />
+                        <div className="text-xs font-bold leading-5 text-ink/62">
+                          <p className="font-extrabold text-ink">{holiday.name}: kitchen closed {holiday.startDate}–{holiday.endDate}</p>
+                          <p>
+                            {holiday.creditedDeliveries} {holiday.creditedDeliveries === 1 ? "delivery has" : "deliveries have"} been moved to the end of this package.
+                            {holiday.note ? ` ${holiday.note}` : ""}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                   <div>
                     <div className="flex justify-between text-xs font-extrabold text-ink/55">
@@ -117,12 +133,21 @@ export default async function CustomerOverviewPage() {
                     <p className="mt-2 text-xs font-bold text-ink/45">Scheduled through {item.endDate}</p>
                   </div>
                   <div className="w-full lg:w-56">
-                    <CustomerPauseButton
-                      packageId={item.id}
-                      canSelfPause={item.canSelfPause}
-                      customerPauseUsed={item.customerPauseUsed}
-                      status={item.status}
-                    />
+                    {item.status === "Expired" && item.packageId ? (
+                      <ButtonLink href={`/packages?plan=${encodeURIComponent(item.packageId)}#build-plan`} className="w-full">
+                        <RotateCcw size={18} />
+                        Buy again
+                      </ButtonLink>
+                    ) : (
+                      <CustomerPauseButton
+                        packageId={item.id}
+                        canSelfPause={item.canSelfPause}
+                        customerPauseUsed={item.customerPauseUsed}
+                        status={item.status}
+                        earliestPauseDate={earliestPauseDate}
+                        scheduledPause={item.scheduledPause}
+                      />
+                    )}
                   </div>
                 </div>
               );

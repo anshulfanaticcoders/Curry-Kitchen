@@ -14,8 +14,8 @@ import {
   parsePackageCart,
   type PackageCartItemInput,
 } from "@/lib/package-cart";
-import { nextEligiblePackageStartInput } from "@/lib/package-schedule";
 import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
+import { getPackageScheduleAvailability } from "@/lib/server/delivery-schedule-adjustments";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Checkout", robots: { index: false, follow: false } };
@@ -25,7 +25,7 @@ export default async function CheckoutPage({
 }: {
   searchParams: Promise<{ package?: string; cart?: string }>;
 }) {
-  const [params, packagePlans, customPackageItems, customerProfile, adminSettings, backgrounds] =
+  const [params, packagePlans, customPackageItems, customerProfile, adminSettings, backgrounds, availability] =
     await Promise.all([
       searchParams,
       getPackagePlans(),
@@ -33,6 +33,7 @@ export default async function CheckoutPage({
       getCustomerProfileDetails(),
       getAdminSettings(),
       getPageBackgrounds(),
+      getPackageScheduleAvailability(),
     ]);
   let initialItems = parsePackageCart(params.cart);
 
@@ -45,7 +46,7 @@ export default async function CheckoutPage({
           kind: "plan",
           lineId: makePackageCartLineId(),
           packageId: legacyPlan.id,
-          startDate: nextEligiblePackageStartInput(),
+          startDate: availability.earliestStartDate,
         } satisfies PackageCartItemInput,
       ];
     }
@@ -98,6 +99,7 @@ export default async function CheckoutPage({
         customerProfile={customerProfile}
         taxRate={adminSettings.taxRate}
         zelleEmail={adminSettings.supportEmail}
+        availability={availability}
       />
     </main>
   );

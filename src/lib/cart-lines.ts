@@ -64,7 +64,7 @@ export function resolveCartLine(
     detail: plan?.servings ?? "",
     image: plan?.image,
     subtotal: plan?.price ?? 0,
-    isStudent: plan?.category === "Student",
+    isStudent: Boolean(plan?.requiresVerification),
     valid: Boolean(plan),
   };
 }

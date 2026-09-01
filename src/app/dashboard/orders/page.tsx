@@ -1,4 +1,4 @@
-import { RotateCcw, Wallet } from "lucide-react";
+import { CreditCard, RotateCcw, Wallet } from "lucide-react";
 import { Card, CardHeader, PageHeader, StatCard, Table, Td, Th } from "@/components/dashboard/primitives";
 import { ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -24,7 +24,7 @@ export default async function CustomerOrdersPage() {
     <div>
       <PageHeader
         title="Your orders"
-        description="Every tiffin order, receipt, and delivery in one place."
+        description="Every tiffin order and its payment status in one place."
         action={
           <ButtonLink href="/packages">
             <RotateCcw size={18} />
@@ -81,7 +81,8 @@ export default async function CustomerOrdersPage() {
                   <span className="font-black">{formatCurrency(order.total)}</span>
                 </div>
                 <ButtonLink href="/dashboard/payments" variant="secondary" className="mt-1 h-10 w-full">
-                  Receipt
+                  <CreditCard size={16} />
+                  Payment history
                 </ButtonLink>
               </div>
             ))
@@ -117,7 +118,8 @@ export default async function CustomerOrdersPage() {
                   <Td>
                     <div className="flex justify-end gap-2">
                       <ButtonLink href="/dashboard/payments" variant="secondary" className="h-9 px-4">
-                        Receipt
+                        <CreditCard size={16} />
+                        Payment history
                       </ButtonLink>
                     </div>
                   </Td>

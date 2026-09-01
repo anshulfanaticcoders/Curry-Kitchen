@@ -52,6 +52,7 @@ export function ConfirmActionButton({
       <button
         type="button"
         aria-label={label}
+        title={label}
         onClick={() => setOpen(true)}
         className={cn(
           "grid size-9 place-items-center rounded-button border border-ink/10 text-ink/60 transition hover:border-masala/40 hover:text-masala",
@@ -65,7 +66,7 @@ export function ConfirmActionButton({
         <div className="fixed inset-0 z-[80] grid place-items-center px-4">
           <button
             type="button"
-            aria-label="Close delete confirmation"
+            aria-label="Close confirmation dialog"
             className="absolute inset-0 bg-ink/60 backdrop-blur-sm"
             onClick={() => (pending ? undefined : setOpen(false))}
           />

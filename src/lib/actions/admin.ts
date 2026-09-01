@@ -19,6 +19,11 @@ import { createOrderCancelledEmail } from "@/lib/email/templates";
 import { calculateDeliveryDates, nextEligiblePackageStartDate } from "@/lib/package-schedule";
 import { isPageBackgroundSlot } from "@/lib/page-backgrounds";
 import { pausePackage, resumePackage } from "@/lib/server/package-pause";
+import {
+  cancelKitchenHoliday,
+  createKitchenHoliday,
+  getActiveHolidayDateRanges,
+} from "@/lib/server/delivery-schedule-adjustments";
 import { markOrderPaidAndActivate } from "@/lib/server/checkout";
 import { STATIC_SEO_ROUTES, normalizeSeoInput, validateHttpsImageUrl, validateHttpsUrl } from "@/lib/seo-core.mjs";
 
@@ -205,6 +210,18 @@ const menuUploadSchema = z
       .startsWith("/api/uploads/menus/", "Upload the menu file first."),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a start date."),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose an end date."),
+  })
+  .refine((value) => value.endDate >= value.startDate, {
+    message: "End date must be on or after the start date.",
+    path: ["endDate"],
+  });
+
+const businessHolidaySchema = z
+  .object({
+    name: z.string().trim().min(2, "Give the holiday a name.").max(120),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a start date."),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose an end date."),
+    note: z.string().trim().max(500).optional(),
   })
   .refine((value) => value.endDate >= value.startDate, {
     message: "End date must be on or after the start date.",
@@ -1185,7 +1202,7 @@ export async function approveStudentVerificationAction(verificationId: string) {
     });
 
     if (verification.orderId) {
-      const rules = await getBusinessRules();
+      const [rules, holidayRanges] = await Promise.all([getBusinessRules(), getActiveHolidayDateRanges()]);
       const pendingPackages = await db.customerPackage.findMany({
         where: { orderId: verification.orderId, status: "PENDING_STUDENT_VERIFICATION" },
         include: { deliveryDays: true, package: true },
@@ -1201,16 +1218,25 @@ export async function approveStudentVerificationAction(verificationId: string) {
             customerPackage.totalDeliveryDays,
             startDate,
             rules.deliveryWeekdays,
+            holidayRanges,
           );
+          const effectiveStartDate = deliveryDates[0] ?? startDate;
 
           await tx.customerPackage.update({
             where: { id: customerPackage.id },
             data: {
               status: "ACTIVE",
-              startDate,
+              startDate: effectiveStartDate,
               endDate: deliveryDates.at(-1) ?? null,
             },
           });
+
+          if (customerPackage.orderItemId && effectiveStartDate.getTime() !== startDate.getTime()) {
+            await tx.orderItem.update({
+              where: { id: customerPackage.orderItemId },
+              data: { startDate: effectiveStartDate },
+            });
+          }
 
           if (customerPackage.deliveryDays.length === 0) {
             await tx.packageDeliveryDay.createMany({
@@ -1293,6 +1319,66 @@ export async function adminPausePackageAction(customerPackageId: string, reason?
     );
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Package could not be paused.");
+  }
+}
+
+export async function createBusinessHolidayAction(formData: FormData) {
+  try {
+    const admin = await requireAdmin();
+    const parsed = businessHolidaySchema.safeParse(formObject(formData));
+    if (!parsed.success) {
+      return fail(parsed.error.issues[0]?.message ?? "Please check the holiday fields.");
+    }
+
+    const result = await createKitchenHoliday({
+      name: parsed.data.name,
+      startDateInput: parsed.data.startDate,
+      endDateInput: parsed.data.endDate,
+      note: parsed.data.note,
+      createdByUserId: admin.id,
+    });
+    await db.auditLog.create({
+      data: {
+        userId: admin.id,
+        action: "business_holiday.created",
+        entity: "business_holiday",
+        entityId: result.id,
+      },
+    });
+
+    revalidatePath("/admin/holidays");
+    revalidatePath("/admin/customers");
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/calendar");
+    return ok(
+      result,
+      `${result.creditedDeliveries} ${result.creditedDeliveries === 1 ? "delivery was" : "deliveries were"} credited across ${result.affectedPackages} ${result.affectedPackages === 1 ? "package" : "packages"}.`,
+    );
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Kitchen holiday could not be created.");
+  }
+}
+
+export async function cancelBusinessHolidayAction(holidayId: string) {
+  try {
+    const admin = await requireAdmin();
+    const result = await cancelKitchenHoliday(holidayId);
+    await db.auditLog.create({
+      data: {
+        userId: admin.id,
+        action: "business_holiday.cancelled",
+        entity: "business_holiday",
+        entityId: holidayId,
+      },
+    });
+
+    revalidatePath("/admin/holidays");
+    revalidatePath("/admin/customers");
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/calendar");
+    return ok(result, `Holiday cancelled. ${result.restoredDeliveries} scheduled deliveries were restored.`);
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Kitchen holiday could not be cancelled.");
   }
 }
 

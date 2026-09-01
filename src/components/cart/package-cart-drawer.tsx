@@ -8,6 +8,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { usePackageCart } from "@/components/providers/package-cart-provider";
 import { cartLineEditHref, resolveCartLine } from "@/lib/cart-lines";
 import { formatCurrency } from "@/lib/utils";
+import { packageStartDateIssue } from "@/lib/package-schedule";
 
 function displayStartDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -29,6 +30,7 @@ export function PackageCartDrawer() {
     catalogReady,
     removeItem,
     checkoutHref,
+    availability,
   } = usePackageCart();
   const plans = Object.values(plansById);
   const resolvedLines = items.map((item) =>
@@ -83,6 +85,12 @@ export function PackageCartDrawer() {
                     const { item, plan } = line;
                     const lineTotal = line.subtotal;
                     const editHref = cartLineEditHref(item);
+                    const startDateError = packageStartDateIssue(
+                      item.startDate,
+                      availability.deliveryWeekdays,
+                      availability.holidays,
+                      availability.earliestStartDate,
+                    );
 
                     return (
                       <motion.article
@@ -124,10 +132,13 @@ export function PackageCartDrawer() {
                                   ? "This saved configuration is no longer available."
                                   : "Loading package details..."}
                             </p>
-                            <p className="mt-2 flex items-center gap-1.5 text-xs font-extrabold text-leaf">
+                            <p className={`mt-2 flex items-center gap-1.5 text-xs font-extrabold ${startDateError ? "text-masala" : "text-leaf"}`}>
                               <CalendarDays size={14} />
-                              Starts {displayStartDate(item.startDate)}
+                              {startDateError ? "Start date needs attention" : `Starts ${displayStartDate(item.startDate)}`}
                             </p>
+                            {startDateError ? (
+                              <p className="mt-1 text-xs font-bold leading-5 text-masala">{startDateError}</p>
+                            ) : null}
                             <div className="mt-3 flex justify-end gap-2">
                               <Link
                                 href={editHref}
