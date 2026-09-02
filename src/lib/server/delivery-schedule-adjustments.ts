@@ -220,6 +220,114 @@ export async function scheduleCustomerPause({
   });
 }
 
+// Undo a customer's scheduled one-time pause so they can book it again with the
+// right dates: restore the cancelled days, remove the appended replacements,
+// and give the package its pause back. Only allowed before the pause starts.
+export async function resetScheduledCustomerPause(customerPackageId: string) {
+  const today = inputToDate(businessDateInput());
+
+  return db.$transaction(async (tx) => {
+    const customerPackage = await tx.customerPackage.findUnique({
+      where: { id: customerPackageId },
+      include: { deliveryDays: true, pauseRequests: true, customer: { select: { userId: true } } },
+    });
+    if (!customerPackage) throw new Error("Package was not found.");
+
+    const pause = customerPackage.pauseRequests.find((request) => request.status === "ACTIVE");
+    if (!pause || !customerPackage.customerPauseUsed) {
+      throw new Error("This package has no scheduled customer pause to reset.");
+    }
+    if (customerPackage.status !== "ACTIVE") {
+      throw new Error("Only an upcoming pause on an active package can be reset.");
+    }
+    if (pause.startDate < today) {
+      throw new Error("This pause has already started and must be adjusted manually.");
+    }
+
+    const holidayCredits = await tx.holidayDeliveryCredit.findMany({
+      where: { customerPackageId },
+      select: {
+        originalDeliveryDayId: true,
+        replacementDeliveryDayId: true,
+        originalDeliveryDate: true,
+        businessHoliday: { select: { status: true } },
+      },
+    });
+    // ponytail: a holiday declared over the pause's replacement days breaks the
+    // "replacements are the latest scheduled days" assumption — hand off to manual.
+    if (
+      holidayCredits.some(
+        (credit) => credit.businessHoliday.status === "ACTIVE" && credit.originalDeliveryDate > pause.endDate,
+      )
+    ) {
+      throw new Error("A kitchen holiday also moved days on this schedule. Cancel that holiday first or adjust manually.");
+    }
+    const holidayOriginalIds = new Set(holidayCredits.map((credit) => credit.originalDeliveryDayId));
+    const holidayReplacementIds = new Set(holidayCredits.map((credit) => credit.replacementDeliveryDayId));
+
+    const restoreDays = customerPackage.deliveryDays.filter(
+      (day) =>
+        day.status === "CANCELLED" &&
+        !holidayOriginalIds.has(day.id) &&
+        day.deliveryDate >= pause.startDate &&
+        day.deliveryDate <= pause.endDate,
+    );
+    if (!restoreDays.length) {
+      throw new Error("No paused delivery days were found to restore. Adjust this schedule manually.");
+    }
+
+    // The pause appended its replacement days after the then-latest scheduled
+    // day, so the latest N non-holiday PREPARING days are those replacements.
+    const replacements = customerPackage.deliveryDays
+      .filter((day) => day.status === "PREPARING" && !holidayReplacementIds.has(day.id))
+      .sort((a, b) => b.deliveryDate.getTime() - a.deliveryDate.getTime())
+      .slice(0, restoreDays.length);
+    if (replacements.length < restoreDays.length) {
+      throw new Error("This schedule no longer matches the pause and must be adjusted manually.");
+    }
+
+    await tx.packageDeliveryDay.deleteMany({
+      where: { id: { in: replacements.map((day) => day.id) } },
+    });
+    await tx.packageDeliveryDay.updateMany({
+      where: { id: { in: restoreDays.map((day) => day.id) } },
+      data: { status: "PREPARING" },
+    });
+    await tx.pauseRequest.update({
+      where: { id: pause.id },
+      data: { status: "REJECTED", adminNote: "Reset by admin so the customer can schedule the pause again." },
+    });
+
+    const deletedIds = new Set(replacements.map((day) => day.id));
+    const restoredIds = new Set(restoreDays.map((day) => day.id));
+    const remainingDates = customerPackage.deliveryDays
+      .filter((day) => !deletedIds.has(day.id) && (day.status !== "CANCELLED" || restoredIds.has(day.id)))
+      .map((day) => day.deliveryDate);
+
+    await tx.customerPackage.update({
+      where: { id: customerPackageId },
+      data: {
+        customerPauseUsed: false,
+        endDate: maxDate(remainingDates),
+        reminderEmailSentAt: null,
+      },
+    });
+
+    if (customerPackage.customer?.userId) {
+      await tx.notification.create({
+        data: {
+          userId: customerPackage.customer.userId,
+          type: "SYSTEM",
+          title: "Pause reset",
+          body: "Your scheduled pause was reset and your original delivery schedule is restored. You can schedule your pause again with the correct dates.",
+        },
+      });
+    }
+
+    return { restoredDays: restoreDays.length };
+  });
+}
+
 export async function createKitchenHoliday({
   name,
   startDateInput,
@@ -324,8 +432,8 @@ export async function createKitchenHoliday({
           data: {
             userId: customerPackage.customer.userId,
             type: "SYSTEM",
-            title: "Kitchen holiday credited",
-            body: `${holiday.name} affects ${days.length} delivery ${days.length === 1 ? "day" : "days"}. The same number has been added to the end of your package.${holiday.note ? ` ${holiday.note}` : ""}`,
+            title: "Kitchen holiday — deliveries moved",
+            body: `${holiday.name} affects ${days.length} delivery ${days.length === 1 ? "day" : "days"}. The same number has been added to the end of your package, so you receive every delivery you paid for.${holiday.note ? ` ${holiday.note}` : ""}`,
           },
         });
       }

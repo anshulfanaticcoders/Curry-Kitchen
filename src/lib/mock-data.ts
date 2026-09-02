@@ -381,11 +381,11 @@ export const seoEntries: SeoEntry[] = [
 ];
 
 export const adminOrders: AdminOrder[] = [
-  { id: "CK-1048", customer: "Priya Sharma", plan: "Regular 8 Roti Tiffin", items: 5, total: 368, payment: "Paid", status: "Accepted", date: "Jun 21, 2026" },
-  { id: "CK-1047", customer: "Simran Kaur", plan: "Regular 8 Roti Tiffin", items: 5, total: 350, payment: "Paid", status: "Accepted", date: "Jun 21, 2026" },
-  { id: "CK-1046", customer: "Aman Gill", plan: "Student & Military Saver Pack", items: 5, total: 220, payment: "Paid", status: "Accepted", date: "Jun 20, 2026" },
-  { id: "CK-1041", customer: "Neha Patel", plan: "Weekly Trial Pack", items: 6, total: 100, payment: "Refunded", status: "Cancelled", date: "Jun 14, 2026" },
-  { id: "CK-1040", customer: "Rohan Mehta", plan: "Extra Large 12 Roti Tiffin", items: 5, total: 450, payment: "Pending", status: "Pending payment", date: "Jun 13, 2026" },
+  { id: "CK-1048", customer: "Priya Sharma", plan: "Regular 8 Roti Tiffin", items: 5, total: 368, payment: "Paid", status: "Accepted", date: "Jun 21, 2026", allergies: "" },
+  { id: "CK-1047", customer: "Simran Kaur", plan: "Regular 8 Roti Tiffin", items: 5, total: 350, payment: "Paid", status: "Accepted", date: "Jun 21, 2026", allergies: "" },
+  { id: "CK-1046", customer: "Aman Gill", plan: "Student & Military Saver Pack", items: 5, total: 220, payment: "Paid", status: "Accepted", date: "Jun 20, 2026", allergies: "" },
+  { id: "CK-1041", customer: "Neha Patel", plan: "Weekly Trial Pack", items: 6, total: 100, payment: "Refunded", status: "Cancelled", date: "Jun 14, 2026", allergies: "" },
+  { id: "CK-1040", customer: "Rohan Mehta", plan: "Extra Large 12 Roti Tiffin", items: 5, total: 450, payment: "Pending", status: "Pending payment", date: "Jun 13, 2026", allergies: "" },
 ];
 
 export const customPackageItems = [

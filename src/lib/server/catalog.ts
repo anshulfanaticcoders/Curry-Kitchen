@@ -117,7 +117,12 @@ function planFromRecord(plan: {
   id: string;
   slug: string;
   name: string;
-  category: { name: string; deliveryDayCount: number; requiresVerification: boolean };
+  category: {
+    name: string;
+    deliveryDayCount: number;
+    deliveryCharge: DecimalLike | null;
+    requiresVerification: boolean;
+  };
   isFeatured: boolean;
   badge: string | null;
   price: DecimalLike;
@@ -138,6 +143,8 @@ function planFromRecord(plan: {
     name: plan.name,
     category: plan.category.name,
     deliveryDayCount: plan.category.deliveryDayCount,
+    categoryDeliveryCharge:
+      plan.category.deliveryCharge == null ? null : toNumber(plan.category.deliveryCharge),
     requiresVerification: plan.category.requiresVerification,
     isFeatured: plan.isFeatured,
     badge: plan.badge ?? plan.category.name,
@@ -417,6 +424,7 @@ export async function getAdminOrders(): Promise<AdminOrder[]> {
       payment: mapPaymentStatus(order.payments[0]?.status ?? "PENDING"),
       status: mapOrderStatus(order.status),
       date: formatDate(order.createdAt),
+      allergies: order.allergies?.trim() ?? "",
     }));
   } catch {
     return [];
@@ -504,7 +512,7 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
                 items: { orderBy: { sortOrder: "asc" } },
               },
             },
-            order: { select: { foodPreferences: true } },
+            order: { select: { foodPreferences: true, allergies: true } },
             deliveryDays: {
               orderBy: { deliveryDate: "asc" },
             },
@@ -551,6 +559,7 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
             item.quantity ? `${item.quantity} ${item.name}` : item.name,
           ),
           foodPreferences: customerPackage.order.foodPreferences?.trim() || "No special food preferences",
+          allergies: customerPackage.order.allergies?.trim() ?? "",
         };
       }),
     };

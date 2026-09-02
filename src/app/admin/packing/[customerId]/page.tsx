@@ -30,6 +30,11 @@ export default async function PackingRecordPage({
           record.packages.map((customerPackage) => (
             <Card key={customerPackage.id} className="p-5">
               <h2 className="font-display text-2xl font-black">{customerPackage.name}</h2>
+              {customerPackage.allergies ? (
+                <p className="mt-3 rounded-lg border border-masala/40 bg-rose p-3 text-base font-black text-masala">
+                  Allergies: {customerPackage.allergies}
+                </p>
+              ) : null}
               <ul className="mt-4 grid gap-2 text-base font-bold text-ink/80">
                 {customerPackage.includes.length ? (
                   customerPackage.includes.map((item) => (

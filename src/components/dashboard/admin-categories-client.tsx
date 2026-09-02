@@ -37,6 +37,7 @@ export function AdminCategoriesClient({ categories }: { categories: Category[] }
               <Th>Slug</Th>
               <Th>Plans</Th>
               <Th>Delivery days</Th>
+              <Th>Delivery charge</Th>
               <Th>Verification</Th>
               <Th>Description</Th>
               <Th>Status</Th>
@@ -50,6 +51,11 @@ export function AdminCategoriesClient({ categories }: { categories: Category[] }
                 <Td className="text-ink/55">/{category.slug}</Td>
                 <Td>{category.count}</Td>
                 <Td>{category.deliveryDayCount}</Td>
+                <Td>
+                  {category.deliveryCharge == null
+                    ? "Global"
+                    : `$${category.deliveryCharge.toFixed(2)}`}
+                </Td>
                 <Td>
                   <StatusPill tone={category.requiresVerification ? "amber" : "green"}>
                     {category.requiresVerification ? "Required" : "Not required"}

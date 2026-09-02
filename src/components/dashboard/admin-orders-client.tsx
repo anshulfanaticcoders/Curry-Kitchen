@@ -62,6 +62,12 @@ function OrderDetails({ order, close }: { order: AdminOrder; close: () => void }
           </div>
         ))}
       </div>
+      {order.allergies ? (
+        <div className="rounded-lg border border-masala/40 bg-rose p-4">
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-masala">Allergies</p>
+          <p className="mt-1 font-bold text-masala">{order.allergies}</p>
+        </div>
+      ) : null}
       <div className="rounded-lg border border-ink/10 bg-ivory p-4">
         <p className="text-xs font-black uppercase tracking-[0.14em] text-ink/45">Status</p>
         <div className="mt-2">

@@ -53,9 +53,25 @@ export function CategoryForm({ category }: { category?: Category }) {
           Student / military verification required
         </label>
       </div>
-      <Field label="Sort order">
-        <Input name="sortOrder" type="number" min="0" defaultValue="0" />
-      </Field>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field
+          label="Delivery charge (USD)"
+          hint="Charged once per order for packages in this category. Leave blank to use the global delivery charge."
+        >
+          <Input
+            name="deliveryCharge"
+            type="number"
+            min="0"
+            max="999"
+            step="0.01"
+            defaultValue={category?.deliveryCharge ?? ""}
+            placeholder="Global charge"
+          />
+        </Field>
+        <Field label="Sort order">
+          <Input name="sortOrder" type="number" min="0" defaultValue="0" />
+        </Field>
+      </div>
       <Field label="Description">
         <Textarea name="description" defaultValue={category?.description} placeholder="Full-month tiffin plans." />
       </Field>

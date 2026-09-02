@@ -128,7 +128,7 @@ function DeliveryRulesTab({ settings }: { settings: AdminSettings }) {
           <Field label="Order cut-off"><Select name="orderCutoff" defaultValue={settings.orderCutoff}><option>9:00 AM</option><option>Noon</option><option>3:00 PM</option></Select></Field>
           <Field label="Delivery days"><Input name="deliveryDays" defaultValue={settings.deliveryDays} required /></Field>
           <Field label="Custom package: monthly delivery days" hint="Days billed for a custom monthly plan."><Input name="customMonthlyDays" type="number" min="1" max="60" step="1" defaultValue={settings.customMonthlyDays} required /></Field>
-          <Field label="Flat delivery charge (USD)" hint="Applied once per complete order, never by ZIP or by package."><Input name="deliveryCharge" type="number" min="0" max="999" step="0.01" defaultValue={settings.deliveryCharge.toFixed(2)} required /></Field>
+          <Field label="Flat delivery charge (USD)" hint="Default applied once per complete order. Categories with their own delivery charge override this amount."><Input name="deliveryCharge" type="number" min="0" max="999" step="0.01" defaultValue={settings.deliveryCharge.toFixed(2)} required /></Field>
           <Field label="Checkout delivery note" hint="Optional message customers see beside the delivery charge." className="md:col-span-2"><Textarea name="deliveryChargeNote" maxLength={240} defaultValue={settings.deliveryChargeNote} placeholder="A flat delivery charge applies once to each order." /></Field>
         </div>
         <div className="mt-5 grid gap-3">

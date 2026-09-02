@@ -50,11 +50,11 @@ function AnimatedTitle() {
               aria-hidden
               className="pointer-events-none absolute -top-[0.46em] left-1/2 -translate-x-1/2 text-saffron"
               initial={{ opacity: 0, rotate: -10, y: -12 }}
-              animate={{ opacity: 1, rotate: [7, 9, 7, 5, 7], y: [0, -3, 0, -2, 0] }}
+              animate={{ opacity: 1, rotate: 0, y: [0, -7, 0, -4, 0] }}
               transition={{
                 opacity: { delay: 1, duration: 0.65, ease: [0.22, 1, 0.36, 1] },
-                rotate: { delay: 1.65, duration: 3.6, ease: "easeInOut", repeat: Infinity },
-                y: { delay: 1.65, duration: 3.6, ease: "easeInOut", repeat: Infinity },
+                rotate: { delay: 1, duration: 0.65, ease: [0.22, 1, 0.36, 1] },
+                y: { delay: 1.65, duration: 2.4, ease: "easeInOut", repeat: Infinity },
               }}
             >
               <ChefHat className="h-[0.6em] w-[0.6em]" strokeWidth={2.25} />

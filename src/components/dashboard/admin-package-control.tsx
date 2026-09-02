@@ -4,7 +4,11 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { ConfirmActionButton } from "@/components/dashboard/confirm-action-button";
-import { adminPausePackageAction, adminResumePackageAction } from "@/lib/actions/admin";
+import {
+  adminPausePackageAction,
+  adminResetCustomerPauseAction,
+  adminResumePackageAction,
+} from "@/lib/actions/admin";
 import type { Customer } from "@/lib/types";
 
 export function AdminPackageControl({ customer }: { customer: Customer }) {
@@ -18,7 +22,8 @@ export function AdminPackageControl({ customer }: { customer: Customer }) {
   const paused = customer.status === "Paused";
 
   return (
-    <ConfirmActionButton
+    <div className="flex flex-wrap gap-3">
+      <ConfirmActionButton
       label={paused ? "Resume package" : "Pause package"}
       title={paused ? `Resume ${customer.plan}?` : `Pause ${customer.plan}?`}
       description={
@@ -43,6 +48,29 @@ export function AdminPackageControl({ customer }: { customer: Customer }) {
           }),
         )
       }
-    />
+      />
+      {!paused ? (
+        <ConfirmActionButton
+          label="Reset customer pause"
+          title="Reset the customer's scheduled pause?"
+          description="Restores the original delivery days, removes the make-up days from the end, and lets the customer schedule their one-time pause again. Only works before the pause starts."
+          confirmLabel="Reset pause"
+          action={() =>
+            new Promise((resolve) =>
+              startTransition(async () => {
+                const result = await adminResetCustomerPauseAction(customer.activePackageId!);
+                if (result.ok) {
+                  toast.success(result.message ?? "Pause reset.");
+                  router.refresh();
+                } else {
+                  toast.error("Pause could not be reset", { description: result.error });
+                }
+                resolve(result);
+              }),
+            )
+          }
+        />
+      ) : null}
+    </div>
   );
 }

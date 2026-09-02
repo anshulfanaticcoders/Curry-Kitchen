@@ -6,6 +6,8 @@ export type PackagePlan = {
   name: string;
   category: PackageCategory;
   deliveryDayCount: number;
+  /** Category-level delivery charge; null/undefined means use the global charge. */
+  categoryDeliveryCharge?: number | null;
   requiresVerification: boolean;
   isFeatured: boolean;
   badge: string;
@@ -235,6 +237,8 @@ export type Category = {
   count: number;
   description: string;
   deliveryDayCount: number;
+  /** null means the global delivery charge applies. */
+  deliveryCharge?: number | null;
   requiresVerification: boolean;
   status?: ProductStatus;
 };
@@ -362,6 +366,8 @@ export type PackagingPackage = {
   nextDelivery: string;
   includes: string[];
   foodPreferences: string;
+  /** Empty string when the customer declared no allergies. */
+  allergies: string;
 };
 
 export type PackagingRecord = {
@@ -420,6 +426,8 @@ export type AdminOrder = {
   payment: "Paid" | "Pending" | "Refunded";
   status: OrderDecision;
   date: string;
+  /** Empty string when the customer declared no allergies. */
+  allergies: string;
 };
 
 export type PlanPerformance = {

@@ -52,7 +52,7 @@ export function AdminHolidaysClient({
     <div>
       <PageHeader
         title="Delivery holidays"
-        description="Close the kitchen for selected dates and automatically credit every affected customer delivery."
+        description="Close the kitchen for selected dates. Affected deliveries automatically move to the end of each customer's package, so nobody loses a day."
       />
 
       <Card className="p-5 sm:p-6">
@@ -77,18 +77,18 @@ export function AdminHolidaysClient({
           <div className="flex justify-end md:col-span-2">
             <Button type="submit" disabled={pending}>
               {pending ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
-              {pending ? "Crediting deliveries" : "Add holiday"}
+              {pending ? "Moving deliveries" : "Add holiday"}
             </Button>
           </div>
         </form>
       </Card>
 
       <Card className="mt-6">
-        <CardHeader title="Holiday history" description="Active closures and the delivery credits created for them." />
+        <CardHeader title="Holiday history" description="Closures and the delivery days moved to the end of affected packages." />
         {holidays.length ? (
           <Table>
             <thead>
-              <tr><Th>Holiday</Th><Th>Dates</Th><Th>Credits</Th><Th>Status</Th><Th className="text-right">Action</Th></tr>
+              <tr><Th>Holiday</Th><Th>Dates</Th><Th>Days moved</Th><Th>Status</Th><Th className="text-right">Action</Th></tr>
             </thead>
             <tbody>
               {holidays.map((holiday) => (

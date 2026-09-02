@@ -70,6 +70,7 @@ const checkoutSchema = z.object({
     postalCode: z.string().min(5),
   }),
   foodPreferences: z.string().optional(),
+  allergies: z.string().max(1000).optional(),
   couponCode: z.string().optional(),
   paymentMethod: z
     .enum(["CREDIT_CARD", "DEBIT_CARD", "APPLE_PAY", "ZELLE"])
@@ -455,7 +456,17 @@ export async function createCheckoutOrder(rawInput: unknown) {
 
     const subtotal = pricedItems.reduce((sum, item) => sum + item.subtotal, 0);
     const deliveryCharge = globalDeliveryChargeFromValue(settings?.value);
-    const deliveryFee = deliveryCharge.enabled ? deliveryCharge.amount : 0;
+    // Delivery is still charged once per order; each category can override the
+    // global amount, and a mixed cart pays the highest applicable charge.
+    const deliveryFee = deliveryCharge.enabled
+      ? pricedItems.reduce((highest, { plan }) => {
+          const categoryCharge =
+            plan.category.deliveryCharge == null
+              ? deliveryCharge.amount
+              : toNumber(plan.category.deliveryCharge);
+          return Math.max(highest, categoryCharge);
+        }, 0)
+      : 0;
     let customer = await tx.customer.findUnique({ where: { userId: session.user.id } });
     customer ??= await tx.customer.findFirst({ where: { email: input.customer.email } });
 
@@ -534,6 +545,7 @@ export async function createCheckoutOrder(rawInput: unknown) {
         discountAmount: decimal(discountAmount),
         total: decimal(total),
         foodPreferences: input.foodPreferences,
+        allergies: input.allergies?.trim() || null,
         payments: {
           create: {
             amount: decimal(total),

@@ -22,6 +22,7 @@ import { pausePackage, resumePackage } from "@/lib/server/package-pause";
 import {
   cancelKitchenHoliday,
   createKitchenHoliday,
+  resetScheduledCustomerPause,
   getActiveHolidayDateRanges,
 } from "@/lib/server/delivery-schedule-adjustments";
 import { markOrderPaidAndActivate } from "@/lib/server/checkout";
@@ -191,6 +192,11 @@ const categorySchema = z.object({
   slug: z.string().optional(),
   description: z.string().optional(),
   deliveryDayCount: z.coerce.number().int().min(1).max(366),
+  // Blank means "use the global delivery charge from admin settings".
+  deliveryCharge: z.preprocess(
+    (value) => (value === "" || value == null ? null : value),
+    z.coerce.number().min(0).max(999).nullable(),
+  ),
   requiresVerification: formBoolean.default(false),
   sortOrder: z.coerce.number().int().min(0).default(0),
   status: z.enum(["ACTIVE", "DRAFT", "ARCHIVED"]).default("ACTIVE"),
@@ -1319,6 +1325,32 @@ export async function adminPausePackageAction(customerPackageId: string, reason?
     );
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Package could not be paused.");
+  }
+}
+
+export async function adminResetCustomerPauseAction(customerPackageId: string) {
+  try {
+    const admin = await requireAdmin();
+    const { restoredDays } = await resetScheduledCustomerPause(customerPackageId);
+
+    await db.auditLog.create({
+      data: {
+        userId: admin.id,
+        action: "customer_pause.reset",
+        entity: "customer_package",
+        entityId: customerPackageId,
+      },
+    });
+
+    revalidatePath("/admin/customers");
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/calendar");
+    return ok(
+      { id: customerPackageId },
+      `Pause reset — ${restoredDays} delivery ${restoredDays === 1 ? "day" : "days"} restored. The customer can schedule their pause again.`,
+    );
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Customer pause could not be reset.");
   }
 }
 

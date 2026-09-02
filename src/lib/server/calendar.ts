@@ -33,7 +33,7 @@ function formatFullDate(date: Date) {
 export async function getCustomerCalendarData(
   customerId: string,
 ): Promise<CustomerCalendarData | null> {
-  const [customer, rules] = await Promise.all([
+  const [customer, rules, activeHolidays] = await Promise.all([
     db.customer.findUnique({
       where: { id: customerId },
       include: {
@@ -49,11 +49,32 @@ export async function getCustomerCalendarData(
       },
     }),
     getBusinessRules(),
+    db.businessHoliday.findMany({
+      where: { status: "ACTIVE" },
+      select: { name: true, startDate: true, endDate: true },
+    }),
   ]);
 
   if (!customer) return null;
 
   const events: CustomerCalendarData["events"] = [];
+
+  // Mark every active kitchen-holiday date as closed, even when this customer
+  // has no delivery scheduled on it — the whole kitchen is off that day.
+  for (const holiday of activeHolidays) {
+    const cursor = new Date(holiday.startDate);
+    let guard = 0;
+
+    while (cursor <= holiday.endDate && guard < 62) {
+      events.push({
+        date: toDateKey(cursor),
+        type: "holiday",
+        label: `${holiday.name} — kitchen closed`,
+      });
+      cursor.setDate(cursor.getDate() + 1);
+      guard += 1;
+    }
+  }
 
   for (const customerPackage of customer.packages) {
     const planName = customerPackage.package.name;
@@ -89,7 +110,7 @@ export async function getCustomerCalendarData(
         date: toDateKey(day.deliveryDate),
         type: holidayCredit ? "holiday" : paused ? "pause" : "delivery",
         label: holidayCredit
-          ? `${holidayCredit.businessHoliday.name} — kitchen closed; delivery credited to ${formatFullDate(holidayCredit.replacementDeliveryDate)}`
+          ? `${holidayCredit.businessHoliday.name} — kitchen closed; delivery moved to ${formatFullDate(holidayCredit.replacementDeliveryDate)}`
           : paused
             ? `${planName} — delivery paused`
           : `${planName} — morning delivery`,

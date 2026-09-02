@@ -181,6 +181,8 @@ export function CheckoutFlow({
     postalCode: customerProfile.postalCode,
   });
   const [foodPreferences, setFoodPreferences] = useState(() => customerProfile.preferences.join(", "));
+  const [hasAllergies, setHasAllergies] = useState(false);
+  const [allergies, setAllergies] = useState("");
   const [student, setStudent] = useState({
     verificationType: "STUDENT" as "STUDENT" | "MILITARY",
     universityName: "",
@@ -261,7 +263,14 @@ export function CheckoutFlow({
         ),
   )
     : 0;
-  const deliveryFee = deliveryChargeEnabled ? deliveryCharge : 0;
+  // Mirrors the server: delivery is charged once per order, each category can
+  // override the global amount, and a mixed cart pays the highest charge.
+  const deliveryFee = deliveryChargeEnabled
+    ? resolvedItems.reduce(
+        (highest, line) => Math.max(highest, line.plan?.categoryDeliveryCharge ?? deliveryCharge),
+        0,
+      )
+    : 0;
   const { taxAmount, total } = calculateOrderTotals({
     subtotal,
     discountAmount,
@@ -281,6 +290,8 @@ export function CheckoutFlow({
     city: address.city.trim().length >= 2 ? "" : "Enter your city.",
     postalCode:
       address.postalCode.trim().length >= 5 ? "" : "Enter a valid ZIP / postal code.",
+    allergies:
+      !hasAllergies || allergies.trim().length >= 2 ? "" : "Tell us what you are allergic to.",
     universityName:
       !requiresStudent || student.universityName.trim().length >= 2
         ? ""
@@ -480,6 +491,7 @@ export function CheckoutFlow({
             postalCode: address.postalCode,
           },
           foodPreferences,
+          allergies: hasAllergies ? allergies.trim() : "",
           couponCode: appliedCoupon?.code,
           paymentMethod,
           student: requiresStudent
@@ -854,6 +866,29 @@ export function CheckoutFlow({
                   onChange={(event) => setFoodPreferences(event.target.value)}
                 />
               </label>
+              <div className="grid gap-3 md:col-span-2">
+                <label className="flex items-center gap-3 rounded-lg border border-ink/10 bg-white p-4 text-sm font-extrabold">
+                  <input
+                    type="checkbox"
+                    checked={hasAllergies}
+                    onChange={(event) => setHasAllergies(event.target.checked)}
+                    className="size-4 accent-saffron"
+                  />
+                  I have food allergies
+                </label>
+                {hasAllergies ? (
+                  <label className="grid gap-2 text-sm font-extrabold">
+                    What are you allergic to?
+                    <input
+                      value={allergies}
+                      onChange={(event) => setAllergies(event.target.value)}
+                      placeholder="e.g. peanuts, dairy, shellfish"
+                      className={fieldInputClass(showDeliveryErrors && Boolean(deliveryErrors.allergies))}
+                    />
+                    {showDeliveryErrors ? <FieldError message={deliveryErrors.allergies} /> : null}
+                  </label>
+                ) : null}
+              </div>
               {requiresStudent ? (
                 <div className="grid gap-4 rounded-lg border border-saffron/30 bg-rose p-4 md:col-span-2 md:grid-cols-2">
                   <p className="text-sm font-extrabold text-masala md:col-span-2">
