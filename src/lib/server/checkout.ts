@@ -15,11 +15,11 @@ import {
   packageStartDateIssue,
 } from "@/lib/package-schedule";
 import {
-  belowMinimumItems,
   customDeliveryDayCount,
   customPackageName,
   formatCustomQuantity,
   priceCustomPackage,
+  validateCustomPackageSelections,
   type CustomPackageItemOption,
 } from "@/lib/custom-package";
 import { MAX_CUSTOM_ITEM_QUANTITY } from "@/lib/package-cart";
@@ -322,14 +322,23 @@ export async function createCheckoutOrder(rawInput: unknown) {
     );
 
     if (customLines.length) {
-      const catalogueRows = await tx.customPackageItem.findMany({ where: { status: "ACTIVE" } });
+      const catalogueRows = await tx.customPackageItem.findMany({
+        where: { status: "ACTIVE", category: { status: "ACTIVE" } },
+        include: { category: true },
+      });
       const catalogue: CustomPackageItemOption[] = catalogueRows.map((row) => ({
         id: row.id,
+        categoryId: row.categoryId,
+        categoryName: row.category.name,
+        categoryDescription: row.category.description ?? "",
+        categoryRequired: row.category.required,
+        quantityControl: row.category.quantityControl,
         name: row.name,
+        description: row.description ?? "",
+        imageUrl: row.imageUrl ?? "",
         unitLabel: row.unitLabel,
         pricePerUnit: toNumber(row.pricePerUnit),
         minQuantity: row.minQuantity,
-        required: row.required,
         sortOrder: row.sortOrder,
       }));
       const catalogueIds = new Set(catalogue.map((option) => option.id));
@@ -355,12 +364,16 @@ export async function createCheckoutOrder(rawInput: unknown) {
           );
         }
 
-        const minimumFailures = belowMinimumItems(item.items, catalogue);
+        const minimumFailures = validateCustomPackageSelections(item.items, catalogue);
 
         if (minimumFailures.length) {
           throw new CheckoutError(
             `Your custom package needs ${minimumFailures
-              .map((option) => `${option.name} (minimum ${option.minQuantity} ${option.unitLabel})`)
+              .map((option) =>
+                option.type === "category"
+                  ? `one ${option.name} option`
+                  : `${option.name} (minimum ${option.minQuantity} ${option.unitLabel})`,
+              )
               .join(", ")}.`,
             409,
             "CUSTOM_ITEM_MINIMUM",

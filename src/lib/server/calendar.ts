@@ -58,6 +58,8 @@ export async function getCustomerCalendarData(
   if (!customer) return null;
 
   const events: CustomerCalendarData["events"] = [];
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   // Mark every active kitchen-holiday date as closed, even when this customer
   // has no delivery scheduled on it — the whole kitchen is off that day.
@@ -78,6 +80,16 @@ export async function getCustomerCalendarData(
 
   for (const customerPackage of customer.packages) {
     const planName = customerPackage.package.name;
+    const countableDeliveryDays = customerPackage.deliveryDays
+      .filter((day) => !["CANCELLED", "PAUSED"].includes(day.status))
+      .sort((left, right) => left.deliveryDate.getTime() - right.deliveryDate.getTime());
+    const elapsedDeliveryDays = countableDeliveryDays.filter(
+      (day) => day.status === "DELIVERED" || day.deliveryDate < today,
+    ).length;
+    const completedDays = Math.max(customerPackage.usedDeliveryDays, elapsedDeliveryDays);
+    const completedDayIds = new Set(
+      countableDeliveryDays.slice(0, completedDays).map((day) => day.id),
+    );
     const holidayCreditByOriginalDay = new Map(
       customerPackage.holidayCredits.map((credit) => [credit.originalDeliveryDayId, credit]),
     );
@@ -101,6 +113,8 @@ export async function getCustomerCalendarData(
     for (const day of customerPackage.deliveryDays) {
       const holidayCredit = holidayCreditByOriginalDay.get(day.id);
       const paused = day.status === "PAUSED" || day.status === "CANCELLED";
+      const completed =
+        day.status === "DELIVERED" || completedDayIds.has(day.id);
       const coveredByPause = customerPackage.pauseRequests.some(
         (pause) => day.deliveryDate >= pause.startDate && day.deliveryDate <= pause.endDate,
       );
@@ -108,12 +122,20 @@ export async function getCustomerCalendarData(
 
       events.push({
         date: toDateKey(day.deliveryDate),
-        type: holidayCredit ? "holiday" : paused ? "pause" : "delivery",
+        type: holidayCredit
+          ? "holiday"
+          : paused
+            ? "pause"
+            : completed
+              ? "delivery-completed"
+              : "delivery",
         label: holidayCredit
           ? `${holidayCredit.businessHoliday.name} — kitchen closed; delivery moved to ${formatFullDate(holidayCredit.replacementDeliveryDate)}`
           : paused
             ? `${planName} — delivery paused`
-          : `${planName} — morning delivery`,
+            : completed
+              ? `${planName} — delivered`
+              : `${planName} — morning delivery`,
       });
     }
 
@@ -137,15 +159,15 @@ export async function getCustomerCalendarData(
     }
   }
 
-  const now = new Date();
-
   return {
     customerId: customer.id,
     customerName: customer.name,
     deliveryWeekdays: rules.deliveryWeekdays,
     packages: customer.packages.map((customerPackage) => {
       const elapsedDays = customerPackage.deliveryDays.filter(
-        (day) => day.status !== "CANCELLED" && day.deliveryDate < now,
+        (day) =>
+          day.status === "DELIVERED" ||
+          (day.deliveryDate < today && !["CANCELLED", "PAUSED"].includes(day.status)),
       ).length;
       const usedDays = Math.max(customerPackage.usedDeliveryDays, elapsedDays);
       const activePause = customerPackage.pauseRequests.find(
@@ -157,6 +179,8 @@ export async function getCustomerCalendarData(
         status: packageStatusLabel(customerPackage.status),
         startDate: customerPackage.startDate ? formatFullDate(customerPackage.startDate) : null,
         endDate: customerPackage.endDate ? formatFullDate(customerPackage.endDate) : null,
+        completedDays: usedDays,
+        totalDeliveryDays: customerPackage.totalDeliveryDays,
         remainingDays: Math.max(customerPackage.totalDeliveryDays - usedDays, 0),
         resumeBy:
           customerPackage.status === "PAUSED" && activePause

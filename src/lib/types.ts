@@ -29,12 +29,27 @@ export type AdminPackageRecord = PackagePlan & {
 
 export type AdminCustomPackageItemRecord = {
   id: string;
+  categoryId: string;
+  categoryName: string;
   name: string;
+  description: string;
+  imageUrl: string;
   unitLabel: string;
   pricePerUnit: number;
   minQuantity: number;
-  required: boolean;
   sortOrder: number;
+  status: ProductStatus;
+};
+
+export type AdminCustomPackageCategoryRecord = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  required: boolean;
+  quantityControl: "Counter" | "Number input";
+  sortOrder: number;
+  itemCount: number;
   status: ProductStatus;
 };
 
@@ -266,6 +281,7 @@ export type MenuUploadView = {
 
 export type CalendarEventType =
   | "delivery"
+  | "delivery-completed"
   | "pause"
   | "holiday"
   | "package-start"
@@ -286,6 +302,8 @@ export type CustomerCalendarData = {
     status: string;
     startDate: string | null;
     endDate: string | null;
+    completedDays: number;
+    totalDeliveryDays: number;
     remainingDays: number;
     resumeBy: string | null;
   }>;

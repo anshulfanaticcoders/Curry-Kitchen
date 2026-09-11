@@ -1,6 +1,7 @@
 import "server-only";
 
 import type {
+  AdminCustomPackageCategoryRecord,
   AdminCustomPackageItemRecord,
   AdminBusinessHoliday,
   AdminCustomerOption,
@@ -250,7 +251,7 @@ function formatDate(value?: Date | null) {
 }
 
 export async function getAdminPackageManagerData() {
-  const [categories, customPackageItems, packages] = await Promise.all([
+  const [categories, customPackageCategories, customPackageItems, packages] = await Promise.all([
     db.packageCategory.findMany({
       where: { status: { not: "ARCHIVED" } },
       include: {
@@ -258,9 +259,15 @@ export async function getAdminPackageManagerData() {
       },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
+    db.customPackageCategory.findMany({
+      where: { status: { not: "ARCHIVED" } },
+      include: { _count: { select: { items: { where: { status: { not: "ARCHIVED" } } } } } },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    }),
     db.customPackageItem.findMany({
       where: { status: { not: "ARCHIVED" } },
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: { category: true },
+      orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }, { name: "asc" }],
     }),
     db.package.findMany({
       where: { status: { not: "ARCHIVED" }, isCustom: false },
@@ -284,13 +291,27 @@ export async function getAdminPackageManagerData() {
       requiresVerification: category.requiresVerification,
       status: mapStatus(category.status),
     })),
+    customPackageCategories: customPackageCategories.map<AdminCustomPackageCategoryRecord>((category) => ({
+      id: category.id,
+      name: category.name,
+      slug: category.slug,
+      description: category.description ?? "",
+      required: category.required,
+      quantityControl: category.quantityControl === "COUNTER" ? "Counter" : "Number input",
+      sortOrder: category.sortOrder,
+      itemCount: category._count.items,
+      status: mapStatus(category.status),
+    })),
     customPackageItems: customPackageItems.map<AdminCustomPackageItemRecord>((item) => ({
       id: item.id,
+      categoryId: item.categoryId,
+      categoryName: item.category.name,
       name: item.name,
+      description: item.description ?? "",
+      imageUrl: item.imageUrl ?? "",
       unitLabel: item.unitLabel,
       pricePerUnit: toNumber(item.pricePerUnit),
       minQuantity: item.minQuantity,
-      required: item.required,
       sortOrder: item.sortOrder,
       status: mapStatus(item.status),
     })),

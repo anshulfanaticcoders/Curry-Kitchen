@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, CalendarOff, ChevronLeft, ChevronRight, Pause, X } from "lucide-react";
+import { CalendarDays, CalendarOff, Check, ChevronLeft, ChevronRight, Pause, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/dashboard/primitives";
 import type { CalendarEvent, CalendarEventType, CustomerCalendarData } from "@/lib/types";
@@ -10,6 +10,7 @@ const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const EVENT_CHIPS: Record<CalendarEventType, string> = {
   delivery: "bg-rose text-masala",
+  "delivery-completed": "bg-leaf/10 text-leaf",
   pause: "bg-amber-50 text-amber-700",
   holiday: "bg-rose text-masala",
   "package-start": "bg-basil-soft text-basil",
@@ -117,6 +118,7 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
                 {" "}· Ends <span className="text-chili">{activePlan.endDate}</span>
               </>
             ) : null}
+            {" "}· <span className="text-basil">{activePlan.completedDays} delivered</span>
             {" "}· {activePlan.remainingDays} delivery {activePlan.remainingDays === 1 ? "day" : "days"} left
           </p>
         ) : null}
@@ -139,10 +141,13 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
             const hasPause = events.some((event) => event.type === "pause");
             const hasHoliday = events.some((event) => event.type === "holiday");
             const hasDelivery = events.some((event) => event.type === "delivery");
+            const hasCompletedDelivery = events.some((event) => event.type === "delivery-completed");
 
-            // Fill colors carry meaning: green start, red end, saffron delivery,
+            // Fill colors carry meaning: green completed day, green start, red end, saffron delivery,
             // amber pause, faded red cross for off days.
-            const fill = isStart
+            const fill = hasCompletedDelivery
+              ? "border-leaf bg-leaf text-white"
+              : isStart
               ? "border-basil bg-basil text-white"
               : isEnd
                 ? "border-chili bg-chili text-white"
@@ -169,6 +174,9 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
                 )}
               >
                 {cell.date.getDate()}
+                {hasCompletedDelivery ? (
+                  <Check size={12} className="absolute bottom-1.5 text-white" strokeWidth={3} />
+                ) : null}
                 {isOffDay && !isStart && !isEnd && !hasDelivery && !hasPause && !hasHoliday ? (
                   <X size={11} className="absolute bottom-1.5 text-chili/50" strokeWidth={3} />
                 ) : null}
@@ -186,6 +194,7 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
         <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-ink/8 pt-5">
           {[
             { swatch: "bg-basil", label: "Package starts" },
+            { swatch: "bg-leaf border border-leaf/80", label: "Delivered" },
             { swatch: "bg-chili", label: "Package ends" },
             { swatch: "bg-saffron", label: "Delivery day" },
             { swatch: "bg-amber-300", label: "Paused" },
@@ -252,6 +261,9 @@ export function DashboardCalendar({ data }: { data: CustomerCalendarData }) {
                       ) : null}
                     </p>
                   ) : null}
+                  <p className="text-xs font-black text-leaf">
+                    {plan.completedDays} delivered · {plan.remainingDays} remaining
+                  </p>
                 </div>
               ))}
             </div>

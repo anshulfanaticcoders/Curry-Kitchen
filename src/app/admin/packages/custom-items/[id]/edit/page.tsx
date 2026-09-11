@@ -11,7 +11,7 @@ export default async function EditCustomPackageItemPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { customPackageItems } = await getAdminPackageManagerData();
+  const { customPackageCategories, customPackageItems } = await getAdminPackageManagerData();
   const item = customPackageItems.find((candidate) => candidate.id === id);
 
   if (!item) notFound();
@@ -22,7 +22,7 @@ export default async function EditCustomPackageItemPage({
       backLabel="Back to packages"
       title={`Edit ${item.name}`}
     >
-      <CustomPackageItemForm item={item} />
+      <CustomPackageItemForm item={item} categories={customPackageCategories} />
     </AdminFormShell>
   );
 }

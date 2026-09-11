@@ -11,7 +11,9 @@ import {
 } from "@/lib/actions/admin";
 import type { Customer } from "@/lib/types";
 
-export function AdminPackageControl({ customer }: { customer: Customer }) {
+type PackageControlCustomer = Pick<Customer, "activePackageId" | "plan" | "status">;
+
+export function AdminPackageControl({ customer }: { customer: PackageControlCustomer }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
 

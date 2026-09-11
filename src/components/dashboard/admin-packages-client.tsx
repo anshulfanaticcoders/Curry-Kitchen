@@ -9,10 +9,11 @@ import { Card, CardHeader, PageHeader, Table, Td, Th } from "@/components/dashbo
 import { ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import {
+  deleteCustomPackageCategoryAction,
   deleteCustomPackageItemAction,
   deletePackageAction,
 } from "@/lib/actions/admin";
-import type { AdminCustomPackageItemRecord, AdminPackageRecord } from "@/lib/types";
+import type { AdminCustomPackageCategoryRecord, AdminCustomPackageItemRecord, AdminPackageRecord } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 
 function statusTone(status: string) {
@@ -85,20 +86,44 @@ function PackagesTab({ packages }: { packages: AdminPackageRecord[] }) {
   );
 }
 
+function CustomCategoriesTab({ categories }: { categories: AdminCustomPackageCategoryRecord[] }) {
+  return (
+    <Card>
+      <CardHeader title="Custom package categories" description="Categories decide required choices and the customer quantity control. Dishes keep their own prices and minimum portions." />
+      <Table>
+        <thead><tr><Th>Category</Th><Th>Customer rule</Th><Th>Control</Th><Th>Dishes</Th><Th>Status</Th><Th className="text-right">Actions</Th></tr></thead>
+        <tbody>
+          {categories.map((category) => (
+            <tr key={category.id} className="transition hover:bg-ivory/60">
+              <Td><p className="font-extrabold">{category.name}</p><p className="text-xs font-bold text-ink/45">{category.description || "No customer description"}</p></Td>
+              <Td><StatusPill tone={category.required ? "green" : "amber"}>{category.required ? "Choose one" : "Optional"}</StatusPill></Td>
+              <Td className="text-ink/70">{category.quantityControl}</Td>
+              <Td className="font-black">{category.itemCount}</Td>
+              <Td><StatusPill tone={statusTone(category.status)}>{category.status}</StatusPill></Td>
+              <Td><div className="flex items-center justify-end gap-2"><Link href={`/admin/packages/custom-categories/${category.id}/edit`} aria-label={`Edit ${category.name}`} className={editLinkClass}><Pencil size={16} /></Link><ConfirmActionButton label={`Delete ${category.name}`} title={`Archive ${category.name}?`} description="Archive or move every dish in this category first. Existing orders are unaffected." confirmLabel="Archive" action={() => deleteCustomPackageCategoryAction(category.id)} /></div></Td>
+            </tr>
+          ))}
+          {!categories.length ? <tr><Td className="text-ink/50">No custom categories yet. Create a category before adding dishes.</Td></tr> : null}
+        </tbody>
+      </Table>
+    </Card>
+  );
+}
+
 function CustomItemsTab({ items }: { items: AdminCustomPackageItemRecord[] }) {
   return (
     <Card>
       <CardHeader
-        title="Custom package items"
-        description="Per-unit priced items customers combine into their own plan."
+        title="Custom package dishes"
+        description="Every dish has its own image, price, and minimum portion. Categories control the group experience."
       />
       <Table>
         <thead>
           <tr>
-            <Th>Item</Th>
+            <Th>Dish</Th>
+            <Th>Category</Th>
             <Th>Price per unit</Th>
             <Th>Minimum</Th>
-            <Th>Mandatory</Th>
             <Th>Status</Th>
             <Th className="text-right">Actions</Th>
           </tr>
@@ -110,6 +135,7 @@ function CustomItemsTab({ items }: { items: AdminCustomPackageItemRecord[] }) {
                 <p className="font-extrabold">{item.name}</p>
                 <p className="text-xs font-bold text-ink/45">Sort order {item.sortOrder}</p>
               </Td>
+              <Td className="font-bold text-ink/70">{item.categoryName}</Td>
               <Td className="font-black">
                 {formatCurrency(item.pricePerUnit)}
                 <span className="ml-1 text-xs font-bold text-ink/45">/ {item.unitLabel}</span>
@@ -117,11 +143,6 @@ function CustomItemsTab({ items }: { items: AdminCustomPackageItemRecord[] }) {
               <Td className="font-black">
                 {item.minQuantity}
                 <span className="ml-1 text-xs font-bold text-ink/45">{item.unitLabel}</span>
-              </Td>
-              <Td>
-                <StatusPill tone={item.required ? "green" : "amber"}>
-                  {item.required ? "Required" : "Optional"}
-                </StatusPill>
               </Td>
               <Td>
                 <StatusPill tone={statusTone(item.status)}>{item.status}</StatusPill>
@@ -159,21 +180,27 @@ function CustomItemsTab({ items }: { items: AdminCustomPackageItemRecord[] }) {
 
 export function AdminPackagesClient({
   packages,
+  customPackageCategories,
   customPackageItems,
 }: {
   packages: AdminPackageRecord[];
+  customPackageCategories: AdminCustomPackageCategoryRecord[];
   customPackageItems: AdminCustomPackageItemRecord[];
 }) {
   return (
     <div>
       <PageHeader
         title="Packages"
-        description="Create fixed plans, and price the items customers can build a custom package from."
+        description="Create fixed plans and manage the categories and dishes customers use to build a custom package."
         action={
           <div className="flex flex-wrap gap-2">
+            <ButtonLink href="/admin/packages/custom-categories/new" variant="secondary">
+              <Plus size={18} />
+              Add custom category
+            </ButtonLink>
             <ButtonLink href="/admin/packages/custom-items/new" variant="secondary">
               <Plus size={18} />
-              Add custom item
+              Add custom dish
             </ButtonLink>
             <ButtonLink href="/admin/packages/new">
               <Plus size={18} />
@@ -191,7 +218,12 @@ export function AdminPackagesClient({
           },
           {
             id: "custom-items",
-            label: `Custom items (${customPackageItems.length})`,
+            label: `Custom categories (${customPackageCategories.length})`,
+            content: <CustomCategoriesTab categories={customPackageCategories} />,
+          },
+          {
+            id: "custom-dishes",
+            label: `Custom dishes (${customPackageItems.length})`,
             content: <CustomItemsTab items={customPackageItems} />,
           },
         ]}

@@ -148,6 +148,8 @@ const siteImage = z
     "Upload an image or paste a full image URL.",
   );
 
+const optionalSiteImage = z.union([siteImage, z.literal("")]).transform((value) => value || null);
+
 const packageSchema = z.object({
   id: z.string().optional(),
   categoryId: z.string().min(1),
@@ -166,11 +168,23 @@ const packageSchema = z.object({
 
 const customPackageItemSchema = z.object({
   id: z.string().optional(),
+  categoryId: z.string().min(1),
   name: z.string().min(2),
+  description: z.string().max(500).optional(),
+  imageUrl: optionalSiteImage,
   unitLabel: z.string().min(1).max(20),
   pricePerUnit: z.coerce.number().min(0),
   minQuantity: z.coerce.number().int().min(1).max(99),
+  sortOrder: z.coerce.number().int().min(0).default(0),
+  status: z.enum(["ACTIVE", "DRAFT", "ARCHIVED"]).default("ACTIVE"),
+});
+
+const customPackageCategorySchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(2).max(80),
+  description: z.string().max(300).optional(),
   required: formBoolean.default(false),
+  quantityControl: z.enum(["COUNTER", "INPUT"]).default("INPUT"),
   sortOrder: z.coerce.number().int().min(0).default(0),
   status: z.enum(["ACTIVE", "DRAFT", "ARCHIVED"]).default("ACTIVE"),
 });
@@ -635,15 +649,26 @@ export async function saveCustomPackageItemAction(formData: FormData) {
     }
 
     const { id, ...data } = parsed.data;
+    const category = await db.customPackageCategory.findFirst({
+      where: { id: data.categoryId, status: { not: "ARCHIVED" } },
+      select: { id: true },
+    });
+
+    if (!category) {
+      return fail("Choose an active custom package category.");
+    }
+
     const item = await db.customPackageItem.upsert({
       where: { id: id ?? "__new_custom_package_item__" },
       create: {
         ...data,
+        required: false,
         pricePerUnit: new Prisma.Decimal(data.pricePerUnit),
         slug: slugify(data.name),
       },
       update: {
         ...data,
+        required: false,
         pricePerUnit: new Prisma.Decimal(data.pricePerUnit),
         slug: slugify(data.name),
       },
@@ -690,6 +715,71 @@ export async function deleteCustomPackageItemAction(itemId: string) {
     return ok({ id: itemId }, "Custom item archived.");
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Custom item could not be archived.");
+  }
+}
+
+export async function saveCustomPackageCategoryAction(formData: FormData) {
+  try {
+    const admin = await requireAdmin();
+    const parsed = customPackageCategorySchema.safeParse(formObject(formData));
+
+    if (!parsed.success) {
+      return fail("Please fix the custom category fields.", parsed.error.flatten().fieldErrors);
+    }
+
+    const { id, ...data } = parsed.data;
+    const category = await db.customPackageCategory.upsert({
+      where: { id: id ?? "__new_custom_package_category__" },
+      create: { ...data, slug: slugify(data.name) },
+      update: { ...data, slug: slugify(data.name) },
+    });
+
+    await db.auditLog.create({
+      data: {
+        userId: admin.id,
+        action: id ? "custom_package_category.updated" : "custom_package_category.created",
+        entity: "custom_package_category",
+        entityId: category.id,
+      },
+    });
+
+    revalidatePath("/admin/packages");
+    revalidatePath("/packages/build");
+    return ok({ id: category.id }, id ? "Custom category updated." : "Custom category created.");
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Custom category could not be saved.");
+  }
+}
+
+export async function deleteCustomPackageCategoryAction(categoryId: string) {
+  try {
+    const admin = await requireAdmin();
+    const activeItems = await db.customPackageItem.count({
+      where: { categoryId, status: { not: "ARCHIVED" } },
+    });
+
+    if (activeItems > 0) {
+      return fail("Move or archive the dishes in this category before archiving it.");
+    }
+
+    await db.customPackageCategory.update({
+      where: { id: categoryId },
+      data: { status: "ARCHIVED" },
+    });
+    await db.auditLog.create({
+      data: {
+        userId: admin.id,
+        action: "custom_package_category.archived",
+        entity: "custom_package_category",
+        entityId: categoryId,
+      },
+    });
+
+    revalidatePath("/admin/packages");
+    revalidatePath("/packages/build");
+    return ok({ id: categoryId }, "Custom category archived.");
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Custom category could not be archived.");
   }
 }
 

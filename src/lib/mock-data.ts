@@ -389,10 +389,10 @@ export const adminOrders: AdminOrder[] = [
 ];
 
 export const customPackageItems = [
-  { id: "custom-roti", name: "Roti", unitLabel: "roti", pricePerUnit: 0.6, minQuantity: 3, required: true, sortOrder: 1 },
-  { id: "custom-rice", name: "Rice", unitLabel: "oz", pricePerUnit: 0.2, minQuantity: 4, required: false, sortOrder: 2 },
-  { id: "custom-sabzi", name: "Sabzi", unitLabel: "oz", pricePerUnit: 0.9, minQuantity: 6, required: true, sortOrder: 3 },
-  { id: "custom-dal", name: "Dal", unitLabel: "oz", pricePerUnit: 0.8, minQuantity: 8, required: true, sortOrder: 4 },
-  { id: "custom-raita", name: "Raita", unitLabel: "oz", pricePerUnit: 0.2, minQuantity: 4, required: false, sortOrder: 5 },
-  { id: "custom-salad", name: "Salad", unitLabel: "serving", pricePerUnit: 0.1, minQuantity: 1, required: false, sortOrder: 6 },
+  { id: "custom-roti", categoryId: "custom-breads", categoryName: "Breads", categoryDescription: "Fresh breads for every tiffin.", categoryRequired: true, quantityControl: "COUNTER" as const, name: "Roti", description: "Soft, fresh rotis made for the day.", imageUrl: "", unitLabel: "roti", pricePerUnit: 0.6, minQuantity: 3, sortOrder: 1 },
+  { id: "custom-rice", categoryId: "custom-rice", categoryName: "Rice", categoryDescription: "Choose a satisfying rice portion.", categoryRequired: false, quantityControl: "INPUT" as const, name: "Steamed rice", description: "A simple, comforting rice portion.", imageUrl: "", unitLabel: "oz", pricePerUnit: 0.2, minQuantity: 4, sortOrder: 2 },
+  { id: "custom-sabzi", categoryId: "custom-sabzi", categoryName: "Sabzi", categoryDescription: "Seasonal vegetable dishes made fresh.", categoryRequired: true, quantityControl: "INPUT" as const, name: "Seasonal sabzi", description: "Today's fresh vegetable preparation.", imageUrl: "", unitLabel: "oz", pricePerUnit: 0.9, minQuantity: 6, sortOrder: 3 },
+  { id: "custom-dal", categoryId: "custom-dal", categoryName: "Dal", categoryDescription: "Choose one warm dal for your plate.", categoryRequired: true, quantityControl: "INPUT" as const, name: "Dal", description: "A comforting everyday dal.", imageUrl: "", unitLabel: "oz", pricePerUnit: 0.8, minQuantity: 8, sortOrder: 4 },
+  { id: "custom-raita", categoryId: "custom-sides", categoryName: "Sides", categoryDescription: "Optional fresh finishing touches.", categoryRequired: false, quantityControl: "INPUT" as const, name: "Raita", description: "Cool, creamy yogurt side.", imageUrl: "", unitLabel: "oz", pricePerUnit: 0.2, minQuantity: 4, sortOrder: 5 },
+  { id: "custom-salad", categoryId: "custom-sides", categoryName: "Sides", categoryDescription: "Optional fresh finishing touches.", categoryRequired: false, quantityControl: "INPUT" as const, name: "Salad", description: "A crisp fresh side.", imageUrl: "", unitLabel: "serving", pricePerUnit: 0.1, minQuantity: 1, sortOrder: 6 },
 ];

@@ -1,8 +1,8 @@
 import {
-  belowMinimumItems,
   customDeliveryDayCount,
   describeCustomPackage,
   priceCustomPackage,
+  validateCustomPackageSelections,
   type CustomPackageItemOption,
 } from "@/lib/custom-package";
 import type { PackageCartItemInput } from "@/lib/package-cart";
@@ -51,7 +51,7 @@ export function resolveCartLine(
       detail: describeCustomPackage(pricing) || "No items selected",
       subtotal: pricing.total,
       isStudent: false,
-      valid: known && pricing.perDay > 0 && belowMinimumItems(item.items, customItems).length === 0,
+      valid: known && pricing.perDay > 0 && validateCustomPackageSelections(item.items, customItems).length === 0,
     };
   }
 

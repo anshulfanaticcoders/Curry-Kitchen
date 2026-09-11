@@ -167,8 +167,9 @@ export async function getCustomPackageItems(): Promise<CustomPackageItemOption[]
 
   try {
     const items = await db.customPackageItem.findMany({
-      where: { status: "ACTIVE" },
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      where: { status: "ACTIVE", category: { status: "ACTIVE" } },
+      include: { category: true },
+      orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }, { name: "asc" }],
     });
 
     if (!items.length) {
@@ -177,11 +178,17 @@ export async function getCustomPackageItems(): Promise<CustomPackageItemOption[]
 
     return items.map((item) => ({
       id: item.id,
+      categoryId: item.categoryId,
+      categoryName: item.category.name,
+      categoryDescription: item.category.description ?? "",
+      categoryRequired: item.category.required,
+      quantityControl: item.category.quantityControl,
       name: item.name,
+      description: item.description ?? "",
+      imageUrl: item.imageUrl ?? "",
       unitLabel: item.unitLabel,
       pricePerUnit: toNumber(item.pricePerUnit),
       minQuantity: item.minQuantity,
-      required: item.required,
       sortOrder: item.sortOrder,
     }));
   } catch {
@@ -478,6 +485,144 @@ export async function getAdminCustomers(): Promise<Customer[]> {
     });
   } catch {
     return [];
+  }
+}
+
+// The customer list intentionally stays lightweight. The detail page needs a
+// fuller operational record so the kitchen can prepare and deliver without
+// opening the QR packing view first.
+export async function getAdminCustomerDetail(customerId: string) {
+  if (!hasDatabaseUrl()) {
+    return null;
+  }
+
+  try {
+    const customer = await db.customer.findUnique({
+      where: { id: customerId },
+      include: {
+        addresses: {
+          orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }],
+          take: 1,
+        },
+        orders: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            payments: { orderBy: { createdAt: "desc" } },
+          },
+        },
+        packages: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            package: { select: { name: true, cadence: true } },
+            order: { select: { foodPreferences: true, allergies: true } },
+            deliveryDays: { orderBy: { deliveryDate: "asc" } },
+          },
+        },
+        studentVerifications: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+      },
+    });
+
+    if (!customer) return null;
+
+    const activePackage =
+      customer.packages.find((item) => item.status === "ACTIVE" || item.status === "PAUSED") ??
+      customer.packages[0];
+    const address = customer.addresses[0];
+    const latestOrder = customer.orders[0];
+    const latestPayment = customer.orders
+      .flatMap((order) => order.payments)
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0];
+    const spend = customer.orders.reduce((total, order) => total + toNumber(order.total), 0);
+    const status: Customer["status"] =
+      activePackage?.status === "PAUSED"
+        ? "Paused"
+        : activePackage?.package.cadence === "WEEKLY"
+          ? "Trial"
+          : "Active";
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const scheduledDeliveryDays = activePackage?.deliveryDays.filter((day) => day.status !== "CANCELLED") ?? [];
+    const nextDelivery = scheduledDeliveryDays.find(
+      (day) => day.deliveryDate >= today && day.status !== "PAUSED",
+    );
+    const completedDays = activePackage
+      ? Math.max(
+          activePackage.usedDeliveryDays,
+          scheduledDeliveryDays.filter((day) => day.deliveryDate < today).length,
+        )
+      : 0;
+    const foodPreferences = activePackage?.order.foodPreferences?.trim() || latestOrder?.foodPreferences?.trim() || "";
+    const allergies = activePackage?.order.allergies?.trim() || latestOrder?.allergies?.trim() || "";
+
+    return {
+      id: customer.id,
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone ?? "",
+      joined: formatFullDate(customer.joinedAt),
+      status,
+      plan: activePackage?.package.name ?? "No active plan",
+      activePackageId:
+        activePackage?.status === "ACTIVE" || activePackage?.status === "PAUSED"
+          ? activePackage.id
+          : undefined,
+      orders: customer.orders.length,
+      spend,
+      emailReceipts: customer.emailReceipts,
+      smsUpdates: customer.smsUpdates,
+      address: address
+        ? {
+            name: address.name ?? "Delivery address",
+            lines: [address.line1, address.line2, `${address.city}, ${address.state} ${address.postalCode}`, address.country]
+              .filter(Boolean),
+            city: address.city,
+            isDefault: address.isDefault,
+          }
+        : null,
+      currentPackage: activePackage
+        ? {
+            id: activePackage.id,
+            name: activePackage.package.name,
+            status: titleCase(activePackage.status),
+            startDate: activePackage.startDate ? formatFullDate(activePackage.startDate) : "Not scheduled",
+            endDate: activePackage.endDate ? formatFullDate(activePackage.endDate) : "To be scheduled",
+            deliveryProgress: `${completedDays} of ${activePackage.totalDeliveryDays} deliveries completed`,
+            remainingDeliveries: Math.max(activePackage.totalDeliveryDays - completedDays, 0),
+            nextDelivery: nextDelivery ? formatFullDate(nextDelivery.deliveryDate) : "No upcoming delivery scheduled",
+          }
+        : null,
+      kitchenNotes: {
+        foodPreferences,
+        allergies,
+      },
+      latestOrder: latestOrder
+        ? {
+            number: latestOrder.orderNumber,
+            status: mapOrderStatus(latestOrder.status),
+            date: formatFullDate(latestOrder.createdAt),
+            total: toNumber(latestOrder.total),
+          }
+        : null,
+      latestPayment: latestPayment
+        ? {
+            method: titleCase(latestPayment.method),
+            status: titleCase(latestPayment.status),
+            date: formatFullDate(latestPayment.createdAt),
+            amount: toNumber(latestPayment.amount),
+          }
+        : null,
+      verification: customer.studentVerifications[0]
+        ? {
+            type: titleCase(customer.studentVerifications[0].verificationType),
+            status: titleCase(customer.studentVerifications[0].status),
+          }
+        : null,
+    };
+  } catch {
+    return null;
   }
 }
 

@@ -23,6 +23,11 @@ enum RecordStatus {
   ARCHIVED
 }
 
+enum CustomPackageQuantityControl {
+  COUNTER
+  INPUT
+}
+
 enum SeoTargetType {
   STATIC_PAGE
   PACKAGE
@@ -291,20 +296,44 @@ model PackageItem {
 }
 
 model CustomPackageItem {
-  id           String       @id @default(cuid())
+  id           String                @id @default(cuid())
+  categoryId   String
   name         String
-  slug         String       @unique
-  unitLabel    String       @default("oz")
-  pricePerUnit Decimal      @db.Decimal(10, 2)
-  minQuantity  Int          @default(1)
-  required     Boolean      @default(false)
-  sortOrder    Int          @default(0)
-  status       RecordStatus @default(ACTIVE)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  slug         String                @unique
+  description  String?               @db.Text
+  imageUrl     String?               @db.VarChar(600)
+  unitLabel    String                @default("oz")
+  pricePerUnit Decimal               @db.Decimal(10, 2)
+  minQuantity  Int                   @default(1)
+  required     Boolean               @default(false)
+  sortOrder    Int                   @default(0)
+  status       RecordStatus          @default(ACTIVE)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
 
+  category CustomPackageCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([categoryId])
   @@index([status])
   @@map("custom_package_items")
+}
+
+model CustomPackageCategory {
+  id              String                       @id @default(cuid())
+  name            String
+  slug            String                       @unique
+  description     String?                      @db.Text
+  required        Boolean                      @default(false)
+  quantityControl CustomPackageQuantityControl @default(INPUT)
+  sortOrder       Int                          @default(0)
+  status          RecordStatus                 @default(ACTIVE)
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+
+  items CustomPackageItem[]
+
+  @@index([status])
+  @@map("custom_package_categories")
 }
 
 model WeeklyMenu {

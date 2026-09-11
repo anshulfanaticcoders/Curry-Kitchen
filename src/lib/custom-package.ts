@@ -2,13 +2,23 @@ import type { PackageCustomItemInput } from "@/lib/package-cart";
 
 export type CustomPackageItemOption = {
   id: string;
+  categoryId: string;
+  categoryName: string;
+  categoryDescription: string;
+  categoryRequired: boolean;
+  quantityControl: "COUNTER" | "INPUT";
   name: string;
+  description: string;
+  imageUrl: string;
   unitLabel: string;
   pricePerUnit: number;
   minQuantity: number;
-  required: boolean;
   sortOrder: number;
 };
+
+export type CustomPackageValidationFailure =
+  | { type: "category"; id: string; name: string }
+  | { type: "minimum"; id: string; name: string; minQuantity: number; unitLabel: string };
 
 export type CustomPackagePricing = {
   perDay: number;
@@ -57,8 +67,44 @@ export function belowMinimumItems(
 
   return options.filter((option) => {
     const quantity = quantityById.get(option.id) ?? 0;
-    return option.required ? quantity < option.minQuantity : quantity > 0 && quantity < option.minQuantity;
+    return quantity > 0 && quantity < option.minQuantity;
   });
+}
+
+export function validateCustomPackageSelections(
+  selections: PackageCustomItemInput[],
+  options: CustomPackageItemOption[],
+): CustomPackageValidationFailure[] {
+  const quantityById = new Map(selections.map((selection) => [selection.itemId, selection.quantity]));
+  const categories = new Map(
+    options.map((option) => [
+      option.categoryId,
+      { id: option.categoryId, name: option.categoryName, required: option.categoryRequired },
+    ]),
+  );
+  const failures: CustomPackageValidationFailure[] = [];
+
+  for (const category of categories.values()) {
+    const selectedInCategory = options.some(
+      (option) => option.categoryId === category.id && (quantityById.get(option.id) ?? 0) > 0,
+    );
+
+    if (category.required && !selectedInCategory) {
+      failures.push({ type: "category", id: category.id, name: category.name });
+    }
+  }
+
+  for (const item of belowMinimumItems(selections, options)) {
+    failures.push({
+      type: "minimum",
+      id: item.id,
+      name: item.name,
+      minQuantity: item.minQuantity,
+      unitLabel: item.unitLabel,
+    });
+  }
+
+  return failures;
 }
 
 export function describeCustomPackage(pricing: CustomPackagePricing) {
