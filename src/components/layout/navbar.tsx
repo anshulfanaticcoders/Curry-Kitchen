@@ -291,7 +291,7 @@ export function Navbar({
         )}
       >
         <div className="flex min-w-0 shrink-0 items-center">
-          <Link href="/" className="group flex items-center gap-3" onClick={() => setOpen(false)}>
+          <Link href="/" className="group flex items-center gap-3 max-[374px]:gap-2" onClick={() => setOpen(false)}>
             <span
               className={cn(
                 "grid size-10 place-items-center rounded-full font-display text-lg font-black shadow-inset transition group-hover:rotate-[-4deg]",
@@ -301,7 +301,7 @@ export function Navbar({
               CK
             </span>
             <span>
-              <span className="block whitespace-nowrap font-display text-2xl font-black leading-none">Curry Kitchen</span>
+              <span className="block whitespace-nowrap font-display text-2xl font-black leading-none max-[374px]:text-lg">Curry Kitchen</span>
             </span>
           </Link>
 

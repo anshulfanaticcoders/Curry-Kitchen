@@ -4,9 +4,9 @@ export const PAGE_BACKGROUND_SLOTS = [
     page: "Homepage",
     section: "Hero",
     fallbackImageUrl:
-      "https://images.unsplash.com/photo-1630409346824-4f0e7b080087?auto=format&fit=crop&w=2000&q=88",
+      "/images/hero-approved-thali-v2.webp",
     focalPoint: "CENTER",
-    overlay: "DARK",
+    overlay: "NONE",
   },
   {
     slot: "home.comfort",
