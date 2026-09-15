@@ -1,7 +1,7 @@
 "use client";
 
-import { motion, useScroll, useTransform } from "framer-motion";
-import { ArrowRight, CalendarDays, ChefHat, CirclePlay, Clock3, MapPin } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import { ArrowRight, CalendarDays, ChefHat, CirclePlay, Clock3, MapPin, CookingPot, Utensils, PackageCheck } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import type { PageBackgroundVisual } from "@/lib/page-backgrounds";
 import { cn } from "@/lib/utils";
@@ -28,11 +28,13 @@ const heroOverlay = {
 } as const;
 
 function AnimatedTitle() {
+  const reducedMotion = useReducedMotion();
   return (
     <motion.h1
       variants={reveal}
       transition={{ staggerChildren: 0.035, delayChildren: 0.18 }}
-      className="flex flex-nowrap justify-center whitespace-nowrap font-display text-[clamp(2.35rem,9.5vw,4.2rem)] font-black leading-[0.94] tracking-normal lg:text-[clamp(3rem,6vw,5.6rem)]"
+      aria-label="Curry Kitchen"
+      className="flex flex-nowrap justify-center whitespace-nowrap font-display text-[36px] font-black leading-none tracking-normal min-[375px]:text-[42px] min-[430px]:text-5xl sm:text-6xl lg:text-[80px] xl:text-[88px]"
     >
       {"Curry".split("").map((character, index) => (
         <motion.span key={`curry-${index}`} variants={titleCharacter} className="inline-block">
@@ -50,7 +52,7 @@ function AnimatedTitle() {
               aria-hidden
               className="pointer-events-none absolute -top-[0.46em] left-1/2 -translate-x-1/2 text-saffron"
               initial={{ opacity: 0, rotate: -10, y: -12 }}
-              animate={{ opacity: 1, rotate: 0, y: [0, -7, 0, -4, 0] }}
+              animate={{ opacity: 1, rotate: 0, y: reducedMotion ? 0 : [0, -5, 0] }}
               transition={{
                 opacity: { delay: 1, duration: 0.65, ease: [0.22, 1, 0.36, 1] },
                 rotate: { delay: 1, duration: 0.65, ease: [0.22, 1, 0.36, 1] },
@@ -75,6 +77,7 @@ const promises = [
   ["A proper home-style meal", "Roti, sabzi, dal, rice, and a fresh side — the dinner you grew up with."],
   ["Packed with care", "Generous portions in a real tiffin, sealed warm and ready to open."],
 ] as const;
+const promiseIcons = [CookingPot, Utensils, PackageCheck];
 
 export type HeroFacts = {
   deliveryDays: string;
@@ -83,12 +86,11 @@ export type HeroFacts = {
 };
 
 export function HeroSection({ background, facts }: { background: PageBackgroundVisual; facts: HeroFacts }) {
-  const { scrollY } = useScroll();
-  const imageY = useTransform(scrollY, [0, 760], [0, 96]);
+  const reducedMotion = useReducedMotion();
 
   return (
-    <section className="dark-band relative isolate flex min-h-[100svh] flex-col overflow-hidden text-white">
-      <motion.div style={{ y: imageY }} className="absolute inset-0 -z-20">
+    <section aria-label="Curry Kitchen" className="dark-band relative isolate flex min-h-[calc(100svh-24px)] flex-col overflow-hidden text-white">
+      <div className="absolute inset-0 -z-20">
         {/* eslint-disable-next-line @next/next/no-img-element -- admin can choose a secure external background URL. */}
         <img
           src={background.imageUrl}
@@ -97,24 +99,23 @@ export function HeroSection({ background, facts }: { background: PageBackgroundV
           style={{ objectPosition: `${background.focalPoint.toLowerCase()} center` }}
           fetchPriority="high"
         />
-      </motion.div>
+      </div>
       <div className={cn("absolute inset-0 -z-10", heroOverlay[background.overlay])} />
       <div className="absolute inset-x-0 bottom-0 -z-10 h-[42%] bg-gradient-to-t from-black/80 via-black/28 to-transparent" />
       <div className="absolute inset-x-0 top-0 -z-10 h-36 bg-gradient-to-b from-black/64 to-transparent" />
 
-      <div className="section-shell flex w-full flex-1 flex-col justify-center pb-8 pt-28 sm:py-32 lg:pb-20 lg:pt-16">
-        <div className="flex flex-col items-center gap-8 text-center sm:gap-10 lg:gap-8">
+      <div className="section-shell flex w-full flex-1 flex-col justify-center pb-14 pt-32 text-center sm:pb-20 sm:pt-32 lg:min-h-[460px] lg:pb-28 lg:pt-28">
         <motion.div
-          initial="hidden"
+          initial={reducedMotion ? false : "hidden"}
           animate="show"
           transition={{ staggerChildren: 0.11, delayChildren: 0.04 }}
-          className="mx-auto max-w-2xl"
+          className="mx-auto w-full max-w-3xl"
         >
           <AnimatedTitle />
           <motion.p
             variants={reveal}
             transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-            className="mx-auto mt-7 max-w-xl text-base font-medium leading-7 text-white/78 sm:text-lg sm:leading-8 lg:mt-5 lg:max-w-3xl"
+            className="mx-auto mt-6 max-w-2xl text-base font-medium leading-7 text-white/85 sm:text-lg sm:leading-8"
           >
             Honest Indian food, cooked fresh each day and delivered in the comforting rhythm of a proper tiffin.
           </motion.p>
@@ -137,50 +138,51 @@ export function HeroSection({ background, facts }: { background: PageBackgroundV
             </ButtonLink>
           </motion.div>
         </motion.div>
-
+      </div>
+      <div className="relative border-b border-white/15 bg-black/65 py-7 backdrop-blur-sm sm:py-8">
         <motion.div
-          initial="hidden"
+          initial={reducedMotion ? false : "hidden"}
           animate="show"
           transition={{ staggerChildren: 0.11, delayChildren: 0.5 }}
-          className="w-full"
+          className="section-shell w-full"
         >
           <motion.p
             variants={reveal}
             transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
-            className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-saffron"
+            className="flex items-center justify-center gap-4 text-center text-xs font-extrabold uppercase tracking-normal text-saffron before:h-px before:max-w-60 before:flex-1 before:bg-saffron/50 after:h-px after:max-w-60 after:flex-1 after:bg-saffron/50 sm:gap-7"
           >
             The Curry Kitchen promise
           </motion.p>
-          <ul className="mt-4 flex snap-x snap-mandatory overflow-x-auto border-y border-white/16 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:overflow-visible">
-            {promises.map(([title, copy], index) => (
-              <motion.li
+          <ul className="mt-6 grid gap-5 md:grid-cols-3 md:gap-0">
+            {promises.map(([title, copy], index) => {
+              const Icon = promiseIcons[index];
+              return (
+                <motion.li
                 key={title}
                 variants={reveal}
                 transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
                 className={cn(
-                  "min-w-[82%] snap-start px-5 py-4 text-left md:min-w-0 md:flex-1 md:px-7 md:py-5",
-                  index > 0 && "border-l border-white/14",
-                  index === 0 && "pl-0 md:pl-0",
-                  index === promises.length - 1 && "md:pr-0",
+                  "grid min-w-0 grid-cols-[40px_minmax(0,1fr)] items-start gap-x-4 md:flex md:flex-col md:items-center md:px-6 md:text-center",
+                  index > 0 && "border-t border-white/14 pt-5 md:border-l md:border-t-0 md:pt-0",
                 )}
               >
-                <span className="block font-display text-lg font-black leading-tight">{title}</span>
-                <span className="mt-1 block text-sm leading-6 text-white/64">{copy}</span>
-              </motion.li>
-            ))}
+                <Icon aria-hidden size={36} strokeWidth={1.5} className="row-span-2 text-saffron md:mb-4" />
+                <span className="block font-display text-base font-black leading-tight md:min-h-[2.5em] lg:min-h-0 lg:text-lg">{title}</span>
+                <span className="mt-2 block max-w-sm text-sm leading-6 text-white/75">{copy}</span>
+                </motion.li>
+              );
+            })}
           </ul>
         </motion.div>
-        </div>
-
       </div>
 
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
+        initial={reducedMotion ? false : { opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.9, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-        className="relative mt-auto border-t border-white/18 bg-black/45 backdrop-blur-md lg:absolute lg:inset-x-0 lg:bottom-0 lg:bg-black/35"
+        className="relative mt-auto bg-[#090a09]/95"
       >
-        <dl className="section-shell grid md:grid-cols-3">
+        <dl className="section-shell grid grid-cols-2 py-2 md:grid-cols-[1fr_1fr_1.35fr] md:py-0">
           {[
             [CalendarDays, "Delivery days", facts.deliveryDays],
             [Clock3, "Delivery window", facts.deliveryWindow],
@@ -192,8 +194,9 @@ export function HeroSection({ background, facts }: { background: PageBackgroundV
               <div
                 key={label as string}
                 className={cn(
-                  "flex items-center gap-3 py-5 md:px-6 lg:py-3",
-                  index > 0 && "border-t border-white/14 md:border-l md:border-t-0",
+                  "flex min-w-0 items-center gap-2 py-4 sm:gap-3 md:my-5 md:px-6 md:py-0",
+                  index === 1 && "border-l border-white/14 pl-3",
+                  index === 2 && "col-span-2 border-t border-white/14 md:col-span-1 md:border-l md:border-t-0",
                   index === 0 && "md:pl-0",
                   index === 2 && "md:pr-0",
                 )}
@@ -202,8 +205,8 @@ export function HeroSection({ background, facts }: { background: PageBackgroundV
                   <DetailIcon size={18} strokeWidth={2} aria-hidden />
                 </span>
                 <span className="min-w-0">
-                  <dt className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/56">{label as string}</dt>
-                  <dd className="mt-1 text-sm font-bold text-white/92">{value as string}</dd>
+                  <dt className="text-[10px] font-extrabold uppercase tracking-normal text-white/55 sm:text-[11px]">{label as string}</dt>
+                  <dd className="mt-1 text-xs font-bold leading-5 text-white/90 sm:text-sm">{value as string}</dd>
                 </span>
               </div>
             );

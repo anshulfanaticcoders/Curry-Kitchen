@@ -8,7 +8,7 @@ import {
   Truck,
 } from "lucide-react";
 import { PackageCard } from "@/components/food/package-card";
-import { MenuDayCard } from "@/components/food/menu-day-card";
+import { MenuEmptyState } from "@/components/food/menu-empty-state";
 import { JsonLd } from "@/components/seo/json-ld";
 import { HeroSection } from "@/components/sections/hero-section";
 import { TestimonialsCarousel } from "@/components/sections/testimonials-carousel";
@@ -16,7 +16,7 @@ import { RevealItem, StaggerGroup } from "@/components/ui/animated-section";
 import { ButtonLink } from "@/components/ui/button";
 import { getBusinessRules } from "@/lib/business-rules";
 import { getAdminSettings } from "@/lib/server/admin";
-import { getActiveMenuUploads, getPackagePlans, getTestimonials, getWeeklyMenu } from "@/lib/server/catalog";
+import { getActiveMenuUploads, getPackagePlans, getTestimonials } from "@/lib/server/catalog";
 import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
 import { getHomeSchemas, getMarketingMetadata } from "@/lib/server/seo";
 
@@ -59,7 +59,7 @@ const backgroundOverlay = {
 } as const;
 
 export default async function Home() {
-  const [packagePlans, testimonials, schemas, backgrounds, settings, rules, menuUploads, weeklyMenu] = await Promise.all([
+  const [packagePlans, testimonials, schemas, backgrounds, settings, rules, menuUploads] = await Promise.all([
     getPackagePlans(),
     getTestimonials(),
     getHomeSchemas(),
@@ -67,11 +67,9 @@ export default async function Home() {
     getAdminSettings(),
     getBusinessRules(),
     getActiveMenuUploads(),
-    getWeeklyMenu(),
   ]);
   const featuredPlans = packagePlans.filter((plan) => plan.isFeatured).slice(0, 3);
   const featuredMenus = menuUploads.slice(0, 3);
-  const featuredMenuDays = weeklyMenu.slice(0, 3);
   return (
     <main className="overflow-hidden bg-[#fffdf9] text-ink">
       <JsonLd data={schemas} />
@@ -123,7 +121,6 @@ export default async function Home() {
         </StaggerGroup>
       </section>
 
-      {featuredMenus.length || featuredMenuDays.length ? (
         <section className="dark-band relative overflow-hidden py-20 text-white lg:py-24">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_82%_18%,rgba(255,122,26,0.14),transparent_31%)]" />
           <StaggerGroup className="section-shell relative">
@@ -136,17 +133,16 @@ export default async function Home() {
                   This month&apos;s menus, week by week.
                 </RevealItem>
               </div>
-              <RevealItem>
+              {featuredMenus.length > 0 ? <RevealItem>
                 <ButtonLink href="/menu" variant="secondary" className="rounded-full border-white/20 bg-transparent px-6 text-white hover:bg-white hover:text-ink">
                   View full menu
                   <ArrowRight size={18} />
                 </ButtonLink>
-              </RevealItem>
+              </RevealItem> : null}
             </div>
 
-            <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-              {featuredMenus.length
-                ? featuredMenus.map((menu) => (
+            {featuredMenus.length > 0 ? <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+              {featuredMenus.map((menu) => (
                     <RevealItem key={menu.id}>
                       <a
                         href={`/menu/view/${menu.id}`}
@@ -182,16 +178,10 @@ export default async function Home() {
                         </span>
                       </a>
                     </RevealItem>
-                  ))
-                : featuredMenuDays.map((item) => (
-                    <RevealItem key={item.day}>
-                      <MenuDayCard item={item} />
-                    </RevealItem>
                   ))}
-            </div>
+            </div> : <MenuEmptyState dark />}
           </StaggerGroup>
         </section>
-      ) : null}
 
       <section className="section bg-[#f8f0e7]">
         <StaggerGroup className="section-shell">

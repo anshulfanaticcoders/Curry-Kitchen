@@ -1,11 +1,11 @@
 import { ArrowRight, CalendarClock, CalendarRange, CookingPot, Download, Eye, FileText, Truck } from "lucide-react";
 import type { Metadata } from "next";
-import { MenuDayCard } from "@/components/food/menu-day-card";
+import { MenuEmptyState } from "@/components/food/menu-empty-state";
 import { JsonLd } from "@/components/seo/json-ld";
 import { PageHero } from "@/components/sections/page-hero";
 import { RevealItem, StaggerGroup } from "@/components/ui/animated-section";
 import { ButtonLink } from "@/components/ui/button";
-import { getActiveMenuUploads, getWeeklyMenu } from "@/lib/server/catalog";
+import { getActiveMenuUploads } from "@/lib/server/catalog";
 import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
 import { getMarketingMetadata, getMenuSchemas } from "@/lib/server/seo";
 
@@ -34,11 +34,11 @@ const menuSteps = [
 ];
 
 export default async function MenuPage() {
-  const [weeklyMenu, menuUploads, backgrounds] = await Promise.all([getWeeklyMenu(), getActiveMenuUploads(), getPageBackgrounds()]);
-  const schemas = await getMenuSchemas(weeklyMenu);
+  const [menuUploads, backgrounds] = await Promise.all([getActiveMenuUploads(), getPageBackgrounds()]);
+  const schemas = await getMenuSchemas([]);
   const heroChips = menuUploads.length
     ? menuUploads.slice(0, 3).map((menu) => menu.dateRangeLabel)
-    : ["Fresh roti daily", "Dessert twice weekly"];
+    : [];
   const downloadHref = menuUploads.find((menu) => menu.current)?.fileUrl ?? menuUploads[0]?.fileUrl;
 
   return (
@@ -66,7 +66,7 @@ export default async function MenuPage() {
             ) : null}
           </>
         }
-        imageCaption={
+        imageCaption={menuUploads.length ? (
           <>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-saffron">
               This week&apos;s rotation
@@ -75,7 +75,7 @@ export default async function MenuPage() {
               Dal, sabzi, rice, roti, salad, and weekly sweets.
             </p>
           </>
-        }
+        ) : undefined}
       >
         Scan the week before ordering, then revisit the menu from your dashboard once deliveries
         begin.
@@ -193,34 +193,10 @@ export default async function MenuPage() {
           </StaggerGroup>
         </section>
       ) : (
-        /* Fallback while no menus are uploaded — day-by-day grid from the dish schedule */
         <section className="section relative bg-white">
-          <StaggerGroup className="section-shell">
-            <div className="mb-9 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-              <div>
-                <RevealItem as="p" className="text-sm font-black uppercase tracking-[0.18em] text-masala">
-                  Monday to Friday
-                </RevealItem>
-                <RevealItem as="h2" className="mt-3 max-w-xl font-display text-3xl font-black leading-[1.12] lg:text-5xl">
-                  This week, day by day.
-                </RevealItem>
-              </div>
-              <RevealItem>
-                <ButtonLink href="/packages" variant="dark" className="w-fit">
-                  Pick a plan to start
-                  <ArrowRight size={18} />
-                </ButtonLink>
-              </RevealItem>
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {weeklyMenu.map((item) => (
-                <RevealItem key={item.day}>
-                  <MenuDayCard item={item} />
-                </RevealItem>
-              ))}
-            </div>
-          </StaggerGroup>
+          <div className="section-shell">
+            <MenuEmptyState />
+          </div>
         </section>
       )}
     </main>
