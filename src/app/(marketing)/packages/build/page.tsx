@@ -39,7 +39,7 @@ export default async function BuildPackagePage({
         imageAlt="Indian thali with roti, rice, dal and sabzi"
         focalPoint={backgrounds["packages.build.hero"].focalPoint}
         overlay={backgrounds["packages.build.hero"].overlay}
-        chips={["Pay per portion", "Monthly delivery", "Same morning delivery"]}
+        chips={["Pay per portion", "Monthly delivery", "Prepared fresh each morning"]}
       >
         Pick the exact portions you want. We price each item per unit, then multiply by the
         number of delivery days in your plan.

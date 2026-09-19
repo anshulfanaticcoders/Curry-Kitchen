@@ -25,6 +25,6 @@ export async function POST(request: Request) {
       console.error("Unexpected checkout error", error);
     }
 
-    return Response.json({ ok: false, error: message }, { status });
+    return Response.json({ ok: false, error: message, code: error instanceof CheckoutError ? error.code : undefined }, { status });
   }
 }

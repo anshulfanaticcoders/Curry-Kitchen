@@ -2,12 +2,11 @@ import "server-only";
 
 import { getBusinessRules } from "@/lib/business-rules";
 import { db } from "@/lib/db";
+import { dateToInput, isDeliveryDayElapsed } from "@/lib/package-schedule";
 import type { CustomerCalendarData } from "@/lib/types";
 
 function toDateKey(date: Date) {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
+  return dateToInput(date);
 }
 
 function packageStatusLabel(status: string) {
@@ -24,6 +23,7 @@ function formatFullDate(date: Date) {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "UTC",
   }).format(date);
 }
 
@@ -59,7 +59,6 @@ export async function getCustomerCalendarData(
 
   const events: CustomerCalendarData["events"] = [];
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   // Mark every active kitchen-holiday date as closed, even when this customer
   // has no delivery scheduled on it — the whole kitchen is off that day.
@@ -73,7 +72,7 @@ export async function getCustomerCalendarData(
         type: "holiday",
         label: `${holiday.name} — kitchen closed`,
       });
-      cursor.setDate(cursor.getDate() + 1);
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
       guard += 1;
     }
   }
@@ -84,7 +83,7 @@ export async function getCustomerCalendarData(
       .filter((day) => !["CANCELLED", "PAUSED"].includes(day.status))
       .sort((left, right) => left.deliveryDate.getTime() - right.deliveryDate.getTime());
     const elapsedDeliveryDays = countableDeliveryDays.filter(
-      (day) => day.status === "DELIVERED" || day.deliveryDate < today,
+      (day) => isDeliveryDayElapsed(day, now),
     ).length;
     const completedDays = Math.max(customerPackage.usedDeliveryDays, elapsedDeliveryDays);
     const completedDayIds = new Set(
@@ -135,16 +134,16 @@ export async function getCustomerCalendarData(
             ? `${planName} — delivery paused`
             : completed
               ? `${planName} — delivered`
-              : `${planName} — morning delivery`,
+              : `${planName} — ${day.deliveryWindow} Pacific Time`,
       });
     }
 
     for (const pause of customerPackage.pauseRequests) {
       // Expand the scheduled pause range into per-day markers.
       const cursor = new Date(pause.startDate);
-      cursor.setHours(0, 0, 0, 0);
+      cursor.setUTCHours(0, 0, 0, 0);
       const end = new Date(pause.endDate);
-      end.setHours(0, 0, 0, 0);
+      end.setUTCHours(0, 0, 0, 0);
       let guard = 0;
 
       while (cursor <= end && guard < 62) {
@@ -153,7 +152,7 @@ export async function getCustomerCalendarData(
           type: "pause",
           label: `${planName} paused${pause.reason ? ` — ${pause.reason}` : ""}`,
         });
-        cursor.setDate(cursor.getDate() + 1);
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
         guard += 1;
       }
     }
@@ -165,9 +164,7 @@ export async function getCustomerCalendarData(
     deliveryWeekdays: rules.deliveryWeekdays,
     packages: customer.packages.map((customerPackage) => {
       const elapsedDays = customerPackage.deliveryDays.filter(
-        (day) =>
-          day.status === "DELIVERED" ||
-          (day.deliveryDate < today && !["CANCELLED", "PAUSED"].includes(day.status)),
+        (day) => isDeliveryDayElapsed(day, now),
       ).length;
       const usedDays = Math.max(customerPackage.usedDeliveryDays, elapsedDays);
       const activePause = customerPackage.pauseRequests.find(

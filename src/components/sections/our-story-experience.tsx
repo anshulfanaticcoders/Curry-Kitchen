@@ -44,9 +44,9 @@ const storyBeats = [
   },
   {
     icon: Truck,
-    label: "Dinner delivery",
-    title: "Reliable evenings",
-    copy: "Packages are built for students, families, and busy professionals who need dinner to arrive on time.",
+    label: "Lunch & dinner",
+    title: "Right at your doorstep",
+    copy: "Your tiffin arrives between 10 AM and 6 PM Pacific Time, ready to enjoy for lunch or dinner. Deliveries end at 6 PM.",
   },
 ];
 
@@ -438,11 +438,11 @@ export function OurStoryExperience({ background }: { background: PageBackgroundV
               Main attraction
             </p>
             <h2 className="mt-5 font-display text-[clamp(2.35rem,5vw,4.7rem)] font-black leading-[1.12]">
-              From morning prep to dinner at your door.
+              From morning prep to lunch or dinner at your doorstep.
             </h2>
             <p className="mx-auto mt-5 max-w-2xl text-base font-bold leading-8 text-white/64">
-              This animated route is the heart of the page: the meal moves from family recipe to
-              fresh prep, then into a packed tiffin and across San Diego delivery zones.
+              Freshly prepared in the morning, carefully packed, and delivered to your doorstep
+              between 10 AM and 6 PM Pacific Time. Home-style meals for lunch or dinner, on your schedule.
             </p>
           </motion.div>
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { Loader2, RotateCcw } from "lucide-react";
+import { Clock3, Loader2, RotateCcw, Settings2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -12,6 +13,7 @@ import {
   DEFAULT_EMAIL_BRAND,
   EMAIL_TEMPLATE_IDS,
   EMAIL_TEMPLATES,
+  type EmailBrand,
   type EmailTemplateFields,
   type EmailTemplateId,
   renderEmailTemplate,
@@ -33,9 +35,11 @@ function resolveFields(id: EmailTemplateId, overrides: EmailTemplateOverrides): 
 export function AdminEmailTemplatesClient({
   overrides,
   appUrl,
+  brand,
 }: {
   overrides: EmailTemplateOverrides;
   appUrl: string;
+  brand: Partial<EmailBrand>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -44,11 +48,13 @@ export function AdminEmailTemplatesClient({
 
   const definition = EMAIL_TEMPLATES[activeId];
   const customized = Boolean(overrides[activeId]);
+  const resolvedBrand = { ...DEFAULT_EMAIL_BRAND, ...brand };
   const preview = renderEmailTemplate({
     id: activeId,
     variables: definition.variables,
     ctaUrl: `${appUrl}${definition.ctaPath}`,
     fields,
+    brand: resolvedBrand,
   });
 
   function select(id: EmailTemplateId) {
@@ -102,6 +108,19 @@ export function AdminEmailTemplatesClient({
         title="Email templates"
         description="Edit the subject and wording of every automatic email. Variables like {{customerName}} are filled in when the email is sent."
       />
+
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-y border-ink/10 py-4">
+        <div className="flex items-start gap-3">
+          <Clock3 size={20} className="mt-1 shrink-0 text-masala" aria-hidden="true" />
+          <div>
+            <p className="text-xs font-bold text-ink/55">Delivery window</p>
+            <p className="text-sm font-extrabold">{resolvedBrand.deliveryWindow}</p>
+          </div>
+        </div>
+        <Link href="/admin/settings" className="inline-flex items-center gap-2 text-sm font-bold text-masala hover:underline">
+          <Settings2 size={16} aria-hidden="true" /> Business settings
+        </Link>
+      </div>
 
       <div className="grid gap-5 lg:grid-cols-[240px_1fr]">
         <div className="lg:hidden">
@@ -178,11 +197,11 @@ export function AdminEmailTemplatesClient({
                 <div className="rounded-xl bg-frost p-4">
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-ink/45">Available variables</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {[...Object.entries(definition.variables), ...Object.entries(DEFAULT_EMAIL_BRAND)].map(([name, sample]) => (
+                    {Object.entries({ ...resolvedBrand, ...definition.variables }).map(([name, sample]) => (
                       <button
                         key={name}
                         type="button"
-                        title={`Example: ${sample}`}
+                        title={`${name in definition.variables ? "Example" : "Current setting"}: ${sample}`}
                         onClick={() => update("body", `${fields.body}${fields.body.endsWith("\n") || !fields.body ? "" : " "}{{${name}}}`)}
                         className="rounded-full border border-ink/10 bg-white px-2.5 py-1 font-mono text-xs font-bold text-ink/70 transition hover:border-saffron hover:text-saffron"
                       >
@@ -206,7 +225,7 @@ export function AdminEmailTemplatesClient({
           </form>
 
           <Card className="min-w-0 self-start">
-            <CardHeader title="Preview" description="Filled with example values. Updates as you type." />
+            <CardHeader title="Preview" description="Sample order, saved business details." />
             <div className="p-5">
               <p className="text-xs font-black uppercase tracking-[0.14em] text-ink/45">Subject</p>
               <p className="mt-1 break-words font-bold">{preview.subject || <span className="text-ink/35">(empty)</span>}</p>

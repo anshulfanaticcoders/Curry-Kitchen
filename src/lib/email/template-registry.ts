@@ -25,8 +25,8 @@ export type EmailTemplateDefinition = {
   defaults: EmailTemplateFields;
 };
 
-// Business details available in every template. Real sends fill these from
-// admin settings; the preview uses these samples.
+// Business details available in every template. Sends and previews use saved
+// admin settings; these defaults apply when settings are unavailable.
 export type EmailBrand = {
   businessName: string;
   supportEmail: string;
@@ -34,15 +34,19 @@ export type EmailBrand = {
   deliveryWindow: string;
   deliveryDays: string;
   serviceAreas: string;
+  orderCutoff: string;
+  pausePolicy: string;
 };
 
 export const DEFAULT_EMAIL_BRAND: EmailBrand = {
   businessName: "Curry Kitchen",
   supportEmail: "currykitcheninc@gmail.com",
   phone: "(858) 599-1613",
-  deliveryWindow: "8:00 AM – 11:00 AM",
+  deliveryWindow: "10:00 AM - 6:00 PM Pacific Time",
   deliveryDays: "Monday - Friday",
   serviceAreas: "San Diego, Chula Vista, La Jolla",
+  orderCutoff: "8:00 PM Pacific Time",
+  pausePolicy: "Check your dashboard for available pause options or contact our team for help.",
 };
 
 export const EMAIL_BRAND_VARIABLE_NAMES = Object.keys(DEFAULT_EMAIL_BRAND) as Array<keyof EmailBrand>;
@@ -53,7 +57,7 @@ const CUSTOMER_FOOTER =
 export const EMAIL_TEMPLATES = {
   orderConfirmation: {
     label: "Order confirmation",
-    description: "Sent to the customer once a card payment succeeds.",
+    description: "Sent to the customer once payment is confirmed.",
     audience: "customer",
     ctaPath: "/dashboard/orders",
     variables: {
@@ -65,19 +69,21 @@ export const EMAIL_TEMPLATES = {
     },
     defaults: {
       subject: "Order confirmed — {{orderNumber}}",
-      heading: "Your tiffin is on the calendar",
+      heading: "Thank you for your order",
       intro:
-        "Hi {{customerName}}, thank you for choosing {{businessName}}. Your payment went through and your first delivery is booked.",
+        "Hi {{customerName}}, thank you for choosing {{businessName}}. Your payment has been received. Check your dashboard for package activation and delivery status.",
       body: `**Order:** {{orderNumber}}
 **Plan:** {{plans}}
 **Total paid:** {{total}}
 **First delivery:** {{startDate}}
 
 **What happens next**
-Every meal is cooked fresh in our kitchen on the morning of delivery and arrives between {{deliveryWindow}} on your scheduled days ({{deliveryDays}}). Your full delivery calendar is ready in your dashboard.
+Every meal is cooked fresh in our kitchen on the morning of delivery and arrives between {{deliveryWindow}} on your scheduled days ({{deliveryDays}}). Your dashboard shows your delivery calendar once the package is active.
+
+New orders for next-day delivery must be placed before {{orderCutoff}}, subject to delivery days and kitchen holidays.
 
 **Travelling or need a break?**
-Pause your plan any time from the dashboard. Your remaining delivery days stay saved for 30 days, so you never lose a meal you paid for.
+{{pausePolicy}}
 
 ${CUSTOMER_FOOTER}`,
       ctaLabel: "View your orders",
@@ -98,7 +104,7 @@ ${CUSTOMER_FOOTER}`,
       subject: "Order received — complete your Zelle payment for {{orderNumber}}",
       heading: "One step left: send your Zelle payment",
       intro:
-        "Hi {{customerName}}, we have saved your order. Your deliveries begin as soon as your Zelle transfer arrives.",
+        "Hi {{customerName}}, we have saved your order. Payment confirmation is required before your deliveries can be activated.",
       body: `**Order:** {{orderNumber}}
 **Plan:** {{plans}}
 **Amount due:** {{total}}
@@ -106,7 +112,7 @@ ${CUSTOMER_FOOTER}`,
 **How to pay**
 Open your banking app, choose Zelle, and send **{{total}}** to **{{supportEmail}}**. Put your order number **{{orderNumber}}** in the memo so we can match it quickly.
 
-Please send it today if you can — deliveries only start once your payment is confirmed, so a quick transfer means no delay to your first tiffin. We confirm Zelle payments during business hours and email you the moment your plan is active.
+Your order remains pending until our team confirms payment. Check your dashboard for payment, verification, and delivery status.
 
 ${CUSTOMER_FOOTER}`,
       ctaLabel: "View your orders",
@@ -130,7 +136,7 @@ ${CUSTOMER_FOOTER}`,
 **Reason:** {{reason}}
 
 **About refunds**
-If you already paid, your refund is on its way. Card payments return to your card within 5–10 business days; Zelle payments are returned to the same account.
+If you already paid, contact our team with your order number to confirm refund eligibility and processing status. This cancellation email does not confirm that a refund has been issued.
 
 We currently deliver across {{serviceAreas}}. If you think this was a mistake or would like to place a new order, we would love to hear from you.
 
@@ -145,15 +151,15 @@ ${CUSTOMER_FOOTER}`,
     ctaPath: "/dashboard/orders",
     variables: { customerName: "Priya", verificationType: "student" },
     defaults: {
-      subject: "You're verified — your {{businessName}} plan is active",
+      subject: "Your {{businessName}} verification is approved",
       heading: "You are verified. Welcome aboard!",
       intro:
-        "Hi {{customerName}}, your {{verificationType}} ID has been approved and your discounted plan is now active.",
+        "Hi {{customerName}}, your {{verificationType}} ID has been approved. Check your dashboard for your package's activation and payment status.",
       body: `**What happens next**
-Your delivery calendar is ready in your dashboard. Meals are cooked fresh each morning and delivered between {{deliveryWindow}} on your scheduled days.
+Your dashboard shows your delivery schedule once the package is active. Meals are cooked fresh each morning and delivered between {{deliveryWindow}} on your scheduled days.
 
-**Keep your discount**
-Your {{verificationType}} pricing stays attached to your account, so renewals keep the same rate as long as your ID is valid.
+**Your next package**
+Available plans, current prices, and verification requirements are shown when you place a new order.
 
 ${CUSTOMER_FOOTER}`,
       ctaLabel: "View your orders",
@@ -176,12 +182,12 @@ ${CUSTOMER_FOOTER}`,
       body: `**Reason:** {{adminNote}}
 
 **How to fix it**
-Upload a clear, well-lit photo of your current {{verificationType}} ID from your dashboard. Make sure your name, the issuing institution, and the expiry date are readable.
+Contact our team with your order details for help submitting a clear, well-lit photo of your current {{verificationType}} ID. Make sure your name, the issuing institution, and the expiry date are readable.
 
-Once we can read it, we approve verifications within one business day and activate your plan straight away.
+Our team will review the updated information and notify you of the decision. Check your dashboard for the latest status.
 
 ${CUSTOMER_FOOTER}`,
-      ctaLabel: "Upload a new ID",
+      ctaLabel: "View your orders",
     },
   },
   renewalReminder: {
@@ -192,13 +198,13 @@ ${CUSTOMER_FOOTER}`,
     variables: { customerName: "Priya", planName: "Monthly Veg Tiffin", endDate: "September 30, 2026" },
     defaults: {
       subject: "Your {{planName}} ends {{endDate}} — renew to keep deliveries going",
-      heading: "Three days left on your plan",
+      heading: "Your plan ends on {{endDate}}",
       intro: "Hi {{customerName}}, your {{planName}} plan ends on {{endDate}}.",
       body: `**Plan:** {{planName}}
 **Last delivery:** {{endDate}}
 
-**Renew in under a minute**
-Pick the same plan or try a new one — your delivery address and preferences are already saved. Renew before {{endDate}} and your deliveries continue with no gap.
+**Plan your next delivery**
+Choose from the available packages and select your next start date during checkout. Order before {{orderCutoff}} for next-day delivery, subject to delivery days and kitchen holidays.
 
 **Need a break instead?**
 No problem. You can come back any time; your account and history stay exactly where you left them.
@@ -220,7 +226,7 @@ ${CUSTOMER_FOOTER}`,
       body: `It has been a pleasure cooking for you. Every tiffin was made fresh the morning it reached your door, and we hope it tasted like home.
 
 **Ready for more?**
-Choose a new plan whenever you like — weekly or monthly, veg or non-veg. Your address and preferences are saved, so it only takes a minute to start again.
+Choose from the currently available packages whenever you are ready, then select an eligible start date during checkout.
 
 **Tell us how we did**
 Reply to this email with anything you loved or anything we could do better. We read every message.
@@ -252,7 +258,7 @@ ${CUSTOMER_FOOTER}`,
 **How to resume**
 Open your dashboard and tap Resume. Deliveries restart on the next scheduled day and your saved meals are used first.
 
-Saved days are held for 30 days from the pause date. After **{{resumeBy}}** the package ends and unused days cannot be restored.
+The resume deadline for this package is **{{resumeBy}}**. Resume before that date or contact our team for help with your remaining meals.
 
 ${CUSTOMER_FOOTER}`,
       ctaLabel: "Resume my package",
@@ -278,7 +284,7 @@ They have not ordered yet. Open the customer record to view details or reach out
   },
   adminOrderAlert: {
     label: "Paid order alert",
-    description: "Sent to the admin alert address when a card payment succeeds.",
+    description: "Sent to the admin alert address when payment is confirmed.",
     audience: "admin",
     ctaPath: "/admin/orders",
     variables: {
@@ -291,14 +297,14 @@ They have not ordered yet. Open the customer record to view details or reach out
     defaults: {
       subject: "New paid order — {{orderNumber}} ({{total}})",
       heading: "New paid order",
-      intro: "{{customerName}} completed checkout with a card payment.",
+      intro: "Payment has been confirmed for {{customerName}}'s order.",
       body: `**Order:** {{orderNumber}}
 **Customer:** {{customerName}}
 **Email:** {{customerEmail}}
 **Plan:** {{plans}}
 **Total:** {{total}}
 
-The plan is active and the delivery calendar has been generated. Print the packing label from the customer page.`,
+Check the order for package activation, delivery dates, and any outstanding verification. Packing labels are available from the customer page.`,
       ctaLabel: "Open order",
     },
   },
@@ -324,7 +330,7 @@ The plan is active and the delivery calendar has been generated. Print the packi
 **Plan:** {{plans}}
 **Amount expected:** {{total}}
 
-Check your Zelle account for **{{total}}** with memo **{{orderNumber}}**. Once it arrives, mark the payment as paid to activate the plan — the customer is emailed automatically.`,
+Check your Zelle account for **{{total}}** with memo **{{orderNumber}}**. Once it arrives, mark the payment as paid and review any outstanding verification before delivery.`,
       ctaLabel: "Open payments",
     },
   },
@@ -623,6 +629,7 @@ export function renderEmailTemplate({
       plain(body),
       cta ? `${cta.label}: ${cta.url}` : "",
       `${resolvedBrand.businessName} · ${resolvedBrand.supportEmail} · ${resolvedBrand.phone}`,
+      `Delivery: ${resolvedBrand.deliveryDays}, ${resolvedBrand.deliveryWindow}. Serving ${resolvedBrand.serviceAreas}.`,
     ]
       .filter(Boolean)
       .join("\n\n"),

@@ -8,6 +8,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { getActiveMenuUploads } from "@/lib/server/catalog";
 import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
 import { getMarketingMetadata, getMenuSchemas } from "@/lib/server/seo";
+import { getBusinessRules } from "@/lib/business-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export function generateMetadata(): Promise<Metadata> {
   return getMarketingMetadata("/menu");
 }
 
-const menuSteps = [
+const getMenuSteps = (deliveryWindow: string) => [
   {
     icon: CalendarClock,
     title: "Published every Monday",
@@ -28,13 +29,14 @@ const menuSteps = [
   },
   {
     icon: Truck,
-    title: "Delivered 6–8 PM",
-    copy: "Your tiffin arrives in the dinner window, Monday through Friday.",
+    title: "Lunch or dinner at your door",
+    copy: `Your tiffin arrives ${deliveryWindow} Pacific Time, Monday through Friday.`,
   },
 ];
 
 export default async function MenuPage() {
-  const [menuUploads, backgrounds] = await Promise.all([getActiveMenuUploads(), getPageBackgrounds()]);
+  const [menuUploads, backgrounds, rules] = await Promise.all([getActiveMenuUploads(), getPageBackgrounds(), getBusinessRules()]);
+  const menuSteps = getMenuSteps(rules.deliveryWindow);
   const schemas = await getMenuSchemas([]);
   const heroChips = menuUploads.length
     ? menuUploads.slice(0, 3).map((menu) => menu.dateRangeLabel)

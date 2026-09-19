@@ -98,6 +98,7 @@ export async function getPackageScheduleAvailability(
     now,
     deliveryWeekdays: rules.deliveryWeekdays,
     orderCutoff: rules.orderCutoff,
+    deliveryWindow: rules.deliveryWindow,
     orderCutoffPassed: isAfterOrderCutoff(rules.orderCutoff, now),
     holidays: holidays.map(publicHoliday),
   });

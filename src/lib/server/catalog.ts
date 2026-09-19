@@ -23,6 +23,7 @@ import type {
 } from "@/lib/types";
 import { getCurrentSession } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { businessDateInput, inputToDate, isDeliveryDayElapsed } from "@/lib/package-schedule";
 import { hasDatabaseUrl, shouldUseMockData } from "@/lib/server/data-source";
 
 type DecimalLike = { toNumber: () => number } | number | string | null | undefined;
@@ -542,16 +543,15 @@ export async function getAdminCustomerDetail(customerId: string) {
         : activePackage?.package.cadence === "WEEKLY"
           ? "Trial"
           : "Active";
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const scheduledDeliveryDays = activePackage?.deliveryDays.filter((day) => day.status !== "CANCELLED") ?? [];
+    const now = new Date();
+    const scheduledDeliveryDays = activePackage?.deliveryDays.filter((day) => !["CANCELLED", "PAUSED"].includes(day.status)) ?? [];
     const nextDelivery = scheduledDeliveryDays.find(
-      (day) => day.deliveryDate >= today && day.status !== "PAUSED",
+      (day) => !isDeliveryDayElapsed(day, now),
     );
     const completedDays = activePackage
       ? Math.max(
           activePackage.usedDeliveryDays,
-          scheduledDeliveryDays.filter((day) => day.deliveryDate < today).length,
+          scheduledDeliveryDays.filter((day) => isDeliveryDayElapsed(day, now)).length,
         )
       : 0;
     const foodPreferences = activePackage?.order.foodPreferences?.trim() || latestOrder?.foodPreferences?.trim() || "";
@@ -683,10 +683,10 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
       packages: customer.packages.map((customerPackage) => {
         const now = new Date();
         const activeDays = customerPackage.deliveryDays.filter(
-          (day) => day.status !== "CANCELLED",
+          (day) => !["CANCELLED", "PAUSED"].includes(day.status),
         );
-        const nextDelivery = activeDays.find((day) => day.deliveryDate >= now);
-        const elapsedDays = activeDays.filter((day) => day.deliveryDate < now).length;
+        const nextDelivery = activeDays.find((day) => !isDeliveryDayElapsed(day, now));
+        const elapsedDays = activeDays.filter((day) => isDeliveryDayElapsed(day, now)).length;
         const usedDays = Math.max(customerPackage.usedDeliveryDays, elapsedDays);
 
         return {
@@ -788,10 +788,11 @@ export async function getUpcomingDeliveries(): Promise<Delivery[]> {
       return [];
     }
 
+    const now = new Date();
     const deliveries = await db.packageDeliveryDay.findMany({
       where: {
-        deliveryDate: { gte: new Date() },
-        status: { notIn: ["CANCELLED", "PAUSED"] },
+        deliveryDate: { gte: inputToDate(businessDateInput(now), 0) },
+        status: { notIn: ["CANCELLED", "PAUSED", "DELIVERED"] },
         customerPackage: { customerId: customer.id, status: "ACTIVE" },
       },
       include: { customerPackage: { include: { package: true } } },
@@ -799,7 +800,7 @@ export async function getUpcomingDeliveries(): Promise<Delivery[]> {
       take: 5,
     });
 
-    return deliveries.map((delivery) => ({
+    return deliveries.filter((day) => !isDeliveryDayElapsed(day, now)).map((delivery) => ({
       id: delivery.id,
       day: formatDay(delivery.deliveryDate),
       date: formatDate(delivery.deliveryDate),
@@ -857,10 +858,9 @@ export async function getCustomerPackageSummaries(): Promise<CustomerPackageSumm
     });
 
     return packages.map((customerPackage) => {
-      // Deliveries happen every morning, so a delivery day is "used" once its
-      // date has passed — no per-day status tracking.
+      // Keep today's delivery outstanding until the Pacific delivery window ends.
       const elapsedDays = customerPackage.deliveryDays.filter(
-        (day) => day.status !== "CANCELLED" && day.deliveryDate < now,
+        (day) => isDeliveryDayElapsed(day, now),
       ).length;
       const usedDeliveryDays = Math.max(customerPackage.usedDeliveryDays, elapsedDays);
       const remainingDeliveryDays = Math.max(

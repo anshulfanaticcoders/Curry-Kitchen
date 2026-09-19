@@ -22,8 +22,10 @@ import {
   type PackageCartItemInput,
 } from "@/lib/package-cart";
 import type { PackagePlan } from "@/lib/types";
+import { useLiveAvailability } from "@/components/schedule/use-live-availability";
 import {
-  nextEligiblePackageStartInput,
+  buildPackageScheduleAvailability,
+  DEFAULT_ORDER_CUTOFF,
   type PackageScheduleAvailability,
 } from "@/lib/package-schedule";
 
@@ -35,12 +37,11 @@ const STORAGE_KEY = "currykitchen-package-cart-v3";
 const STORAGE_EVENT = "currykitchen-package-cart-change";
 const EMPTY_CART: PackageCartItemInput[] = [];
 const GUEST_OWNER = "guest";
-const DEFAULT_AVAILABILITY: PackageScheduleAvailability = {
-  earliestStartDate: nextEligiblePackageStartInput(),
+const DEFAULT_AVAILABILITY = buildPackageScheduleAvailability({
   deliveryWeekdays: [1, 2, 3, 4, 5],
   holidays: [],
-  orderCutoff: "Noon",
-};
+  orderCutoff: DEFAULT_ORDER_CUTOFF,
+});
 
 type CartEnvelope = { owner: string; items: PackageCartItemInput[] };
 
@@ -236,7 +237,8 @@ export function PackageCartProvider({ children }: { children: ReactNode }) {
   const [customConfig, setCustomConfig] = useState<CustomPackageConfig>(DEFAULT_CUSTOM_CONFIG);
   const [customItemsLoaded, setCustomItemsLoaded] = useState(false);
   const [catalogReady, setCatalogReady] = useState(false);
-  const [availability, setAvailability] = useState(DEFAULT_AVAILABILITY);
+  const [storedAvailability, setAvailability] = useState(DEFAULT_AVAILABILITY);
+  const availability = useLiveAvailability(storedAvailability);
   const hydrated = useSyncExternalStore(
     subscribeToHydration,
     getClientHydrationState,

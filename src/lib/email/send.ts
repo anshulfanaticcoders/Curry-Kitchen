@@ -17,10 +17,12 @@ export async function sendTransactionalEmail({
   to,
   email,
   idempotencyKey,
+  replyTo,
 }: {
   to: string | string[];
   email: TransactionalEmail;
   idempotencyKey?: string;
+  replyTo?: string;
 }): Promise<{ sent: boolean }> {
   const resend = getResend();
 
@@ -37,10 +39,11 @@ export async function sendTransactionalEmail({
   }
 
   try {
+    const resolvedReplyTo = replyTo ?? process.env.MAIL_REPLY_TO ?? (await getAdminSettings()).supportEmail;
     const { error } = await resend.emails.send(
       {
         from: process.env.MAIL_FROM ?? "Curry Kitchen <onboarding@resend.dev>",
-        replyTo: process.env.MAIL_REPLY_TO,
+        replyTo: resolvedReplyTo,
         to,
         subject: email.subject,
         text: email.text,

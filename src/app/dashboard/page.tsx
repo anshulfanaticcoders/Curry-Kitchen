@@ -4,6 +4,7 @@ import { CustomerPauseButton } from "@/components/dashboard/customer-pause-butto
 import { Card, CardHeader, PageHeader, StatCard, Table, Td, Th } from "@/components/dashboard/primitives";
 import { ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import { DeliveryPolicyNotice } from "@/components/schedule/delivery-policy-notice";
 import { getCurrentSession } from "@/lib/auth";
 import { getBusinessRules } from "@/lib/business-rules";
 import { nextEligiblePackageStartInput } from "@/lib/package-schedule";
@@ -75,11 +76,12 @@ export default async function CustomerOverviewPage() {
         <StatCard
           label="Next delivery"
           value={upcomingDeliveries[0]?.date ?? "Not scheduled"}
-          delta={upcomingDeliveries[0] ? `${upcomingDeliveries[0].day} morning` : "Buy a plan"}
+          delta={upcomingDeliveries[0] ? `${rules.deliveryWindow} PT` : "Buy a plan"}
           icon={<Truck size={20} />}
         />
-        <StatCard label="Orders" value={String(recentOrders.length)} delta="Delivered every morning" icon={<Clock size={20} />} />
+        <StatCard label="Orders" value={String(recentOrders.length)} delta="Prepared fresh each morning" icon={<Clock size={20} />} />
       </div>
+      <DeliveryPolicyNotice availability={rules} className="mt-6" />
 
       <Card className="mt-6">
         <CardHeader

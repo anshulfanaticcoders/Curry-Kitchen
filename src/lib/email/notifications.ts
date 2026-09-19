@@ -77,7 +77,7 @@ export async function sendOrderPaidEmails(order: PaidOrderForEmail) {
           planNames,
           total,
           currency: settings.currency,
-          startDate: startDates[0] ?? new Date(),
+          startDate: startDates[0] ?? null,
         }),
         idempotencyKey: `order-confirmation/${order.id}`,
       });

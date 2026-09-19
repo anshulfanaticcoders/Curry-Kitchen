@@ -9,8 +9,10 @@ import { SectionHeading } from "@/components/ui/section-heading";
 import { buildFaqSchema } from "@/lib/seo-core.mjs";
 import { getMarketingMetadata, schemasEnabled } from "@/lib/server/seo";
 import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
+import { getBusinessRules } from "@/lib/business-rules";
+import { formatOrderCutoff } from "@/lib/package-schedule";
 
-const faqGroups = [
+const getFaqGroups = (deliveryWindow: string, orderCutoff: string) => [
   {
     icon: ReceiptText,
     title: "Plans and pricing",
@@ -49,7 +51,11 @@ const faqGroups = [
       {
         question: "What time does food arrive?",
         answer:
-          "Deliveries arrive Monday through Friday, every morning.",
+          `Meals are prepared fresh in the morning and delivered Monday through Friday, ${deliveryWindow} Pacific Time. We do not deliver after the delivery window closes.`,
+      },
+      {
+        question: "What is the deadline for next-day delivery?",
+        answer: `Place your order before ${formatOrderCutoff(orderCutoff)} Pacific Time. At or after this cutoff, tomorrow is unavailable and you can choose the next eligible delivery day instead. Checkout also excludes non-delivery days and kitchen holidays. You can still place orders for later dates.`,
       },
     ],
   },
@@ -81,6 +87,8 @@ export function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function FaqPage() {
+  const rules = await getBusinessRules();
+  const faqGroups = getFaqGroups(rules.deliveryWindow, rules.orderCutoff);
   const faqItems = faqGroups.flatMap((group) => group.questions);
   const [backgrounds, seoEnabled] = await Promise.all([getPageBackgrounds(), schemasEnabled("/faq")]);
   const schemas = seoEnabled ? [buildFaqSchema(faqItems)] : [];

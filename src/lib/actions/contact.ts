@@ -33,6 +33,7 @@ export async function submitContactMessageAction(
   const { sent } = await sendTransactionalEmail({
     to: adminEmail,
     email: await createContactMessageEmail({ name, email, message }),
+    replyTo: email,
   });
 
   if (!sent) {

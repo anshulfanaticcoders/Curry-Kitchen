@@ -9,6 +9,7 @@ import { Card, CardHeader, Field, Input, PageHeader, Select, Textarea } from "@/
 import { Button } from "@/components/ui/button";
 import { saveAdminSettingsAction } from "@/lib/actions/admin";
 import type { AdminSettings } from "@/lib/types";
+import { normalizeOrderCutoff } from "@/lib/package-schedule";
 
 function useSettingsSave() {
   const router = useRouter();
@@ -123,9 +124,9 @@ function DeliveryRulesTab({ settings }: { settings: AdminSettings }) {
       <Card className="p-5">
         <CardHeader title="Delivery & ordering" className="border-0 p-0" />
         <div className="mt-5 grid gap-5 md:grid-cols-2">
-          <Field label="Delivery window start"><Input name="deliveryWindowStart" type="time" defaultValue={settings.deliveryWindowStart} required /></Field>
-          <Field label="Delivery window end"><Input name="deliveryWindowEnd" type="time" defaultValue={settings.deliveryWindowEnd} required /></Field>
-          <Field label="Order cut-off"><Select name="orderCutoff" defaultValue={settings.orderCutoff}><option>9:00 AM</option><option>Noon</option><option>3:00 PM</option></Select></Field>
+          <Field label="Delivery window start (Pacific Time)"><Input name="deliveryWindowStart" type="time" defaultValue={settings.deliveryWindowStart} required /></Field>
+          <Field label="Delivery window end (Pacific Time)"><Input name="deliveryWindowEnd" type="time" defaultValue={settings.deliveryWindowEnd} required /></Field>
+          <Field label="Next-day order cutoff (Pacific Time)"><Input name="orderCutoff" type="time" defaultValue={normalizeOrderCutoff(settings.orderCutoff)} required /></Field>
           <Field label="Delivery days"><Input name="deliveryDays" defaultValue={settings.deliveryDays} required /></Field>
           <Field label="Custom package: monthly delivery days" hint="Days billed for a custom monthly plan."><Input name="customMonthlyDays" type="number" min="1" max="60" step="1" defaultValue={settings.customMonthlyDays} required /></Field>
           <Field label="Flat delivery charge (USD)" hint="Default applied once per complete order. Categories with their own delivery charge override this amount."><Input name="deliveryCharge" type="number" min="0" max="999" step="0.01" defaultValue={settings.deliveryCharge.toFixed(2)} required /></Field>

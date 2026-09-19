@@ -1,6 +1,8 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { DEFAULT_DELIVERY_WINDOW, DEFAULT_ORDER_CUTOFF, normalizeOrderCutoff } from "@/lib/package-schedule";
+export { isAfterOrderCutoff } from "@/lib/package-schedule";
 
 export type BusinessRules = {
   maintenanceMode: boolean;
@@ -17,8 +19,8 @@ const defaultRules: BusinessRules = {
   acceptWeeklyTrials: true,
   enableCheckoutPauses: true,
   deliveryWeekdays: [1, 2, 3, 4, 5],
-  deliveryWindow: "8:00 AM - 11:00 AM",
-  orderCutoff: "Noon",
+  deliveryWindow: DEFAULT_DELIVERY_WINDOW,
+  orderCutoff: DEFAULT_ORDER_CUTOFF,
   customMonthlyDays: 21,
 };
 
@@ -42,7 +44,7 @@ export function deliveryWeekdaysFromText(value: unknown) {
 }
 
 function timeLabel(value: unknown, fallback: string) {
-  return typeof value === "string" && /^\d{2}:\d{2}$/.test(value) ? value : fallback;
+  return typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : fallback;
 }
 
 function formatTime(value: string) {
@@ -54,8 +56,8 @@ function formatTime(value: string) {
 
 export function businessRulesFromValue(value: unknown): BusinessRules {
   const candidate = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-  const start = timeLabel(candidate.deliveryWindowStart, "08:00");
-  const end = timeLabel(candidate.deliveryWindowEnd, "11:00");
+  const start = timeLabel(candidate.deliveryWindowStart, "10:00");
+  const end = timeLabel(candidate.deliveryWindowEnd, "18:00");
   return {
     maintenanceMode:
       typeof candidate.maintenanceMode === "boolean"
@@ -65,7 +67,7 @@ export function businessRulesFromValue(value: unknown): BusinessRules {
     enableCheckoutPauses: typeof candidate.enableCheckoutPauses === "boolean" ? candidate.enableCheckoutPauses : defaultRules.enableCheckoutPauses,
     deliveryWeekdays: deliveryWeekdaysFromText(candidate.deliveryDays),
     deliveryWindow: `${formatTime(start)} - ${formatTime(end)}`,
-    orderCutoff: typeof candidate.orderCutoff === "string" ? candidate.orderCutoff : defaultRules.orderCutoff,
+    orderCutoff: normalizeOrderCutoff(typeof candidate.orderCutoff === "string" ? candidate.orderCutoff : defaultRules.orderCutoff),
     customMonthlyDays:
       typeof candidate.customMonthlyDays === "number" &&
       Number.isInteger(candidate.customMonthlyDays) &&
@@ -80,12 +82,4 @@ export async function getBusinessRules(): Promise<BusinessRules> {
     const setting = await db.setting.findUnique({ where: { key: "admin_settings" } });
     return businessRulesFromValue(setting?.value);
   } catch { return defaultRules; }
-}
-
-export function isAfterOrderCutoff(cutoff: string, now = new Date()) {
-  const hourMinute = cutoff === "Noon" ? [12, 0] : cutoff === "9:00 AM" ? [9, 0] : cutoff === "3:00 PM" ? [15, 0] : [12, 0];
-  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
-  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0);
-  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? 0);
-  return hour * 60 + minute >= hourMinute[0] * 60 + hourMinute[1];
 }

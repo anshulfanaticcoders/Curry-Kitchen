@@ -10,6 +10,7 @@ import {
   type TransactionalEmail,
 } from "@/lib/email/template-registry";
 import { getAdminSettings } from "@/lib/server/admin";
+import { BUSINESS_TIME_ZONE, formatOrderCutoff } from "@/lib/package-schedule";
 
 export type { TransactionalEmail } from "@/lib/email/template-registry";
 
@@ -26,6 +27,7 @@ function formatDate(value: Date) {
     month: "long",
     day: "numeric",
     year: "numeric",
+    timeZone: BUSINESS_TIME_ZONE,
   }).format(value);
 }
 
@@ -38,16 +40,20 @@ function formatClock(value: string) {
 }
 
 // Business details from admin settings, used in the footer and as {{variables}}.
-async function getEmailBrand(): Promise<Partial<EmailBrand>> {
+export async function getEmailBrand(): Promise<Partial<EmailBrand>> {
   try {
     const settings = await getAdminSettings();
     return {
-      businessName: settings.businessName.replace(/\s+inc\.?$/i, ""),
+      businessName: settings.businessName,
       supportEmail: settings.supportEmail,
       phone: settings.phone,
-      deliveryWindow: `${formatClock(settings.deliveryWindowStart)} – ${formatClock(settings.deliveryWindowEnd)}`,
+      deliveryWindow: `${formatClock(settings.deliveryWindowStart)} - ${formatClock(settings.deliveryWindowEnd)} Pacific Time`,
       deliveryDays: settings.deliveryDays,
       serviceAreas: settings.serviceAreas,
+      orderCutoff: `${formatOrderCutoff(settings.orderCutoff)} Pacific Time`,
+      pausePolicy: settings.enableCheckoutPauses
+        ? "Eligible packages allow one customer-scheduled pause. Choose the available dates in your dashboard; affected deliveries move to the end of the package. Contact our team if you need help."
+        : "Contact our team if you need to pause or adjust your delivery schedule.",
     };
   } catch {
     return {};
@@ -73,14 +79,14 @@ export function createOrderConfirmationEmail(input: {
   planNames: string[];
   total: number;
   currency: string;
-  startDate: Date;
+  startDate: Date | null;
 }) {
   return render("orderConfirmation", {
     customerName: input.customerName,
     orderNumber: input.orderNumber,
     plans: input.planNames.join(", "),
     total: formatMoney(input.total, input.currency),
-    startDate: formatDate(input.startDate),
+    startDate: input.startDate ? formatDate(input.startDate) : "Not yet scheduled",
   });
 }
 

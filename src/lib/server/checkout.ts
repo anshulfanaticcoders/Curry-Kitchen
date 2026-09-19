@@ -186,8 +186,8 @@ export async function markOrderPaidAndActivate(orderId: string, stripePaymentId?
       data: { status: "PAID", stripePaymentId },
     });
 
-    // Paid orders are accepted automatically — the kitchen delivers every
-    // morning between the package start and end dates. Admins only step in
+    // Paid orders are accepted automatically — the kitchen delivers on the
+    // scheduled days between the package start and end dates. Admins only step in
     // to cancel an order.
     await tx.order.update({
       where: { id: order.id },
@@ -279,6 +279,7 @@ export async function createCheckoutOrder(rawInput: unknown) {
       now: checkoutNow,
       deliveryWeekdays: rules.deliveryWeekdays,
       orderCutoff: rules.orderCutoff,
+      deliveryWindow: rules.deliveryWindow,
       orderCutoffPassed: isAfterOrderCutoff(rules.orderCutoff, checkoutNow),
       holidays: activeHolidays.map((holiday) => ({
         id: holiday.id,
@@ -295,6 +296,19 @@ export async function createCheckoutOrder(rawInput: unknown) {
         503,
         "MAINTENANCE_MODE",
       );
+    }
+
+    // Validate every plan/custom start before creating any customer or order rows.
+    for (const item of input.items) {
+      const startDateError = packageStartDateIssue(
+        item.startDate,
+        availability.deliveryWeekdays,
+        availability.holidays,
+        availability.earliestStartDate,
+      );
+      if (startDateError) {
+        throw new CheckoutError(startDateError, 409, "START_DATE_UNAVAILABLE");
+      }
     }
 
     const packageIds = Array.from(
@@ -439,15 +453,6 @@ export async function createCheckoutOrder(rawInput: unknown) {
         throw new CheckoutError("Weekly trial packages are not available right now.", 409, "WEEKLY_TRIALS_DISABLED");
       }
 
-      const startDateError = packageStartDateIssue(
-        item.startDate,
-        availability.deliveryWeekdays,
-        availability.holidays,
-        availability.earliestStartDate,
-      );
-      if (startDateError) {
-        throw new CheckoutError(startDateError, 409, "START_DATE_UNAVAILABLE");
-      }
       const startDate = inputToDate(item.startDate);
       const packageTotal = toNumber(plan.price);
 

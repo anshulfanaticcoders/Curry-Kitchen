@@ -417,7 +417,7 @@ async function main() {
   await prisma.setting.createMany({
     data: [
       { key: "business", value: { name: "Curry Kitchen Inc.", currency: "USD", state: "CA", supportEmail: "currykitcheninc@gmail.com" } },
-      { key: "delivery", value: { defaultWindow: "6:00 PM - 8:00 PM", outsideZoneFee: 12, deliveryDays: ["Mon", "Tue", "Wed", "Thu", "Fri"] } },
+      { key: "delivery", value: { defaultWindow: "10:00 AM - 6:00 PM", outsideZoneFee: 12, deliveryDays: ["Mon", "Tue", "Wed", "Thu", "Fri"] } },
       { key: "pausePolicy", value: { customerSelfPauseLimit: 1, adminUnlimited: true } },
       { key: "seo_settings", value: { titleSuffix: " | Curry Kitchen", defaultDescription: "Homestyle Indian tiffin meal plans and weekday dinner delivery in San Diego.", defaultSocialImage: "", logoUrl: "", cuisine: "Indian", priceRange: "$$", socialProfiles: [], googleVerification: "" } },
     ],

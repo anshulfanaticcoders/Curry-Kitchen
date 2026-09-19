@@ -29,7 +29,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
         availability={availability}
       />
       {children}
-      <Footer />
+      <Footer deliveryWindow={rules.deliveryWindow} orderCutoff={rules.orderCutoff} />
     </div>
   );
 }

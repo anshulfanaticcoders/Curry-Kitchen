@@ -1,4 +1,31 @@
 export const BUSINESS_TIME_ZONE = "America/Los_Angeles";
+export const DEFAULT_ORDER_CUTOFF = "20:00";
+export const DEFAULT_DELIVERY_WINDOW = "10:00 AM - 6:00 PM";
+
+export function normalizeOrderCutoff(value: string) {
+  if (value.trim().toLowerCase() === "noon") return "12:00";
+  const clock = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value.trim());
+  if (clock) return `${clock[1]}:${clock[2]}`;
+  const label = /^(0?[1-9]|1[0-2])(?::([0-5]\d))?\s*(AM|PM)$/i.exec(value.trim());
+  if (!label) return DEFAULT_ORDER_CUTOFF;
+  const hour = Number(label[1]) % 12 + (label[3].toUpperCase() === "PM" ? 12 : 0);
+  return `${String(hour).padStart(2, "0")}:${label[2] ?? "00"}`;
+}
+
+export function formatOrderCutoff(value: string) {
+  const [hour, minute] = normalizeOrderCutoff(value).split(":").map(Number);
+  return `${hour % 12 || 12}:${String(minute).padStart(2, "0")} ${hour >= 12 ? "PM" : "AM"}`;
+}
+
+export function isAfterOrderCutoff(cutoff: string, now = new Date()) {
+  const [cutoffHour, cutoffMinute] = normalizeOrderCutoff(cutoff).split(":").map(Number);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: BUSINESS_TIME_ZONE, hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(now);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? 0);
+  return hour * 60 + minute >= cutoffHour * 60 + cutoffMinute;
+}
 
 export type ScheduleDateRange = { startDate: Date; endDate: Date };
 
@@ -15,6 +42,8 @@ export type PackageScheduleAvailability = {
   deliveryWeekdays: number[];
   holidays: PublicBusinessHoliday[];
   orderCutoff: string;
+  deliveryWindow?: string;
+  nextDayOrderingClosed?: boolean;
 };
 
 export function businessDateInput(now = new Date()) {
@@ -60,6 +89,16 @@ export function dateToInput(value: Date) {
   const day = String(value.getUTCDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
+}
+
+export function isDeliveryDayElapsed(day: { deliveryDate: Date; status: string; deliveryWindow?: string }, now = new Date()) {
+  if (["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT"].includes(day.status)) return false;
+  if (day.status === "DELIVERED") return true;
+  const date = dateToInput(day.deliveryDate);
+  const today = businessDateInput(now);
+  if (date !== today) return date < today;
+  const windowEnd = day.deliveryWindow?.split(/\s+[-–]\s+/)[1] ?? "6:00 PM";
+  return isAfterOrderCutoff(windowEnd, now);
 }
 
 export function addDays(value: Date, days: number) {
@@ -115,18 +154,18 @@ export function buildPackageScheduleAvailability({
   orderCutoff,
   orderCutoffPassed,
   holidays,
+  deliveryWindow = DEFAULT_DELIVERY_WINDOW,
 }: {
   now?: Date;
   deliveryWeekdays: number[];
   orderCutoff: string;
-  orderCutoffPassed: boolean;
+  orderCutoffPassed?: boolean;
   holidays: PublicBusinessHoliday[];
+  deliveryWindow?: string;
 }): PackageScheduleAvailability {
-  let earliest = nextEligiblePackageStartDate(now, deliveryWeekdays);
-
-  if (orderCutoffPassed) {
-    earliest = addDays(earliest, 1);
-  }
+  const cutoffPassed = orderCutoffPassed ?? isAfterOrderCutoff(orderCutoff, now);
+  // Close tomorrow first, then skip non-delivery days and kitchen holidays.
+  const earliest = addDays(inputToDate(businessDateInput(now)), cutoffPassed ? 2 : 1);
 
   return {
     earliestStartDate: nextAvailablePackageStartInput(
@@ -137,6 +176,8 @@ export function buildPackageScheduleAvailability({
     deliveryWeekdays,
     holidays,
     orderCutoff,
+    deliveryWindow,
+    nextDayOrderingClosed: cutoffPassed,
   };
 }
 
@@ -180,7 +221,7 @@ export function packageStartDateIssue(
     const date = inputToDate(value);
 
     if (value < earliestStartDate) {
-      return `Choose ${formatInputDate(earliestStartDate)} or later.`;
+      return `This start date is no longer available. Choose ${formatInputDate(earliestStartDate)} or later; the next-day order cutoff and kitchen schedule apply.`;
     }
 
     if (!isDeliveryDay(date, deliveryWeekdays)) {

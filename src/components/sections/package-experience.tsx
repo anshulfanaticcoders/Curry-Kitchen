@@ -19,6 +19,8 @@ import { usePackageCart } from "@/components/providers/package-cart-provider";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { HolidayAvailabilityNotice } from "@/components/schedule/holiday-availability-notice";
+import { DeliveryPolicyNotice } from "@/components/schedule/delivery-policy-notice";
+import { useLiveAvailability } from "@/components/schedule/use-live-availability";
 import {
   makePackageCartLineId,
   MAX_PACKAGE_CART_ITEMS,
@@ -41,7 +43,7 @@ export function PackageExperience({
   initialPlanId,
   initialCartItems = [],
   initialEditLineId,
-  availability,
+  availability: initialAvailability,
 }: {
   plans: PackagePlan[];
   initialPlanId?: string;
@@ -49,6 +51,7 @@ export function PackageExperience({
   initialEditLineId?: string;
   availability: PackageScheduleAvailability;
 }) {
+  const availability = useLiveAvailability(initialAvailability);
   const router = useRouter();
   const {
     items: cartItems,
@@ -367,6 +370,7 @@ export function PackageExperience({
                   </div>
 
                   <div>
+                    <DeliveryPolicyNotice availability={availability} className="mb-5" />
                     <HolidayAvailabilityNotice availability={availability} className="mb-5" />
                     <p className="text-sm font-extrabold">When should it start?</p>
                     <p className="mt-1 text-xs font-bold text-ink/48">Choose your first eligible delivery date.</p>

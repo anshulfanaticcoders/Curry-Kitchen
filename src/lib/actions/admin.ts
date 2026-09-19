@@ -55,9 +55,9 @@ const adminSettingsSchema = z.object({
     .optional()
     .transform((value) => (value === undefined ? undefined : value / 100)),
   serviceAreas: z.string().min(2).optional(),
-  deliveryWindowStart: z.string().regex(/^\d{2}:\d{2}$/).optional(),
-  deliveryWindowEnd: z.string().regex(/^\d{2}:\d{2}$/).optional(),
-  orderCutoff: z.string().min(2).optional(),
+  deliveryWindowStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Choose a valid Pacific time.").optional(),
+  deliveryWindowEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Choose a valid Pacific time.").optional(),
+  orderCutoff: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Choose a valid Pacific cutoff time.").optional(),
   deliveryDays: z.string().min(2).optional(),
   customMonthlyDays: z.coerce.number().int().min(1).max(60).optional(),
   deliveryChargeEnabled: optionalFormBoolean,
@@ -390,6 +390,7 @@ export async function saveAdminSettingsAction(formData: FormData) {
     });
 
     revalidatePath("/admin/settings");
+    revalidatePath("/admin/emails");
     revalidatePath("/checkout");
     revalidatePath("/", "layout");
     revalidatePath("/dashboard", "layout");

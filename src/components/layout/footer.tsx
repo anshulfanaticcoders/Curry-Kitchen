@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Mail, MapPin, Phone } from "lucide-react";
+import { DEFAULT_DELIVERY_WINDOW, DEFAULT_ORDER_CUTOFF, formatOrderCutoff } from "@/lib/package-schedule";
 
 const quickLinks = [
   { href: "/about", label: "Our story" },
@@ -11,7 +12,7 @@ const quickLinks = [
   { href: "/checkout", label: "Order flow" },
 ];
 
-export function Footer() {
+export function Footer({ deliveryWindow = DEFAULT_DELIVERY_WINDOW, orderCutoff = DEFAULT_ORDER_CUTOFF }: { deliveryWindow?: string; orderCutoff?: string }) {
   return (
     <footer className="dark-band relative text-ivory">
       <div className="h-1 bg-saffron" />
@@ -23,8 +24,9 @@ export function Footer() {
             students, and professionals.
           </p>
           <p className="mt-6 inline-flex rounded-full border border-white/12 px-4 py-2 text-xs font-black text-saffron">
-            Monday to Friday dinner delivery
+            Monday to Friday: {deliveryWindow} Pacific Time
           </p>
+          <p className="mt-3 max-w-sm text-sm leading-6 text-ivory/70">Order before {formatOrderCutoff(orderCutoff)} Pacific Time for next-day delivery, subject to kitchen holidays and delivery days.</p>
         </div>
         <div>
           <p className="mb-4 text-sm font-extrabold uppercase tracking-[0.2em] text-saffron">

@@ -27,6 +27,8 @@ import { usePackageCart } from "@/components/providers/package-cart-provider";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { HolidayAvailabilityNotice } from "@/components/schedule/holiday-availability-notice";
+import { DeliveryPolicyNotice } from "@/components/schedule/delivery-policy-notice";
+import { useLiveAvailability } from "@/components/schedule/use-live-availability";
 import { type PackageCartItemInput } from "@/lib/package-cart";
 import { cartLineEditHref, resolveCartLine } from "@/lib/cart-lines";
 import type { CustomPackageItemOption } from "@/lib/custom-package";
@@ -140,7 +142,7 @@ export function CheckoutFlow({
   customerProfile,
   taxRate,
   zelleEmail,
-  availability,
+  availability: initialAvailability,
 }: {
   plans: PackagePlan[];
   customItems: CustomPackageItemOption[];
@@ -154,6 +156,7 @@ export function CheckoutFlow({
   zelleEmail: string;
   availability: PackageScheduleAvailability;
 }) {
+  const availability = useLiveAvailability(initialAvailability);
   const router = useRouter();
   const { data: session, status } = useSession();
   const {
@@ -214,8 +217,8 @@ export function CheckoutFlow({
   }, [customConfig, customItems, registerCustomItems]);
 
   useEffect(() => {
-    registerAvailability(availability);
-  }, [availability, registerAvailability]);
+    registerAvailability(initialAvailability);
+  }, [initialAvailability, registerAvailability]);
 
   useEffect(() => {
     if (!cartHydrated || initialCartApplied.current) return;
@@ -442,6 +445,7 @@ export function CheckoutFlow({
     }
 
     if (!cartReady) {
+      setStep(0);
       toast.error("Cart needs attention", {
         description: "Each package needs a valid start date.",
       });
@@ -509,9 +513,14 @@ export function CheckoutFlow({
         ok: boolean;
         checkoutUrl?: string;
         error?: string;
+        code?: string;
       };
 
       if (!response.ok || !payload.ok) {
+        if (payload.code === "START_DATE_UNAVAILABLE") {
+          setStep(0);
+          router.refresh();
+        }
         throw new Error(payload.error ?? "Checkout could not be created.");
       }
 
@@ -616,6 +625,8 @@ export function CheckoutFlow({
             );
           })}
         </div>
+
+        <DeliveryPolicyNotice availability={availability} className="mb-6" />
 
         {status !== "loading" && !isSignedIn ? (
           <div className="mb-6 rounded-lg border border-saffron/35 bg-rose p-4">

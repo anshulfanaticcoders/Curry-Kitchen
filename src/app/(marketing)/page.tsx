@@ -40,7 +40,7 @@ const steps = [
   {
     icon: Truck,
     title: "Dabba delivery",
-    copy: "Your freshly cooked dabba arrives at your doorstep in the morning, ready to open at mealtime.",
+    copy: "Prepared fresh in the morning and delivered to your doorstep for lunch or dinner.",
   },
 ];
 
@@ -77,7 +77,7 @@ export default async function Home() {
         background={backgrounds["home.hero"]}
         facts={{
           deliveryDays: settings.deliveryDays,
-          deliveryWindow: rules.deliveryWindow,
+          deliveryWindow: `${rules.deliveryWindow} PT`,
           serviceAreas: settings.serviceAreas,
         }}
       />

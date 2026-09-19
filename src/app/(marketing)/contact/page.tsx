@@ -9,6 +9,7 @@ import { SectionHeading } from "@/components/ui/section-heading";
 import { getMarketingMetadata, getSimplePageSchemas } from "@/lib/server/seo";
 import { getPageBackgrounds } from "@/lib/server/page-backgrounds";
 import { cn } from "@/lib/utils";
+import { getBusinessRules } from "@/lib/business-rules";
 
 const contactCards = [
   {
@@ -36,7 +37,7 @@ export function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function ContactPage() {
-  const [schemas, backgrounds] = await Promise.all([getSimplePageSchemas("/contact"), getPageBackgrounds()]);
+  const [schemas, backgrounds, rules] = await Promise.all([getSimplePageSchemas("/contact"), getPageBackgrounds(), getBusinessRules()]);
   return (
     <main>
       <JsonLd data={schemas} />
@@ -119,7 +120,7 @@ export default async function ContactPage() {
             <Clock className="text-masala" size={28} />
             <h2 className="mt-5 font-display text-3xl font-black">Delivery rhythm</h2>
             <p className="mt-3 text-sm font-medium leading-6 text-ink/64">
-              Monday to Friday delivery, every morning. Customers confirm city and ZIP during
+              Monday to Friday delivery, {rules.deliveryWindow} Pacific Time. Customers confirm city and ZIP during
               checkout.
             </p>
             <ButtonLink href="/faq" variant="dark" className="mt-6">
