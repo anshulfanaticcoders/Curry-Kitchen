@@ -30,6 +30,9 @@ export default async function PackingRecordPage({
           record.packages.map((customerPackage) => (
             <Card key={customerPackage.id} className="p-5">
               <h2 className="font-display text-2xl font-black">{customerPackage.name}</h2>
+              <p className="mt-2 text-sm font-bold text-ink/75">
+                {customerPackage.quantity} tiffin{customerPackage.quantity === 1 ? "" : "s"} / {customerPackage.nextDelivery}
+              </p>
               {customerPackage.allergies ? (
                 <p className="mt-3 rounded-lg border border-masala/40 bg-rose p-3 text-base font-black text-masala">
                   Allergies: {customerPackage.allergies}
@@ -50,7 +53,7 @@ export default async function PackingRecordPage({
             </Card>
           ))
         ) : (
-          <Card className="p-5 text-sm font-bold text-ink/55">No packages assigned to this customer.</Card>
+          <Card className="p-5 text-sm font-bold text-ink/65">No upcoming paid deliveries to pack.</Card>
         )}
       </div>
     </div>

@@ -282,6 +282,10 @@ export type MenuUploadView = {
 export type CalendarEventType =
   | "delivery"
   | "delivery-completed"
+  | "delivery-missed"
+  | "delivery-unallocated"
+  | "delivery-complimentary"
+  | "delivery-cancelled"
   | "pause"
   | "holiday"
   | "package-start"
@@ -379,6 +383,7 @@ export type PackagingPackage = {
   id: string;
   name: string;
   status: string;
+  quantity: number;
   startDate: string;
   deliveryProgress: string;
   nextDelivery: string;

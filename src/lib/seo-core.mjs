@@ -19,6 +19,8 @@ const BLOCKED_SITEMAP_PATHS = [
   "/dashboard",
   "/login",
   "/register",
+  "/forgot-password",
+  "/reset-password",
 ];
 
 function cleanPath(path) {

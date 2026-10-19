@@ -6,6 +6,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { verifyPassword } from "@/lib/password";
+import { getPasswordResetVersion, isPasswordSessionCurrent } from "@/lib/auth-session";
 
 const credentialsSchema = z.object({
   email: z.string().email().trim().toLowerCase(),
@@ -42,6 +43,8 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        const passwordResetVersion = await getPasswordResetVersion(user.id);
+
         const passwordMatches = await verifyPassword(
           parsed.data.password,
           user.passwordHash,
@@ -51,22 +54,30 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        // A reset during bcrypt verification must not authenticate the old password.
+        const current = await db.user.findUnique({ where: { id: user.id }, select: { passwordHash: true } });
+        if (current?.passwordHash !== user.passwordHash) return null;
+
         return {
           id: user.id,
           name: user.name,
           email: user.email,
           image: user.image,
           role: user.role,
+          passwordResetVersion,
         };
       },
     }),
   ],
   callbacks: {
-    jwt({ token, user }) {
+    async jwt({ token, user }) {
       if (user) {
         token.role = (user as { role?: UserRole }).role ?? "CUSTOMER";
+        token.passwordResetVersion = user.passwordResetVersion ?? 0;
       }
 
+      // NextAuth v4 clears the session cookie when the JWT callback rejects it.
+      if (!(await isPasswordSessionCurrent(token))) throw new Error("Password changed. Please sign in again.");
       return token;
     },
     session({ session, token }) {

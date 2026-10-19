@@ -46,6 +46,7 @@ function checkoutAt(instant, holidays = []) {
     "@/lib/order-totals": {}, "@/lib/server/coupons": {},
     "@/lib/server/data-source": { shouldUseMockData: () => false },
     "@/lib/stripe": {}, "@/lib/server/delivery-schedule-adjustments": {},
+    "@/lib/server/calendar-lock": {},
   }, Clock);
   return { ...checkout, gatePassed, catalogReached: () => catalogReached };
 }

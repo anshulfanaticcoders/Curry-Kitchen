@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminPackageControl } from "@/components/dashboard/admin-package-control";
+import { AdminOrderReceipt } from "@/components/dashboard/admin-order-receipt";
 import { DashboardCalendar } from "@/components/dashboard/dashboard-calendar";
 import { PackingLabel } from "@/components/dashboard/packing-label";
 import { Card } from "@/components/dashboard/primitives";
@@ -20,6 +21,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { getAppUrl } from "@/lib/app-url";
 import { getAdminCustomerDetail } from "@/lib/server/catalog";
 import { getCustomerCalendarData } from "@/lib/server/calendar";
+import { getAdminCalendarData } from "@/lib/server/calendar-management";
 import { formatCurrency } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -36,9 +38,10 @@ export default async function AdminCustomerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [customer, calendar] = await Promise.all([
+  const [customer, calendar, adminCalendar] = await Promise.all([
     getAdminCustomerDetail(id),
     getCustomerCalendarData(id),
+    getAdminCalendarData(id),
   ]);
 
   if (!customer) notFound();
@@ -197,6 +200,7 @@ export default async function AdminCustomerDetailPage({
                 <p className="mt-3 font-display text-xl font-black tracking-tight">{customer.latestOrder.number}</p>
                 <p className="mt-1 text-sm font-bold text-ink/55">{customer.latestOrder.date}</p>
                 <p className="mt-4 border-t border-ink/8 pt-3 text-sm font-bold">{customer.latestOrder.status} · {formatCurrency(customer.latestOrder.total)}</p>
+                <AdminOrderReceipt orderNumber={customer.latestOrder.number} orders={customer.receiptOrders} className="mt-3 w-full px-3" />
               </>
             ) : (
               <p className="mt-3 text-sm font-bold text-ink/50">No orders on record.</p>
@@ -234,7 +238,7 @@ export default async function AdminCustomerDetailPage({
       </section>
 
       {calendar ? (
-        <DashboardCalendar data={calendar} />
+        <DashboardCalendar data={calendar} adminData={adminCalendar ?? undefined} />
       ) : (
         <Card className="p-8 text-center text-sm font-bold text-ink/55">
           No calendar yet — this customer has no packages.

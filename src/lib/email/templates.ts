@@ -61,16 +61,26 @@ export async function getEmailBrand(): Promise<Partial<EmailBrand>> {
 }
 
 // Admin edits (stored in the settings table) win over the built-in copy.
-async function render(id: EmailTemplateId, variables: Record<string, string>): Promise<TransactionalEmail> {
+async function render(id: EmailTemplateId, variables: Record<string, string>, ctaUrl?: string): Promise<TransactionalEmail> {
   const [overrides, brand] = await Promise.all([getEmailTemplateOverrides(), getEmailBrand()]);
 
   return renderEmailTemplate({
     id,
     variables,
-    ctaUrl: new URL(EMAIL_TEMPLATES[id].ctaPath, getAppUrl()).toString(),
-    fields: overrides[id],
+    ctaUrl: ctaUrl ?? new URL(EMAIL_TEMPLATES[id].ctaPath, getAppUrl()).toString(),
+    fields: id === "passwordReset"
+      ? { ...overrides[id], ctaLabel: overrides[id]?.ctaLabel?.trim() || EMAIL_TEMPLATES.passwordReset.defaults.ctaLabel }
+      : overrides[id],
     brand,
   });
+}
+
+export function createPasswordResetEmail(input: { customerName: string; resetUrl: string; expiryMinutes: number }) {
+  return render("passwordReset", { customerName: input.customerName, expiryMinutes: String(input.expiryMinutes) }, input.resetUrl);
+}
+
+export function createPasswordChangedEmail(input: { customerName: string }) {
+  return render("passwordChanged", { customerName: input.customerName });
 }
 
 export function createOrderConfirmationEmail(input: {

@@ -16,7 +16,7 @@ import {
 } from "@/lib/email/template-overrides";
 import { isEmailTemplateId } from "@/lib/email/template-registry";
 import { createOrderCancelledEmail } from "@/lib/email/templates";
-import { calculateDeliveryDates, nextEligiblePackageStartDate } from "@/lib/package-schedule";
+import { calculateDeliveryDates, isDeliveryDayElapsed, nextEligiblePackageStartDate } from "@/lib/package-schedule";
 import { isPageBackgroundSlot } from "@/lib/page-backgrounds";
 import { pausePackage, resumePackage } from "@/lib/server/package-pause";
 import {
@@ -26,6 +26,7 @@ import {
   getActiveHolidayDateRanges,
 } from "@/lib/server/delivery-schedule-adjustments";
 import { markOrderPaidAndActivate } from "@/lib/server/checkout";
+import { lockCalendars } from "@/lib/server/calendar-lock";
 import { STATIC_SEO_ROUTES, normalizeSeoInput, validateHttpsImageUrl, validateHttpsUrl } from "@/lib/seo-core.mjs";
 
 const formBoolean = z.preprocess(
@@ -1188,20 +1189,23 @@ export async function cancelOrderAction(orderId: string, reason?: string) {
   try {
     const admin = await requireAdmin();
     const trimmedReason = reason?.trim() || "";
-    const order = await db.order.findFirst({
+    const owner = await db.order.findFirst({
       where: { OR: [{ id: orderId }, { orderNumber: orderId }] },
-      include: { customer: true },
+      select: { id: true, customerId: true, customerPackages: { select: { customerId: true } } },
     });
 
-    if (!order) {
+    if (!owner) {
       throw new Error("Order was not found.");
     }
 
-    if (order.status === "DECLINED" || order.status === "CANCELLED") {
-      return ok({ id: order.id, status: order.status }, "Order is already cancelled.");
-    }
-
-    await db.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx) => {
+      await lockCalendars(tx, [owner.customerId, ...owner.customerPackages.map((item) => item.customerId)]);
+      const order = await tx.order.findUnique({ where: { id: owner.id }, include: { customer: true } });
+      if (!order) throw new Error("Order was not found.");
+      if (["DECLINED", "CANCELLED"].includes(order.status)) return { order, changed: false };
+      const days = await tx.packageDeliveryDay.findMany({ where: { customerPackage: { orderId: order.id } } });
+      const cancellableIds = days.filter((day) => !["DELIVERED", "DECLINED", "CANCELLED", "OUT_FOR_DELIVERY"].includes(day.status)
+        && !isDeliveryDayElapsed(day)).map((day) => day.id);
       await tx.order.update({
         where: { id: order.id },
         data: { status: "DECLINED" },
@@ -1212,23 +1216,25 @@ export async function cancelOrderAction(orderId: string, reason?: string) {
         data: { status: "CANCELLED" },
       });
       await tx.packageDeliveryDay.updateMany({
-        where: { customerPackage: { orderId: order.id } },
+        where: { id: { in: cancellableIds } },
         data: { status: "CANCELLED" },
       });
       await tx.studentVerification.updateMany({
         where: { orderId: order.id, status: "PENDING" },
         data: { status: "REJECTED", adminNote: trimmedReason || "Order cancelled.", reviewedAt: new Date() },
       });
-    });
-
-    await db.auditLog.create({
-      data: {
-        userId: admin.id,
-        action: "order.cancelled",
-        entity: "order",
-        entityId: order.id,
-      },
-    });
+      await tx.auditLog.create({
+        data: {
+          userId: admin.id,
+          action: "order.cancelled",
+          entity: "order",
+          entityId: order.id,
+        },
+      });
+      return { order, changed: true };
+    }, { isolationLevel: "ReadCommitted" });
+    const { order } = result;
+    if (!result.changed) return ok({ id: order.id, status: order.status }, "Order is already cancelled.");
 
     const customerEmail = order.customer?.email ?? order.guestEmail;
 
@@ -1290,41 +1296,68 @@ export async function markPaymentPaidAction(paymentId: string) {
 export async function approveStudentVerificationAction(verificationId: string) {
   try {
     const admin = await requireAdmin();
-    const verification = await db.studentVerification.update({
+    const owner = await db.studentVerification.findUnique({
       where: { id: verificationId },
-      data: {
-        status: "APPROVED",
-        reviewedAt: new Date(),
-      },
+      select: { customerId: true, order: { select: { customerId: true, customerPackages: { select: { customerId: true } } } } },
     });
-
-    if (verification.orderId) {
-      const [rules, holidayRanges] = await Promise.all([getBusinessRules(), getActiveHolidayDateRanges()]);
-      const pendingPackages = await db.customerPackage.findMany({
-        where: { orderId: verification.orderId, status: "PENDING_STUDENT_VERIFICATION" },
-        include: { deliveryDays: true, package: true },
+    if (!owner) throw new Error("Student verification was not found.");
+    const rules = await getBusinessRules();
+    const changed = await db.$transaction(async (tx) => {
+      await lockCalendars(tx, [
+        owner.customerId, owner.order?.customerId ?? null,
+        ...(owner.order?.customerPackages.map((item) => item.customerId) ?? []),
+      ]);
+      const verification = await tx.studentVerification.findUnique({
+        where: { id: verificationId }, include: { order: { include: { payments: true } } },
       });
+      if (!verification) throw new Error("Student verification was not found.");
+      if (verification.order && ["DECLINED", "CANCELLED"].includes(verification.order.status)) {
+        throw new Error("A cancelled order cannot be approved.");
+      }
+      if (verification.status === "APPROVED") return false;
+      await tx.studentVerification.update({ where: { id: verificationId }, data: { status: "APPROVED", reviewedAt: new Date() } });
+      if (verification.orderId && verification.order?.payments.some((payment) => payment.status === "PAID")
+        && verification.order.status !== "PENDING_PAYMENT") {
+        const holidayRanges = await getActiveHolidayDateRanges(tx);
+        const pendingPackages = await tx.customerPackage.findMany({
+          where: { orderId: verification.orderId, status: "PENDING_STUDENT_VERIFICATION" },
+          include: { deliveryDays: true, package: true },
+        });
 
-      await db.$transaction(async (tx) => {
+        const now = new Date();
         for (const customerPackage of pendingPackages) {
           const startDate =
-            customerPackage.startDate && customerPackage.startDate > new Date()
+            customerPackage.startDate && customerPackage.startDate > now
               ? customerPackage.startDate
-              : nextEligiblePackageStartDate(new Date(), rules.deliveryWeekdays);
+              : nextEligiblePackageStartDate(now, rules.deliveryWeekdays);
+          const retainedDays = customerPackage.deliveryDays.filter((day) =>
+            !["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT"].includes(day.status));
+          const elapsedDays = retainedDays.filter((day) => isDeliveryDayElapsed(day, now)).length;
+          const unrepresentedUsedDays = Math.max(
+            customerPackage.unrepresentedUsedDays ?? 0, customerPackage.usedDeliveryDays - elapsedDays,
+          );
+          const usedDeliveryDays = unrepresentedUsedDays + elapsedDays;
+          const remaining = Math.max(customerPackage.totalDeliveryDays - usedDeliveryDays
+            - retainedDays.filter((day) => !isDeliveryDayElapsed(day, now)).length, 0);
           const deliveryDates = calculateDeliveryDates(
-            customerPackage.totalDeliveryDays,
+            remaining,
             startDate,
             rules.deliveryWeekdays,
-            holidayRanges,
+            [...holidayRanges, ...retainedDays.map((day) => ({ startDate: day.deliveryDate, endDate: day.deliveryDate }))],
           );
-          const effectiveStartDate = deliveryDates[0] ?? startDate;
+          const allDates = [...retainedDays.map((day) => day.deliveryDate), ...deliveryDates];
+          const effectiveStartDate = allDates.length ? new Date(Math.min(...allDates.map((date) => date.getTime()))) : startDate;
 
           await tx.customerPackage.update({
             where: { id: customerPackage.id },
             data: {
               status: "ACTIVE",
-              startDate: effectiveStartDate,
-              endDate: deliveryDates.at(-1) ?? null,
+              unrepresentedUsedDays,
+              usedDeliveryDays: usedDeliveryDays + deliveryDates.filter((deliveryDate) =>
+                isDeliveryDayElapsed({ deliveryDate, status: "PREPARING", deliveryWindow: rules.deliveryWindow }, now)).length,
+              startDate: usedDeliveryDays > 0 && customerPackage.startDate ? customerPackage.startDate : effectiveStartDate,
+              endDate: allDates.length ? new Date(Math.max(...allDates.map((date) => date.getTime()))) : null,
+              reminderEmailSentAt: null,
             },
           });
 
@@ -1335,7 +1368,7 @@ export async function approveStudentVerificationAction(verificationId: string) {
             });
           }
 
-          if (customerPackage.deliveryDays.length === 0) {
+          if (deliveryDates.length) {
             await tx.packageDeliveryDay.createMany({
               data: deliveryDates.map((deliveryDate) => ({
                 customerPackageId: customerPackage.id,
@@ -1347,17 +1380,19 @@ export async function approveStudentVerificationAction(verificationId: string) {
             });
           }
         }
-      });
-    }
+      }
 
-    await db.auditLog.create({
-      data: {
-        userId: admin.id,
-        action: "student_verification.approved",
-        entity: "student_verification",
-        entityId: verificationId,
-      },
-    });
+      await tx.auditLog.create({
+        data: {
+          userId: admin.id,
+          action: "student_verification.approved",
+          entity: "student_verification",
+          entityId: verificationId,
+        },
+      });
+      return true;
+    }, { isolationLevel: "ReadCommitted" });
+    if (!changed) return ok({ id: verificationId }, "Student verification is already approved.");
 
     await sendVerificationDecisionEmail({ verificationId, approved: true });
 

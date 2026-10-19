@@ -11,11 +11,13 @@ declare module "next-auth" {
 
   interface User {
     role?: UserRole;
+    passwordResetVersion?: number;
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
     role?: UserRole;
+    passwordResetVersion?: number;
   }
 }

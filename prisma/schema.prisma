@@ -185,6 +185,7 @@ model Customer {
   joinedAt      DateTime     @default(now())
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+  calendarRevision Int      @default(0)
 
   user                 User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
   addresses            Address[]
@@ -192,6 +193,7 @@ model Customer {
   packages             CustomerPackage[]
   studentVerifications StudentVerification[]
   coupons              Coupon[]
+  manualDeliveries     ManualDelivery[]
 
   @@index([email])
   @@map("customers")
@@ -579,6 +581,7 @@ model CustomerPackage {
   status              CustomerPackageStatus @default(PENDING_PAYMENT)
   totalDeliveryDays   Int
   usedDeliveryDays    Int                   @default(0)
+  unrepresentedUsedDays Int                 @default(0)
   startDate           DateTime?
   endDate             DateTime?
   reminderEmailSentAt DateTime?
@@ -608,10 +611,36 @@ model PackageDeliveryDay {
   deliveryWindow    String      @default("10:00 AM - 6:00 PM")
 
   customerPackage CustomerPackage @relation(fields: [customerPackageId], references: [id], onDelete: Cascade)
+  manualDelivery ManualDelivery?
 
   @@index([customerPackageId])
   @@index([deliveryDate])
   @@map("package_delivery_days")
+}
+
+enum ManualDeliveryTreatment {
+  AWAITING_RENEWAL
+  COMPLIMENTARY
+  PACKAGE
+  VOIDED
+}
+
+model ManualDelivery {
+  id                   String @id @default(cuid())
+  customerId           String
+  deliveryDate         DateTime
+  label                String
+  quantity             Int @default(1)
+  treatment            ManualDeliveryTreatment @default(AWAITING_RENEWAL)
+  packageDeliveryDayId  String? @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  packageDeliveryDay PackageDeliveryDay? @relation(fields: [packageDeliveryDayId], references: [id], onDelete: Restrict)
+
+  @@index([customerId, deliveryDate])
+  @@map("manual_deliveries")
 }
 
 model PauseRequest {

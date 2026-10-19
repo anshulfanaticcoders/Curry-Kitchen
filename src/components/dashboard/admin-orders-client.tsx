@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Drawer, Tabs } from "@/components/dashboard/interactive";
+import { AdminOrderReceipt } from "@/components/dashboard/admin-order-receipt";
 import { Card, PageHeader, Table, Td, Th } from "@/components/dashboard/primitives";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -86,6 +87,7 @@ function OrderDetails({ order, close }: { order: AdminOrder; close: () => void }
           <span className="text-sm font-black uppercase tracking-[0.16em] text-saffron">Total</span>
           <span className="font-display text-3xl font-black">{formatCurrency(order.total)}</span>
         </div>
+        <AdminOrderReceipt orderNumber={order.id} className="mt-4" />
       </div>
       {order.status !== "Cancelled" &&
         (showCancel ? (

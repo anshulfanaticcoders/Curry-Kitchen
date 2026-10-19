@@ -5,8 +5,9 @@ import {
   createRenewalReminderEmail,
   createSubscriptionEndedEmail,
 } from "@/lib/email/templates";
-import { businessDateInput, inputToDate } from "@/lib/package-schedule";
+import { businessDateInput, inputToDate, isDeliveryDayElapsed } from "@/lib/package-schedule";
 import { getAdminSettings } from "@/lib/server/admin";
+import { lockPackageCalendar } from "@/lib/server/calendar-lock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,14 +27,25 @@ export async function GET(request: Request) {
   const now = new Date();
   const startOfToday = inputToDate(businessDateInput(now));
   const reminderCutoff = new Date(now.getTime() + REMINDER_LEAD_DAYS * 24 * 60 * 60 * 1000);
-  const scheduledPausesEnded = await db.pauseRequest.updateMany({
+  const endedPauseCandidates = await db.pauseRequest.findMany({
     where: {
       status: "ACTIVE",
       endDate: { lt: startOfToday },
       customerPackage: { status: "ACTIVE" },
     },
-    data: { status: "ENDED" },
+    select: { id: true, customerPackageId: true },
   });
+  let scheduledPausesEnded = 0;
+  for (const pause of endedPauseCandidates) {
+    const changed = await db.$transaction(async (tx) => {
+      await lockPackageCalendar(tx, pause.customerPackageId);
+      return tx.pauseRequest.updateMany({
+        where: { id: pause.id, status: "ACTIVE", endDate: { lt: startOfToday }, customerPackage: { status: "ACTIVE" } },
+        data: { status: "ENDED" },
+      });
+    }, { isolationLevel: "ReadCommitted" });
+    scheduledPausesEnded += changed.count;
+  }
 
   let remindersSent = 0;
   let expired = 0;
@@ -43,13 +55,22 @@ export async function GET(request: Request) {
       where: {
         status: "ACTIVE",
         reminderEmailSentAt: null,
-        endDate: { gte: now, lte: reminderCutoff },
+        endDate: { gte: startOfToday, lte: reminderCutoff },
       },
       include: { customer: true, package: true },
     });
 
-    for (const customerPackage of endingSoon) {
-      if (!customerPackage.customer?.email || !customerPackage.endDate) continue;
+    for (const candidate of endingSoon) {
+      const customerPackage = await db.$transaction(async (tx) => {
+        await lockPackageCalendar(tx, candidate.id);
+        return tx.customerPackage.findFirst({
+          where: { id: candidate.id, status: "ACTIVE", reminderEmailSentAt: null,
+            endDate: { gte: startOfToday, lte: reminderCutoff } },
+          include: { customer: true, package: true },
+        });
+      }, { isolationLevel: "ReadCommitted" });
+      if (!customerPackage?.customer?.email || !customerPackage.endDate) continue;
+      const endDate = customerPackage.endDate;
 
       const { sent } = await sendTransactionalEmail({
         to: customerPackage.customer.email,
@@ -58,17 +79,20 @@ export async function GET(request: Request) {
           planName: customerPackage.package.name,
           endDate: customerPackage.endDate,
         }),
-        idempotencyKey: `renewal-reminder/${customerPackage.id}`,
+        idempotencyKey: `renewal-reminder/${customerPackage.id}/${endDate.toISOString()}`,
       });
 
       // Only stamp on success so packages stay eligible while the Resend key
       // is missing or the API is down.
       if (sent) {
-        await db.customerPackage.update({
-          where: { id: customerPackage.id },
-          data: { reminderEmailSentAt: new Date() },
-        });
-        remindersSent += 1;
+        const stamped = await db.$transaction(async (tx) => {
+          await lockPackageCalendar(tx, customerPackage.id);
+          return tx.customerPackage.updateMany({
+            where: { id: customerPackage.id, status: "ACTIVE", endDate, reminderEmailSentAt: null },
+            data: { reminderEmailSentAt: new Date() },
+          });
+        }, { isolationLevel: "ReadCommitted" });
+        remindersSent += stamped.count;
       }
     }
   }
@@ -81,13 +105,22 @@ export async function GET(request: Request) {
     include: { customer: true, package: true },
   });
 
-  for (const customerPackage of pastEnd) {
-    // The EXPIRED transition is the dedupe for the ended email: flip first so a
-    // retried cron run never emails the same package twice.
-    await db.customerPackage.update({
-      where: { id: customerPackage.id },
-      data: { status: "EXPIRED" },
-    });
+  for (const candidate of pastEnd) {
+    const customerPackage = await db.$transaction(async (tx) => {
+      await lockPackageCalendar(tx, candidate.id);
+      const current = await tx.customerPackage.findUnique({
+        where: { id: candidate.id }, include: { customer: true, package: true, deliveryDays: true },
+      });
+      if (!current || current.status !== "ACTIVE" || !current.endDate || current.endDate >= startOfToday) return null;
+      const elapsedDays = current.deliveryDays.filter((day) => isDeliveryDayElapsed(day, now)).length;
+      const unrepresentedUsedDays = Math.max(current.unrepresentedUsedDays ?? 0, current.usedDeliveryDays - elapsedDays);
+      const claimed = await tx.customerPackage.updateMany({
+        where: { id: current.id, status: "ACTIVE", endDate: current.endDate },
+        data: { status: "EXPIRED", unrepresentedUsedDays, usedDeliveryDays: unrepresentedUsedDays + elapsedDays },
+      });
+      return claimed.count ? current : null;
+    }, { isolationLevel: "ReadCommitted" });
+    if (!customerPackage) continue;
     expired += 1;
 
     if (
@@ -102,7 +135,7 @@ export async function GET(request: Request) {
           planName: customerPackage.package.name,
           endDate: customerPackage.endDate,
         }),
-        idempotencyKey: `subscription-ended/${customerPackage.id}`,
+        idempotencyKey: `subscription-ended/${customerPackage.id}/${customerPackage.endDate.toISOString()}`,
       });
     }
   }
@@ -122,27 +155,41 @@ export async function GET(request: Request) {
     },
   });
 
-  for (const customerPackage of pausedPackages) {
+  for (const candidate of pausedPackages) {
+    const result = await db.$transaction(async (tx) => {
+      await lockPackageCalendar(tx, candidate.id);
+      const current = await tx.customerPackage.findUnique({
+        where: { id: candidate.id },
+        include: { customer: true, package: true, deliveryDays: true,
+          pauseRequests: { where: { status: "ACTIVE" }, orderBy: { createdAt: "desc" }, take: 1 } },
+      });
+      if (!current || current.status !== "PAUSED" || !current.pauseRequests[0]) return null;
+      const pause = current.pauseRequests[0];
+      if (pause.endDate < now) {
+        const elapsedDays = current.deliveryDays.filter((day) => isDeliveryDayElapsed(day, now)).length;
+        const unrepresentedUsedDays = Math.max(current.unrepresentedUsedDays ?? 0, current.usedDeliveryDays - elapsedDays);
+        const claimed = await tx.customerPackage.updateMany({
+          where: { id: current.id, status: "PAUSED", endDate: current.endDate },
+          data: { status: "EXPIRED", unrepresentedUsedDays, usedDeliveryDays: unrepresentedUsedDays + elapsedDays },
+        });
+        if (!claimed.count) return null;
+        await tx.pauseRequest.update({ where: { id: pause.id }, data: { status: "ENDED" } });
+      }
+      return current;
+    }, { isolationLevel: "ReadCommitted" });
+    if (!result) continue;
+    const customerPackage = result;
     const pause = customerPackage.pauseRequests[0];
     if (!pause) continue;
 
+    const usedDeliveryDays = Math.max(customerPackage.usedDeliveryDays,
+      (customerPackage.unrepresentedUsedDays ?? 0) + customerPackage.deliveryDays.filter((day) => isDeliveryDayElapsed(day, now)).length);
     const remainingDays = Math.max(
-      customerPackage.totalDeliveryDays - customerPackage.usedDeliveryDays,
+      customerPackage.totalDeliveryDays - usedDeliveryDays,
       0,
     );
 
     if (pause.endDate < now) {
-      // Window closed: flip first so a retried run never emails twice.
-      await db.$transaction([
-        db.customerPackage.update({
-          where: { id: customerPackage.id },
-          data: { status: "EXPIRED" },
-        }),
-        db.pauseRequest.update({
-          where: { id: pause.id },
-          data: { status: "ENDED" },
-        }),
-      ]);
       pausesExpired += 1;
 
       if (settings.packageCompletedEmails && customerPackage.customer?.email) {
@@ -153,7 +200,7 @@ export async function GET(request: Request) {
             planName: customerPackage.package.name,
             endDate: pause.endDate,
           }),
-          idempotencyKey: `pause-expired/${customerPackage.id}/${pause.id}`,
+          idempotencyKey: `pause-expired/${customerPackage.id}/${pause.id}/${pause.endDate.toISOString()}`,
         });
       }
       continue;
@@ -173,15 +220,19 @@ export async function GET(request: Request) {
           remainingDays,
           resumeBy: pause.endDate,
         }),
-        idempotencyKey: `pause-reminder/${customerPackage.id}/${pause.id}`,
+        idempotencyKey: `pause-reminder/${customerPackage.id}/${pause.id}/${pause.endDate.toISOString()}`,
       });
 
       if (sent) {
-        await db.customerPackage.update({
-          where: { id: customerPackage.id },
-          data: { reminderEmailSentAt: new Date() },
-        });
-        pauseRemindersSent += 1;
+        const stamped = await db.$transaction(async (tx) => {
+          await lockPackageCalendar(tx, customerPackage.id);
+          return tx.customerPackage.updateMany({
+            where: { id: customerPackage.id, status: "PAUSED", endDate: customerPackage.endDate,
+              reminderEmailSentAt: null, pauseRequests: { some: { id: pause.id, status: "ACTIVE", endDate: pause.endDate } } },
+            data: { reminderEmailSentAt: new Date() },
+          });
+        }, { isolationLevel: "ReadCommitted" });
+        pauseRemindersSent += stamped.count;
       }
     }
   }
@@ -191,6 +242,6 @@ export async function GET(request: Request) {
     expired,
     pauseRemindersSent,
     pausesExpired,
-    scheduledPausesEnded: scheduledPausesEnded.count,
+    scheduledPausesEnded,
   });
 }

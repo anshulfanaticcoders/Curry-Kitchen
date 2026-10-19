@@ -55,6 +55,34 @@ const CUSTOMER_FOOTER =
   "Questions? Reply to this email or call **{{phone}}** — a real person from our kitchen will get back to you.";
 
 export const EMAIL_TEMPLATES = {
+  passwordReset: {
+    label: "Password reset",
+    description: "Sent when an account holder requests a password reset. The button uses a secure, single-use link.",
+    audience: "customer",
+    ctaPath: "/reset-password",
+    variables: { customerName: "Priya", expiryMinutes: "30" },
+    defaults: {
+      subject: "Reset your {{businessName}} password",
+      heading: "Reset your password",
+      intro: "Hi {{customerName}}, we received a request to reset your password.",
+      body: "Use the button below to choose a new password. This link expires in {{expiryMinutes}} minutes and can only be used once.\n\nIf you did not request this, ignore this email. Your password has not changed. Never share this link.\n\nNeed help? Contact {{supportEmail}}.",
+      ctaLabel: "Reset password",
+    },
+  },
+  passwordChanged: {
+    label: "Password changed",
+    description: "Security confirmation after an account password has been reset.",
+    audience: "customer",
+    ctaPath: "/login",
+    variables: { customerName: "Priya" },
+    defaults: {
+      subject: "Your {{businessName}} password was changed",
+      heading: "Password updated",
+      intro: "Hi {{customerName}}, your password has been changed successfully.",
+      body: "Your previous sign-in sessions and reset links are no longer valid. Sign in with your new password.\n\nIf you did not make this change, contact {{supportEmail}} immediately.",
+      ctaLabel: "Sign in",
+    },
+  },
   orderConfirmation: {
     label: "Order confirmation",
     description: "Sent to the customer once payment is confirmed.",

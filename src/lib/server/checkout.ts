@@ -11,6 +11,7 @@ import {
   calculateDeliveryDates,
   dateToInput,
   inputToDate,
+  isDeliveryDayElapsed,
   nextEligiblePackageStartDate,
   packageStartDateIssue,
 } from "@/lib/package-schedule";
@@ -28,6 +29,7 @@ import { CouponError, findValidCoupon } from "@/lib/server/coupons";
 import { shouldUseMockData } from "@/lib/server/data-source";
 import { getStripe } from "@/lib/stripe";
 import { getActiveHolidayDateRanges } from "@/lib/server/delivery-schedule-adjustments";
+import { lockCalendars } from "@/lib/server/calendar-lock";
 
 const startDateField = z
   .string()
@@ -161,54 +163,65 @@ export function globalDeliveryChargeFromValue(value: unknown) {
 }
 
 export async function markOrderPaidAndActivate(orderId: string, stripePaymentId?: string) {
-  const [rules, holidayRanges] = await Promise.all([getBusinessRules(), getActiveHolidayDateRanges()]);
-  const order = await db.order.findUnique({
+  const rules = await getBusinessRules();
+  const owner = await db.order.findUnique({
     where: { id: orderId },
-    include: {
-      customer: true,
-      customerPackages: { include: { package: { include: { category: true } }, deliveryDays: true } },
-    },
+    select: { customerId: true, customerPackages: { select: { customerId: true } } },
   });
+  if (!owner) return;
 
-  if (!order) {
-    return;
-  }
-
-  // Stripe retries webhooks; a second delivery must not re-activate packages,
-  // send duplicate confirmation emails, or resurrect a cancelled order.
-  if (order.status !== "PENDING_PAYMENT") {
-    return;
-  }
-
-  await db.$transaction(async (tx) => {
+  const activated = await db.$transaction(async (tx) => {
+    await lockCalendars(tx, [owner.customerId, ...owner.customerPackages.map((item) => item.customerId)]);
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { customerPackages: { include: { package: { include: { category: true } }, deliveryDays: true } },
+        studentVerifications: { select: { status: true } } },
+    });
+    if (!order || order.status !== "PENDING_PAYMENT") return false;
+    // The conditional transition also deduplicates legacy guest orders without a customer lock.
+    const claimed = await tx.order.updateMany({
+      where: { id: orderId, status: "PENDING_PAYMENT" }, data: { status: "ACCEPTED" },
+    });
+    if (!claimed.count) return false;
+    const holidayRanges = await getActiveHolidayDateRanges(tx);
     await tx.payment.updateMany({
       where: { orderId: order.id },
       data: { status: "PAID", stripePaymentId },
     });
 
-    // Paid orders are accepted automatically — the kitchen delivers on the
-    // scheduled days between the package start and end dates. Admins only step in
-    // to cancel an order.
-    await tx.order.update({
-      where: { id: order.id },
-      data: { status: "ACCEPTED" },
-    });
-
+    const now = new Date();
     for (const customerPackage of order.customerPackages) {
-      const requiresStudentApproval = customerPackage.package.category.requiresVerification;
+      if (customerPackage.status !== "PENDING_PAYMENT") continue;
+      const requiresStudentApproval = customerPackage.package.category.requiresVerification
+        && !order.studentVerifications.some((verification) => verification.status === "APPROVED");
       const nextStatus = requiresStudentApproval ? "PENDING_STUDENT_VERIFICATION" : "ACTIVE";
-      const startDate = customerPackage.startDate ?? nextEligiblePackageStartDate(new Date(), rules.deliveryWeekdays);
+      const startDate = customerPackage.startDate ?? nextEligiblePackageStartDate(now, rules.deliveryWeekdays);
+      const retainedDays = customerPackage.deliveryDays.filter((day) =>
+        !["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT"].includes(day.status));
+      const elapsedDays = retainedDays.filter((day) => isDeliveryDayElapsed(day, now)).length;
+      const unrepresentedUsedDays = Math.max(
+        customerPackage.unrepresentedUsedDays ?? 0, customerPackage.usedDeliveryDays - elapsedDays,
+      );
+      const usedDeliveryDays = unrepresentedUsedDays + elapsedDays;
+      const remaining = Math.max(customerPackage.totalDeliveryDays - usedDeliveryDays
+        - retainedDays.filter((day) => !isDeliveryDayElapsed(day, now)).length, 0);
       const deliveryDates = requiresStudentApproval
         ? []
-        : calculateDeliveryDates(customerPackage.totalDeliveryDays, startDate, rules.deliveryWeekdays, holidayRanges);
-      const effectiveStartDate = deliveryDates[0] ?? startDate;
+        : calculateDeliveryDates(remaining, startDate, rules.deliveryWeekdays,
+          [...holidayRanges, ...retainedDays.map((day) => ({ startDate: day.deliveryDate, endDate: day.deliveryDate }))]);
+      const allDates = [...retainedDays.map((day) => day.deliveryDate), ...deliveryDates];
+      const effectiveStartDate = allDates.length ? new Date(Math.min(...allDates.map((date) => date.getTime()))) : startDate;
 
       await tx.customerPackage.update({
         where: { id: customerPackage.id },
         data: {
           status: nextStatus,
-          startDate: effectiveStartDate,
-          endDate: deliveryDates.at(-1) ?? null,
+          unrepresentedUsedDays,
+          usedDeliveryDays: usedDeliveryDays + deliveryDates.filter((deliveryDate) =>
+            isDeliveryDayElapsed({ deliveryDate, status: "PREPARING", deliveryWindow: rules.deliveryWindow }, now)).length,
+          startDate: usedDeliveryDays > 0 && customerPackage.startDate ? customerPackage.startDate : effectiveStartDate,
+          endDate: allDates.length ? new Date(Math.max(...allDates.map((date) => date.getTime()))) : null,
+          reminderEmailSentAt: null,
         },
       });
 
@@ -219,7 +232,7 @@ export async function markOrderPaidAndActivate(orderId: string, stripePaymentId?
         });
       }
 
-      if (!requiresStudentApproval && customerPackage.deliveryDays.length === 0) {
+      if (deliveryDates.length) {
         await tx.packageDeliveryDay.createMany({
           data: deliveryDates.map((deliveryDate) => ({
             customerPackageId: customerPackage.id,
@@ -231,10 +244,12 @@ export async function markOrderPaidAndActivate(orderId: string, stripePaymentId?
         });
       }
     }
-  });
+    return true;
+  }, { isolationLevel: "ReadCommitted" });
+  if (!activated) return;
 
   const activatedOrder = await db.order.findUnique({
-    where: { id: order.id },
+    where: { id: orderId },
     include: {
       customer: true,
       customerPackages: { include: { package: true } },

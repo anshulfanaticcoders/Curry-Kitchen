@@ -1,6 +1,7 @@
 import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isPasswordSessionCurrent } from "@/lib/auth-session";
 
 // Defense-in-depth for the admin and customer dashboards. Layouts still do
 // their own role checks; this backstop keeps any future page or route added
@@ -12,7 +13,7 @@ export async function proxy(request: NextRequest) {
   });
   const { pathname } = request.nextUrl;
 
-  if (!token) {
+  if (!token || !(await isPasswordSessionCurrent(token))) {
     const signIn = new URL("/login", request.url);
     signIn.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(signIn);

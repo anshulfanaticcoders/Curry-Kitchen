@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2, LogIn } from "lucide-react";
+import Link from "next/link";
 import { getSession, signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -67,6 +68,9 @@ export function LoginForm() {
           className="h-12 rounded-lg border border-[#e7eaf3] bg-[#f1f4fc] px-4 text-[15px] font-medium text-ink outline-none transition placeholder:text-ink/35 focus:border-saffron focus:bg-white focus:ring-4 focus:ring-saffron/10"
         />
       </label>
+      <Link href="/forgot-password" className="-mt-2 inline-flex min-h-11 items-center justify-self-end text-sm font-bold text-masala underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-masala">
+        Forgot password?
+      </Link>
       <Button type="submit" disabled={loading} className="mt-2 h-12 w-full rounded-lg text-[15px] shadow-[0_12px_24px_rgba(255,122,26,0.22)]">
         {loading ? <Loader2 className="animate-spin" size={18} /> : <LogIn size={18} />}
         {loading ? "Signing in" : "Sign in"}

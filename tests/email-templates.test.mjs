@@ -128,8 +128,10 @@ const actual = {
   resumeBy: new Date("2026-09-25T18:00:00Z"), remainingDays: 7,
   verificationType: "MILITARY", adminNote: "Actual review note", reason: "Actual cancellation reason",
   message: "Actual message <script>unsafe</script>",
+  resetUrl: "https://currykitcheninc.com/reset-password#token=test-token", expiryMinutes: 30,
 };
 const builders = {
+  passwordReset: "createPasswordResetEmail", passwordChanged: "createPasswordChangedEmail",
   orderConfirmation: "createOrderConfirmationEmail", zelleOrderReceived: "createZelleOrderReceivedEmail",
   orderCancelled: "createOrderCancelledEmail", verificationApproved: "createVerificationApprovedEmail",
   verificationRejected: "createVerificationRejectedEmail", renewalReminder: "createRenewalReminderEmail",

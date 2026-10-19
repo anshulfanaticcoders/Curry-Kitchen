@@ -1,5 +1,6 @@
 import "server-only";
 
+import { z } from "zod";
 import { getBusinessRules, isAfterOrderCutoff } from "@/lib/business-rules";
 import { db } from "@/lib/db";
 import {
@@ -9,13 +10,22 @@ import {
   calculateDeliveryDates,
   dateToInput,
   inputToDate,
+  isDeliveryDayElapsed,
   nextEligiblePackageStartInput,
   type PackageScheduleAvailability,
   type PublicBusinessHoliday,
   type ScheduleDateRange,
 } from "@/lib/package-schedule";
+import { lockCalendars, lockPackageCalendar } from "@/lib/server/calendar-lock";
 
 export const MAX_CUSTOMER_PAUSE_DAYS = 14;
+const uncountedStatuses = ["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT"];
+const movableStatuses = ["PAID", "ACCEPTED", "PREPARING"] as const;
+const pauseDaySnapshot = z.object({
+  id: z.string(), deliveryDate: z.string(), status: z.string(),
+  menuSummary: z.string().nullable(), deliveryWindow: z.string(),
+});
+const pauseProvenance = z.object({ originals: z.array(pauseDaySnapshot).min(1), replacements: z.array(pauseDaySnapshot).min(1) });
 
 function inclusiveCalendarDays(startDate: Date, endDate: Date) {
   return Math.floor((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1;
@@ -61,8 +71,8 @@ async function activeHolidayRanges(
   return holidays.map((holiday) => dateRange(holiday.startDate, holiday.endDate));
 }
 
-export function getActiveHolidayDateRanges() {
-  return activeHolidayRanges(db);
+export function getActiveHolidayDateRanges(client: Pick<typeof db, "businessHoliday"> = db) {
+  return activeHolidayRanges(client);
 }
 
 function publicHoliday(holiday: {
@@ -133,6 +143,7 @@ export async function scheduleCustomerPause({
   }
 
   return db.$transaction(async (tx) => {
+    await lockPackageCalendar(tx, customerPackageId);
     const customerPackage = await tx.customerPackage.findUnique({
       where: { id: customerPackageId },
       include: { deliveryDays: true, pauseRequests: true, package: true },
@@ -148,7 +159,8 @@ export async function scheduleCustomerPause({
     const affectedDays = customerPackage.deliveryDays
       .filter(
         (day) =>
-          !["CANCELLED", "PAUSED", "DELIVERED"].includes(day.status) &&
+          movableStatuses.some((status) => status === day.status) &&
+          !isDeliveryDayElapsed(day) &&
           day.deliveryDate >= startDate &&
           day.deliveryDate <= endDate,
       )
@@ -158,22 +170,23 @@ export async function scheduleCustomerPause({
       throw new Error("The selected range does not contain any scheduled delivery days.");
     }
 
-    const latestScheduledDate = maxDate(customerPackage.deliveryDays.map((day) => day.deliveryDate)) ?? endDate;
+    const latestScheduledDate = maxDate(customerPackage.deliveryDays.filter((day) => !uncountedStatuses.includes(day.status)).map((day) => day.deliveryDate)) ?? endDate;
     const holidays = await activeHolidayRanges(tx);
     const occupiedDates = customerPackage.deliveryDays
-      .filter((day) => !affectedDays.some((affected) => affected.id === day.id) && day.status !== "CANCELLED")
+      .filter((day) => !affectedDays.some((affected) => affected.id === day.id) && !uncountedStatuses.includes(day.status))
       .map((day) => day.deliveryDate);
     const replacements = replacementDates({
       count: affectedDays.length,
       afterDate: latestScheduledDate,
       deliveryWeekdays: rules.deliveryWeekdays,
-      holidays,
+      holidays: [...holidays, dateRange(startDate, endDate)],
       occupiedDates,
     });
     const resumeDate = customerPackage.deliveryDays
       .filter(
         (day) =>
-          day.status !== "CANCELLED" &&
+          !uncountedStatuses.includes(day.status) &&
+          !isDeliveryDayElapsed(day) &&
           !affectedDays.some((affected) => affected.id === day.id) &&
           day.deliveryDate > endDate,
       )
@@ -183,16 +196,16 @@ export async function scheduleCustomerPause({
       where: { id: { in: affectedDays.map((day) => day.id) } },
       data: { status: "CANCELLED" },
     });
-    await tx.packageDeliveryDay.createMany({
-      data: replacements.map((deliveryDate) => ({
-        customerPackageId,
-        deliveryDate,
-        status: "PREPARING",
-        menuSummary: customerPackage.package.name,
-        deliveryWindow: rules.deliveryWindow,
-      })),
-    });
-    await tx.pauseRequest.create({
+    const replacementRows = replacements.map((deliveryDate) => ({
+      id: crypto.randomUUID(),
+      customerPackageId,
+      deliveryDate,
+      status: "PREPARING" as const,
+      menuSummary: customerPackage.package.name,
+      deliveryWindow: rules.deliveryWindow,
+    }));
+    await tx.packageDeliveryDay.createMany({ data: replacementRows });
+    const pause = await tx.pauseRequest.create({
       data: {
         customerPackageId,
         requestedByUserId,
@@ -200,6 +213,17 @@ export async function scheduleCustomerPause({
         startDate,
         endDate,
         reason: reason?.trim() || "Customer scheduled a one-time pause.",
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        userId: requestedByUserId, action: "pause.scheduled", entity: "pause_request", entityId: pause.id,
+        metadata: {
+          originals: affectedDays.map((day) => ({ id: day.id, deliveryDate: day.deliveryDate.toISOString(), status: day.status,
+            menuSummary: day.menuSummary, deliveryWindow: day.deliveryWindow })),
+          replacements: replacementRows.map((day) => ({ id: day.id, deliveryDate: day.deliveryDate.toISOString(), status: day.status,
+            menuSummary: day.menuSummary, deliveryWindow: day.deliveryWindow })),
+        },
       },
     });
     await tx.customerPackage.update({
@@ -218,16 +242,17 @@ export async function scheduleCustomerPause({
       resumeDate,
       packageEndDate: replacements.at(-1) ?? customerPackage.endDate,
     };
-  });
+  }, { isolationLevel: "ReadCommitted" });
 }
 
 // Undo a customer's scheduled one-time pause so they can book it again with the
-// right dates: restore the cancelled days, remove the appended replacements,
+// right dates: restore the cancelled days, retire the recorded replacements,
 // and give the package its pause back. Only allowed before the pause starts.
 export async function resetScheduledCustomerPause(customerPackageId: string) {
   const today = inputToDate(businessDateInput());
 
   return db.$transaction(async (tx) => {
+    await lockPackageCalendar(tx, customerPackageId);
     const customerPackage = await tx.customerPackage.findUnique({
       where: { id: customerPackageId },
       include: { deliveryDays: true, pauseRequests: true, customer: { select: { userId: true } } },
@@ -241,54 +266,37 @@ export async function resetScheduledCustomerPause(customerPackageId: string) {
     if (customerPackage.status !== "ACTIVE") {
       throw new Error("Only an upcoming pause on an active package can be reset.");
     }
-    if (pause.startDate < today) {
+    if (dateToInput(pause.startDate) <= dateToInput(today)) {
       throw new Error("This pause has already started and must be adjusted manually.");
     }
 
-    const holidayCredits = await tx.holidayDeliveryCredit.findMany({
-      where: { customerPackageId },
-      select: {
-        originalDeliveryDayId: true,
-        replacementDeliveryDayId: true,
-        originalDeliveryDate: true,
-        businessHoliday: { select: { status: true } },
-      },
+    const provenance = await tx.auditLog.findFirst({
+      where: { action: "pause.scheduled", entity: "pause_request", entityId: pause.id },
+      orderBy: { createdAt: "desc" },
     });
-    // ponytail: a holiday declared over the pause's replacement days breaks the
-    // "replacements are the latest scheduled days" assumption — hand off to manual.
-    if (
-      holidayCredits.some(
-        (credit) => credit.businessHoliday.status === "ACTIVE" && credit.originalDeliveryDate > pause.endDate,
-      )
-    ) {
-      throw new Error("A kitchen holiday also moved days on this schedule. Cancel that holiday first or adjust manually.");
+    const parsed = pauseProvenance.safeParse(provenance?.metadata);
+    if (!parsed.success) {
+      throw new Error("This older pause has no delivery provenance and must be adjusted manually.");
     }
-    const holidayOriginalIds = new Set(holidayCredits.map((credit) => credit.originalDeliveryDayId));
-    const holidayReplacementIds = new Set(holidayCredits.map((credit) => credit.replacementDeliveryDayId));
-
-    const restoreDays = customerPackage.deliveryDays.filter(
-      (day) =>
-        day.status === "CANCELLED" &&
-        !holidayOriginalIds.has(day.id) &&
-        day.deliveryDate >= pause.startDate &&
-        day.deliveryDate <= pause.endDate,
-    );
-    if (!restoreDays.length) {
-      throw new Error("No paused delivery days were found to restore. Adjust this schedule manually.");
-    }
-
-    // The pause appended its replacement days after the then-latest scheduled
-    // day, so the latest N non-holiday PREPARING days are those replacements.
-    const replacements = customerPackage.deliveryDays
-      .filter((day) => day.status === "PREPARING" && !holidayReplacementIds.has(day.id))
-      .sort((a, b) => b.deliveryDate.getTime() - a.deliveryDate.getTime())
-      .slice(0, restoreDays.length);
-    if (replacements.length < restoreDays.length) {
+    const { originals: restoreDays, replacements } = parsed.data;
+    const matchesSnapshot = (snapshot: z.infer<typeof pauseDaySnapshot>, status: string) => {
+      const day = customerPackage.deliveryDays.find((candidate) => candidate.id === snapshot.id);
+      return day && day.status === status && day.deliveryDate.toISOString() === snapshot.deliveryDate
+        && day.menuSummary === snapshot.menuSummary && day.deliveryWindow === snapshot.deliveryWindow;
+    };
+    if (restoreDays.length !== replacements.length
+      || !restoreDays.every((day) => matchesSnapshot(day, "CANCELLED"))
+      || !replacements.every((day) => matchesSnapshot(day, "PREPARING"))) {
       throw new Error("This schedule no longer matches the pause and must be adjusted manually.");
     }
+    const holidays = await activeHolidayRanges(tx);
+    if (restoreDays.some((day) => holidays.some((holiday) => new Date(day.deliveryDate) >= holiday.startDate && new Date(day.deliveryDate) <= holiday.endDate))) {
+      throw new Error("A kitchen holiday overlaps this pause. Cancel that holiday first or adjust manually.");
+    }
 
-    await tx.packageDeliveryDay.deleteMany({
+    await tx.packageDeliveryDay.updateMany({
       where: { id: { in: replacements.map((day) => day.id) } },
+      data: { status: "CANCELLED" },
     });
     await tx.packageDeliveryDay.updateMany({
       where: { id: { in: restoreDays.map((day) => day.id) } },
@@ -299,10 +307,10 @@ export async function resetScheduledCustomerPause(customerPackageId: string) {
       data: { status: "REJECTED", adminNote: "Reset by admin so the customer can schedule the pause again." },
     });
 
-    const deletedIds = new Set(replacements.map((day) => day.id));
+    const retiredIds = new Set(replacements.map((day) => day.id));
     const restoredIds = new Set(restoreDays.map((day) => day.id));
     const remainingDates = customerPackage.deliveryDays
-      .filter((day) => !deletedIds.has(day.id) && (day.status !== "CANCELLED" || restoredIds.has(day.id)))
+      .filter((day) => !retiredIds.has(day.id) && (!uncountedStatuses.includes(day.status) || restoredIds.has(day.id)))
       .map((day) => day.deliveryDate);
 
     await tx.customerPackage.update({
@@ -326,7 +334,7 @@ export async function resetScheduledCustomerPause(customerPackageId: string) {
     }
 
     return { restoredDays: restoreDays.length };
-  });
+  }, { isolationLevel: "ReadCommitted" });
 }
 
 export async function createKitchenHoliday({
@@ -349,7 +357,15 @@ export async function createKitchenHoliday({
   if (startDateInput < businessDateInput()) throw new Error("A kitchen holiday cannot start in the past.");
   if (endDate < startDate) throw new Error("Holiday end date must be on or after its start date.");
 
+  // Include pending packages: payment activation can make them eligible while
+  // this operation is waiting for a calendar lock.
+  const calendarOwners = await db.customerPackage.findMany({
+    where: { status: { in: ["ACTIVE", "PAUSED", "PENDING_PAYMENT", "PENDING_STUDENT_VERIFICATION"] } },
+    select: { customerId: true },
+  });
+  const customerIds = [...new Set(calendarOwners.map((item) => item.customerId).filter((id): id is string => Boolean(id)))];
   return db.$transaction(async (tx) => {
+    await lockCalendars(tx, customerIds);
     const overlap = await tx.businessHoliday.findFirst({
       where: {
         status: "ACTIVE",
@@ -365,8 +381,8 @@ export async function createKitchenHoliday({
     const affectedDays = await tx.packageDeliveryDay.findMany({
       where: {
         deliveryDate: { gte: startDate, lte: endDate },
-        status: { notIn: ["CANCELLED", "PAUSED", "DELIVERED"] },
-        customerPackage: { status: "ACTIVE" },
+        status: { in: [...movableStatuses] },
+        customerPackage: { status: "ACTIVE", customerId: { in: customerIds } },
       },
       include: {
         customerPackage: {
@@ -377,6 +393,7 @@ export async function createKitchenHoliday({
     });
     const byPackage = new Map<string, typeof affectedDays>();
     for (const day of affectedDays) {
+      if (isDeliveryDayElapsed(day)) continue;
       const group = byPackage.get(day.customerPackageId) ?? [];
       group.push(day);
       byPackage.set(day.customerPackageId, group);
@@ -385,15 +402,19 @@ export async function createKitchenHoliday({
 
     for (const [customerPackageId, days] of byPackage) {
       const customerPackage = days[0].customerPackage;
-      const latestScheduledDate = maxDate(customerPackage.deliveryDays.map((day) => day.deliveryDate)) ?? endDate;
+      const latestScheduledDate = maxDate(customerPackage.deliveryDays.filter((day) => !uncountedStatuses.includes(day.status)).map((day) => day.deliveryDate)) ?? endDate;
       const occupiedDates = customerPackage.deliveryDays
-        .filter((day) => day.status !== "CANCELLED" && !days.some((affected) => affected.id === day.id))
+        .filter((day) => !uncountedStatuses.includes(day.status) && !days.some((affected) => affected.id === day.id))
         .map((day) => day.deliveryDate);
+      const pauses = await tx.pauseRequest.findMany({
+        where: { customerPackageId, status: { in: ["ACTIVE", "APPROVED", "REQUESTED"] } },
+        select: { startDate: true, endDate: true },
+      });
       const replacements = replacementDates({
         count: days.length,
         afterDate: latestScheduledDate,
         deliveryWeekdays: rules.deliveryWeekdays,
-        holidays,
+        holidays: [...holidays, ...pauses],
         occupiedDates,
       });
 
@@ -440,14 +461,21 @@ export async function createKitchenHoliday({
       }
     }
 
-    return { id: holiday.id, affectedPackages: byPackage.size, creditedDeliveries: affectedDays.length };
-  });
+    return { id: holiday.id, affectedPackages: byPackage.size,
+      creditedDeliveries: [...byPackage.values()].reduce((total, days) => total + days.length, 0) };
+  }, { isolationLevel: "ReadCommitted", timeout: 30_000 });
 }
 
 export async function cancelKitchenHoliday(holidayId: string) {
   const today = inputToDate(businessDateInput());
 
+  const calendarOwners = await db.customerPackage.findMany({
+    where: { holidayCredits: { some: { businessHolidayId: holidayId } } },
+    select: { customerId: true },
+  });
+  const customerIds = [...new Set(calendarOwners.map((item) => item.customerId).filter((id): id is string => Boolean(id)))];
   return db.$transaction(async (tx) => {
+    await lockCalendars(tx, customerIds);
     const holiday = await tx.businessHoliday.findUnique({
       where: { id: holidayId },
       include: { credits: true },
@@ -458,11 +486,28 @@ export async function cancelKitchenHoliday(holidayId: string) {
 
     const dayIds = holiday.credits.flatMap((credit) => [credit.originalDeliveryDayId, credit.replacementDeliveryDayId]);
     const deliveryDays = await tx.packageDeliveryDay.findMany({ where: { id: { in: dayIds } } });
-    if (deliveryDays.some((day) => ["DELIVERED", "OUT_FOR_DELIVERY"].includes(day.status))) {
-      throw new Error("This holiday has delivery activity and must be adjusted manually.");
+    const daysById = new Map(deliveryDays.map((day) => [day.id, day]));
+    for (const credit of holiday.credits) {
+      const original = daysById.get(credit.originalDeliveryDayId);
+      const replacement = daysById.get(credit.replacementDeliveryDayId);
+      if (!original || !replacement || original.status !== "CANCELLED" || replacement.status !== "PREPARING"
+        || original.customerPackageId !== credit.customerPackageId || replacement.customerPackageId !== credit.customerPackageId
+        || original.deliveryDate.getTime() !== credit.originalDeliveryDate.getTime()
+        || replacement.deliveryDate.getTime() !== credit.replacementDeliveryDate.getTime()
+        || isDeliveryDayElapsed(replacement)) {
+        throw new Error("This holiday schedule has changed or has delivery activity and must be adjusted manually.");
+      }
     }
 
     const packageIds = Array.from(new Set(holiday.credits.map((credit) => credit.customerPackageId)));
+    const affectedPackages = await tx.customerPackage.findMany({
+      where: { id: { in: packageIds } },
+      select: { id: true, status: true, customerId: true, customer: { select: { userId: true } } },
+    });
+    if (affectedPackages.length !== packageIds.length || affectedPackages.some((item) => item.status !== "ACTIVE"
+      || !customerIds.some((id) => id === item.customerId))) {
+      throw new Error("An affected package is no longer active. Adjust its schedule manually.");
+    }
     const replacementIds = holiday.credits.map((credit) => credit.replacementDeliveryDayId);
     const chainedHolidayCredit = await tx.holidayDeliveryCredit.findFirst({
       where: {
@@ -493,20 +538,15 @@ export async function cancelKitchenHoliday(holidayId: string) {
         where: { id: credit.originalDeliveryDayId },
         data: { status: "PREPARING", menuSummary: credit.originalMenuSummary },
       });
-      await tx.packageDeliveryDay.deleteMany({ where: { id: credit.replacementDeliveryDayId } });
+      await tx.packageDeliveryDay.update({ where: { id: credit.replacementDeliveryDayId }, data: { status: "CANCELLED" } });
     }
-    await tx.holidayDeliveryCredit.deleteMany({ where: { businessHolidayId: holidayId } });
     await tx.businessHoliday.update({ where: { id: holidayId }, data: { status: "ARCHIVED" } });
 
-    const affectedPackages = await tx.customerPackage.findMany({
-      where: { id: { in: packageIds } },
-      select: { id: true, customer: { select: { userId: true } } },
-    });
     const affectedPackageById = new Map(affectedPackages.map((item) => [item.id, item]));
 
     for (const customerPackageId of packageIds) {
       const remainingDays = await tx.packageDeliveryDay.findMany({
-        where: { customerPackageId, status: { not: "CANCELLED" } },
+        where: { customerPackageId, status: { notIn: ["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT"] } },
         orderBy: { deliveryDate: "desc" },
         take: 1,
       });
@@ -528,7 +568,7 @@ export async function cancelKitchenHoliday(holidayId: string) {
     }
 
     return { id: holidayId, restoredDeliveries: holiday.credits.length };
-  });
+  }, { isolationLevel: "ReadCommitted", timeout: 30_000 });
 }
 
 export function scheduledResumeInput(endDateInput: string, deliveryWeekdays: number[]) {

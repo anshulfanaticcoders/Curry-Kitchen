@@ -23,7 +23,7 @@ import type {
 } from "@/lib/types";
 import { getCurrentSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { businessDateInput, inputToDate, isDeliveryDayElapsed } from "@/lib/package-schedule";
+import { businessDateInput, dateToInput, inputToDate, isDeliveryDayElapsed } from "@/lib/package-schedule";
 import { hasDatabaseUrl, shouldUseMockData } from "@/lib/server/data-source";
 
 type DecimalLike = { toNumber: () => number } | number | string | null | undefined;
@@ -544,14 +544,14 @@ export async function getAdminCustomerDetail(customerId: string) {
           ? "Trial"
           : "Active";
     const now = new Date();
-    const scheduledDeliveryDays = activePackage?.deliveryDays.filter((day) => !["CANCELLED", "PAUSED"].includes(day.status)) ?? [];
-    const nextDelivery = scheduledDeliveryDays.find(
+    const scheduledDeliveryDays = activePackage?.deliveryDays.filter((day) => !["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT"].includes(day.status)) ?? [];
+    const nextDelivery = activePackage?.status === "ACTIVE" ? scheduledDeliveryDays.find(
       (day) => !isDeliveryDayElapsed(day, now),
-    );
+    ) : undefined;
     const completedDays = activePackage
       ? Math.max(
           activePackage.usedDeliveryDays,
-          scheduledDeliveryDays.filter((day) => isDeliveryDayElapsed(day, now)).length,
+          (activePackage.unrepresentedUsedDays ?? 0) + scheduledDeliveryDays.filter((day) => isDeliveryDayElapsed(day, now)).length,
         )
       : 0;
     const foodPreferences = activePackage?.order.foodPreferences?.trim() || latestOrder?.foodPreferences?.trim() || "";
@@ -606,6 +606,10 @@ export async function getAdminCustomerDetail(customerId: string) {
             total: toNumber(latestOrder.total),
           }
         : null,
+      receiptOrders: customer.orders.map((order) => ({
+        number: order.orderNumber,
+        date: formatFullDate(order.createdAt),
+      })),
       latestPayment: latestPayment
         ? {
             method: titleCase(latestPayment.method),
@@ -649,8 +653,11 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
           take: 1,
         },
         packages: {
+          where: { status: "ACTIVE", deliveryDays: { some: {
+            deliveryDate: { gte: inputToDate(businessDateInput(), 0) },
+            status: { notIn: ["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT", "DELIVERED"] },
+          } } },
           orderBy: { createdAt: "desc" },
-          take: 8,
           include: {
             package: {
               include: {
@@ -669,6 +676,13 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
     if (!customer) return null;
 
     const address = customer.addresses[0];
+    const now = new Date();
+    const nextDayFor = (item: (typeof customer.packages)[number]) => item.deliveryDays.find(
+      (day) => !["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT", "DELIVERED"].includes(day.status)
+        && !isDeliveryDayElapsed(day, now),
+    );
+    const nextPackingDate = customer.packages.map(nextDayFor).filter((day) => day !== undefined)
+      .map((day) => dateToInput(day.deliveryDate)).sort()[0];
 
     return {
       id: customer.id,
@@ -680,19 +694,22 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
             .filter(Boolean)
             .join(", ")
         : "No delivery address on file",
-      packages: customer.packages.map((customerPackage) => {
-        const now = new Date();
+      packages: customer.packages.filter((item) => {
+        const next = nextDayFor(item);
+        return next && dateToInput(next.deliveryDate) === nextPackingDate;
+      }).map((customerPackage) => {
         const activeDays = customerPackage.deliveryDays.filter(
-          (day) => !["CANCELLED", "PAUSED"].includes(day.status),
+          (day) => !["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT"].includes(day.status),
         );
         const nextDelivery = activeDays.find((day) => !isDeliveryDayElapsed(day, now));
         const elapsedDays = activeDays.filter((day) => isDeliveryDayElapsed(day, now)).length;
-        const usedDays = Math.max(customerPackage.usedDeliveryDays, elapsedDays);
+        const usedDays = Math.max(customerPackage.usedDeliveryDays, (customerPackage.unrepresentedUsedDays ?? 0) + elapsedDays);
 
         return {
           id: customerPackage.id,
           name: customerPackage.package.name,
           status: titleCase(customerPackage.status),
+          quantity: customerPackage.quantity,
           startDate: customerPackage.startDate
             ? formatFullDate(customerPackage.startDate)
             : "Not scheduled",
@@ -792,7 +809,7 @@ export async function getUpcomingDeliveries(): Promise<Delivery[]> {
     const deliveries = await db.packageDeliveryDay.findMany({
       where: {
         deliveryDate: { gte: inputToDate(businessDateInput(now), 0) },
-        status: { notIn: ["CANCELLED", "PAUSED", "DELIVERED"] },
+        status: { notIn: ["CANCELLED", "PAUSED", "DELIVERED", "DECLINED", "PENDING_PAYMENT"] },
         customerPackage: { customerId: customer.id, status: "ACTIVE" },
       },
       include: { customerPackage: { include: { package: true } } },
@@ -862,7 +879,7 @@ export async function getCustomerPackageSummaries(): Promise<CustomerPackageSumm
       const elapsedDays = customerPackage.deliveryDays.filter(
         (day) => isDeliveryDayElapsed(day, now),
       ).length;
-      const usedDeliveryDays = Math.max(customerPackage.usedDeliveryDays, elapsedDays);
+      const usedDeliveryDays = Math.max(customerPackage.usedDeliveryDays, (customerPackage.unrepresentedUsedDays ?? 0) + elapsedDays);
       const remainingDeliveryDays = Math.max(
         customerPackage.totalDeliveryDays - usedDeliveryDays,
         0,

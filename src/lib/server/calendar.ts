@@ -37,13 +37,14 @@ export async function getCustomerCalendarData(
     db.customer.findUnique({
       where: { id: customerId },
       include: {
+        manualDeliveries: { where: { treatment: { in: ["AWAITING_RENEWAL", "COMPLIMENTARY"] } } },
         packages: {
-          where: { status: { notIn: ["PENDING_PAYMENT", "CANCELLED"] } },
+          where: { status: { not: "PENDING_PAYMENT" } },
           include: {
             package: { select: { name: true } },
             deliveryDays: { orderBy: { deliveryDate: "asc" } },
             pauseRequests: { where: { status: { in: ["APPROVED", "ACTIVE", "ENDED"] } } },
-            holidayCredits: { include: { businessHoliday: true } },
+            holidayCredits: { where: { businessHoliday: { status: "ACTIVE" } }, include: { businessHoliday: true } },
           },
         },
       },
@@ -59,6 +60,14 @@ export async function getCustomerCalendarData(
 
   const events: CustomerCalendarData["events"] = [];
   const now = new Date();
+
+  for (const record of customer.manualDeliveries) {
+    events.push({
+      date: toDateKey(record.deliveryDate),
+      type: record.treatment === "COMPLIMENTARY" ? "delivery-complimentary" : "delivery-unallocated",
+      label: `${record.label} (${record.quantity} tiffin${record.quantity === 1 ? "" : "s"}) - delivered; ${record.treatment === "COMPLIMENTARY" ? "complimentary" : "awaiting renewal"}`,
+    });
+  }
 
   // Mark every active kitchen-holiday date as closed, even when this customer
   // has no delivery scheduled on it — the whole kitchen is off that day.
@@ -79,16 +88,6 @@ export async function getCustomerCalendarData(
 
   for (const customerPackage of customer.packages) {
     const planName = customerPackage.package.name;
-    const countableDeliveryDays = customerPackage.deliveryDays
-      .filter((day) => !["CANCELLED", "PAUSED"].includes(day.status))
-      .sort((left, right) => left.deliveryDate.getTime() - right.deliveryDate.getTime());
-    const elapsedDeliveryDays = countableDeliveryDays.filter(
-      (day) => isDeliveryDayElapsed(day, now),
-    ).length;
-    const completedDays = Math.max(customerPackage.usedDeliveryDays, elapsedDeliveryDays);
-    const completedDayIds = new Set(
-      countableDeliveryDays.slice(0, completedDays).map((day) => day.id),
-    );
     const holidayCreditByOriginalDay = new Map(
       customerPackage.holidayCredits.map((credit) => [credit.originalDeliveryDayId, credit]),
     );
@@ -111,25 +110,39 @@ export async function getCustomerCalendarData(
 
     for (const day of customerPackage.deliveryDays) {
       const holidayCredit = holidayCreditByOriginalDay.get(day.id);
+      const replacement = holidayCredit ? customerPackage.deliveryDays.find((entry) => entry.id === holidayCredit.replacementDeliveryDayId) : undefined;
       const paused = day.status === "PAUSED" || day.status === "CANCELLED";
-      const completed =
-        day.status === "DELIVERED" || completedDayIds.has(day.id);
+      const completed = isDeliveryDayElapsed(day, now);
       const coveredByPause = customerPackage.pauseRequests.some(
         (pause) => day.deliveryDate >= pause.startDate && day.deliveryDate <= pause.endDate,
       );
       if (!holidayCredit && paused && coveredByPause) continue;
+      const cancelled = day.status === "CANCELLED" && !holidayCredit && !coveredByPause;
+      const missed = day.status === "DECLINED";
 
       events.push({
         date: toDateKey(day.deliveryDate),
-        type: holidayCredit
+        type: completed
+          ? "delivery-completed"
+          : missed
+            ? "delivery-missed"
+            : cancelled
+              ? "delivery-cancelled"
+              : holidayCredit
           ? "holiday"
           : paused
             ? "pause"
             : completed
               ? "delivery-completed"
               : "delivery",
-        label: holidayCredit
-          ? `${holidayCredit.businessHoliday.name} — kitchen closed; delivery moved to ${formatFullDate(holidayCredit.replacementDeliveryDate)}`
+        label: completed
+          ? `${planName} - delivered`
+          : missed
+            ? `${planName} - not delivered; package credit retained`
+            : cancelled
+              ? `${planName} - delivery cancelled`
+              : holidayCredit
+          ? `${holidayCredit.businessHoliday.name} — kitchen closed; ${replacement && ["DECLINED", "PAUSED", "CANCELLED"].includes(replacement.status) ? "delivery credit retained in the updated schedule" : `delivery moved to ${formatFullDate(replacement?.deliveryDate ?? holidayCredit.replacementDeliveryDate)}`}`
           : paused
             ? `${planName} — delivery paused`
             : completed
@@ -166,7 +179,7 @@ export async function getCustomerCalendarData(
       const elapsedDays = customerPackage.deliveryDays.filter(
         (day) => isDeliveryDayElapsed(day, now),
       ).length;
-      const usedDays = Math.max(customerPackage.usedDeliveryDays, elapsedDays);
+      const usedDays = Math.max(customerPackage.usedDeliveryDays, (customerPackage.unrepresentedUsedDays ?? 0) + elapsedDays);
       const activePause = customerPackage.pauseRequests.find(
         (pause) => pause.status === "ACTIVE",
       );
