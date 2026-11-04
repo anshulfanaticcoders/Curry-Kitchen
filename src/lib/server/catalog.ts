@@ -25,6 +25,8 @@ import { getCurrentSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { businessDateInput, dateToInput, inputToDate, isDeliveryDayElapsed } from "@/lib/package-schedule";
 import { hasDatabaseUrl, shouldUseMockData } from "@/lib/server/data-source";
+import { getPendingRenewalDeliveries } from "@/lib/server/pending-renewal-deliveries";
+import { ADMIN_CUSTOMER_PAGE_SIZE, ADMIN_ORDER_PAGE_SIZE, type AdminListQuery } from "@/lib/admin-list-query";
 
 type DecimalLike = { toNumber: () => number } | number | string | null | undefined;
 
@@ -407,25 +409,41 @@ export async function getAdminStudentVerifications(): Promise<AdminStudentVerifi
   }
 }
 
-export async function getAdminOrders(): Promise<AdminOrder[]> {
+export async function getAdminOrders(filters?: AdminListQuery): Promise<AdminOrder[]> {
   if (!hasDatabaseUrl()) {
     return [];
   }
 
+  if ((await getCurrentSession())?.user.role !== "ADMIN") return [];
+
   try {
+    const q = filters?.q ?? "";
     const orders = await db.order.findMany({
+      where: {
+        ...(q ? { OR: [
+          { orderNumber: { contains: q } }, { guestName: { contains: q } },
+          { guestEmail: { contains: q } }, { guestPhone: { contains: q } },
+          { customer: { name: { contains: q } } }, { customer: { email: { contains: q } } },
+          { customer: { phone: { contains: q } } },
+        ] } : {}),
+        ...(filters?.status === "Cancelled" ? { status: { in: ["DECLINED", "CANCELLED"] as const } }
+          : filters?.status === "Pending payment" ? { status: "PENDING_PAYMENT" as const }
+          : filters?.status === "Accepted" ? { status: { notIn: ["DECLINED", "CANCELLED", "PENDING_PAYMENT"] as const } } : {}),
+      },
       include: {
         customer: true,
         items: { include: { package: true } },
         payments: { orderBy: { createdAt: "desc" }, take: 1 },
       },
-      orderBy: { createdAt: "desc" },
-      take: 50,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip: filters ? (filters.page - 1) * ADMIN_ORDER_PAGE_SIZE : 0,
+      take: ADMIN_ORDER_PAGE_SIZE + (filters ? 1 : 0),
     });
 
     return orders.map((order) => ({
       id: order.orderNumber,
       customer: order.customer?.name ?? order.guestName ?? "Guest customer",
+      customerId: order.customer?.id ?? null,
       plan: order.items.map((item) => item.package.name).join(", ") || "Custom tiffin",
       items: order.items.reduce((total, item) => total + item.quantity, 0),
       total: toNumber(order.total),
@@ -435,24 +453,30 @@ export async function getAdminOrders(): Promise<AdminOrder[]> {
       allergies: order.allergies?.trim() ?? "",
     }));
   } catch {
+    if (filters) throw new Error("Orders could not be loaded. Please try again.");
     return [];
   }
 }
 
-export async function getAdminCustomers(): Promise<Customer[]> {
+export async function getAdminCustomers(filters?: AdminListQuery): Promise<Customer[]> {
   if (!hasDatabaseUrl()) {
     return [];
   }
 
+  if ((await getCurrentSession())?.user.role !== "ADMIN") return [];
+
   try {
+    const q = filters?.q ?? "";
     const customers = await db.customer.findMany({
+      where: q ? { OR: [{ name: { contains: q } }, { email: { contains: q } }, { phone: { contains: q } }] } : {},
       include: {
         addresses: { where: { isDefault: true }, take: 1 },
         orders: true,
         packages: { include: { package: true }, orderBy: { createdAt: "desc" } },
       },
-      orderBy: { joinedAt: "desc" },
-      take: 80,
+      orderBy: [{ joinedAt: "desc" }, { id: "desc" }],
+      skip: filters ? (filters.page - 1) * ADMIN_CUSTOMER_PAGE_SIZE : 0,
+      take: ADMIN_CUSTOMER_PAGE_SIZE + (filters ? 1 : 0),
     });
 
     return customers.map((customer) => {
@@ -485,6 +509,7 @@ export async function getAdminCustomers(): Promise<Customer[]> {
       };
     });
   } catch {
+    if (filters) throw new Error("Customers could not be loaded. Please try again.");
     return [];
   }
 }
@@ -546,8 +571,12 @@ export async function getAdminCustomerDetail(customerId: string) {
     const now = new Date();
     const scheduledDeliveryDays = activePackage?.deliveryDays.filter((day) => !["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT"].includes(day.status)) ?? [];
     const nextDelivery = activePackage?.status === "ACTIVE" ? scheduledDeliveryDays.find(
-      (day) => !isDeliveryDayElapsed(day, now),
+      (day) => dateToInput(day.deliveryDate) >= businessDateInput(now) && !isDeliveryDayElapsed(day, now),
     ) : undefined;
+    const pendingRenewal = (await getPendingRenewalDeliveries(customer.id, now))[0];
+    const nextDeliveryText = pendingRenewal && (!nextDelivery || pendingRenewal.deliveryDate < nextDelivery.deliveryDate)
+      ? `${formatFullDate(pendingRenewal.deliveryDate)} / ${pendingRenewal.label} (renewal pending)`
+      : nextDelivery ? formatFullDate(nextDelivery.deliveryDate) : "No upcoming delivery scheduled";
     const completedDays = activePackage
       ? Math.max(
           activePackage.usedDeliveryDays,
@@ -591,7 +620,7 @@ export async function getAdminCustomerDetail(customerId: string) {
             endDate: activePackage.endDate ? formatFullDate(activePackage.endDate) : "To be scheduled",
             deliveryProgress: `${completedDays} of ${activePackage.totalDeliveryDays} deliveries completed`,
             remainingDeliveries: Math.max(activePackage.totalDeliveryDays - completedDays, 0),
-            nextDelivery: nextDelivery ? formatFullDate(nextDelivery.deliveryDate) : "No upcoming delivery scheduled",
+            nextDelivery: nextDeliveryText,
           }
         : null,
       kitchenNotes: {
@@ -679,10 +708,15 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
     const now = new Date();
     const nextDayFor = (item: (typeof customer.packages)[number]) => item.deliveryDays.find(
       (day) => !["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT", "DELIVERED"].includes(day.status)
+        && dateToInput(day.deliveryDate) >= businessDateInput(now)
         && !isDeliveryDayElapsed(day, now),
     );
-    const nextPackingDate = customer.packages.map(nextDayFor).filter((day) => day !== undefined)
-      .map((day) => dateToInput(day.deliveryDate)).sort()[0];
+    const pendingRenewals = await getPendingRenewalDeliveries(customer.id, now);
+    const paidDates = customer.packages.flatMap((item) => item.deliveryDays.filter((day) =>
+      !["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT", "DELIVERED"].includes(day.status)).map((day) => dateToInput(day.deliveryDate)));
+    const pendingToPack = pendingRenewals.filter((record) => !paidDates.includes(dateToInput(record.deliveryDate)));
+    const nextPackingDate = [...customer.packages.map(nextDayFor).filter((day) => day !== undefined)
+      .map((day) => dateToInput(day.deliveryDate)), ...pendingToPack.map((record) => dateToInput(record.deliveryDate))].sort()[0];
 
     return {
       id: customer.id,
@@ -694,14 +728,16 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
             .filter(Boolean)
             .join(", ")
         : "No delivery address on file",
-      packages: customer.packages.filter((item) => {
+      warning: pendingRenewals.some((record) => dateToInput(record.deliveryDate) === nextPackingDate && paidDates.includes(nextPackingDate))
+        ? "A renewal-pending delivery also exists for this date. Only the paid delivery is listed; review the customer's calendar before packing an additional meal." : undefined,
+      packages: [...customer.packages.filter((item) => {
         const next = nextDayFor(item);
         return next && dateToInput(next.deliveryDate) === nextPackingDate;
       }).map((customerPackage) => {
         const activeDays = customerPackage.deliveryDays.filter(
           (day) => !["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT"].includes(day.status),
         );
-        const nextDelivery = activeDays.find((day) => !isDeliveryDayElapsed(day, now));
+        const nextDelivery = nextDayFor(customerPackage);
         const elapsedDays = activeDays.filter((day) => isDeliveryDayElapsed(day, now)).length;
         const usedDays = Math.max(customerPackage.usedDeliveryDays, (customerPackage.unrepresentedUsedDays ?? 0) + elapsedDays);
 
@@ -723,7 +759,14 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
           foodPreferences: customerPackage.order.foodPreferences?.trim() || "No special food preferences",
           allergies: customerPackage.order.allergies?.trim() ?? "",
         };
-      }),
+      }), ...pendingToPack.filter((record) => dateToInput(record.deliveryDate) === nextPackingDate).map((record) => ({
+        id: record.id, name: record.label, status: "Renewal pending", quantity: record.quantity,
+        startDate: formatFullDate(record.deliveryDate), deliveryProgress: "Admin-authorized delivery; renewal pending",
+        nextDelivery: formatFullDate(record.deliveryDate),
+        includes: record.sourcePackage?.package.items.map((item) => item.quantity ? `${item.quantity} ${item.name}` : item.name) ?? [],
+        foodPreferences: record.sourcePackage?.order.foodPreferences?.trim() || "No special food preferences",
+        allergies: record.sourcePackage?.order.allergies?.trim() ?? "",
+      }))],
     };
   } catch {
     return null;
@@ -817,12 +860,19 @@ export async function getUpcomingDeliveries(): Promise<Delivery[]> {
       take: 5,
     });
 
-    return deliveries.filter((day) => !isDeliveryDayElapsed(day, now)).map((delivery) => ({
+    const pendingRenewals = await getPendingRenewalDeliveries(customer.id, now);
+    const visible = deliveries.filter((day) => !isDeliveryDayElapsed(day, now));
+    return [...visible.map((delivery) => ({
       id: delivery.id,
       day: formatDay(delivery.deliveryDate),
       date: formatDate(delivery.deliveryDate),
       meal: delivery.menuSummary ?? delivery.customerPackage.package.name,
-    }));
+      sortDate: delivery.deliveryDate,
+    })), ...pendingRenewals.filter((record) => !visible.some((day) => dateToInput(day.deliveryDate) === dateToInput(record.deliveryDate)))
+      .map((record) => ({ id: record.id, day: formatDay(record.deliveryDate), date: formatDate(record.deliveryDate),
+        meal: `${record.label} (renewal pending)`, sortDate: record.deliveryDate }))]
+      .sort((a, b) => a.sortDate.getTime() - b.sortDate.getTime()).slice(0, 5)
+      .map(({ sortDate: _sortDate, ...delivery }) => { void _sortDate; return delivery; });
   } catch {
     return [];
   }

@@ -62,10 +62,13 @@ export async function getCustomerCalendarData(
   const now = new Date();
 
   for (const record of customer.manualDeliveries) {
+    if (record.treatment === "VOIDED" || record.treatment === "PACKAGE" || record.status === "CANCELLED") continue;
+    const delivered = !record.status || record.status === "DELIVERED";
+    const missed = record.status === "DECLINED";
     events.push({
       date: toDateKey(record.deliveryDate),
-      type: record.treatment === "COMPLIMENTARY" ? "delivery-complimentary" : "delivery-unallocated",
-      label: `${record.label} (${record.quantity} tiffin${record.quantity === 1 ? "" : "s"}) - delivered; ${record.treatment === "COMPLIMENTARY" ? "complimentary" : "awaiting renewal"}`,
+      type: missed ? "delivery-missed" : delivered ? record.treatment === "COMPLIMENTARY" ? "delivery-complimentary" : "delivery-unallocated" : "delivery",
+      label: `${record.label} (${record.quantity} tiffin${record.quantity === 1 ? "" : "s"}) - ${missed ? "not delivered" : delivered ? "delivered" : "scheduled by admin"}; ${record.treatment === "COMPLIMENTARY" ? "complimentary" : "renewal pending"}`,
     });
   }
 

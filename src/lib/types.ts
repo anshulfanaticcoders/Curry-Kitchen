@@ -400,6 +400,7 @@ export type PackagingRecord = {
   phone: string;
   address: string;
   packages: PackagingPackage[];
+  warning?: string;
 };
 
 export type Transaction = {
@@ -443,6 +444,7 @@ export type SeoEntry = {
 export type AdminOrder = {
   id: string;
   customer: string;
+  customerId: string | null;
   plan: string;
   items: number;
   total: number;

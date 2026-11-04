@@ -196,13 +196,14 @@ export async function scheduleCustomerPause({
       where: { id: { in: affectedDays.map((day) => day.id) } },
       data: { status: "CANCELLED" },
     });
-    const replacementRows = replacements.map((deliveryDate) => ({
+    const replacementRows = replacements.map((deliveryDate, index) => ({
       id: crypto.randomUUID(),
       customerPackageId,
       deliveryDate,
       status: "PREPARING" as const,
       menuSummary: customerPackage.package.name,
       deliveryWindow: rules.deliveryWindow,
+      requiresConfirmation: affectedDays[index].requiresConfirmation ?? false,
     }));
     await tx.packageDeliveryDay.createMany({ data: replacementRows });
     const pause = await tx.pauseRequest.create({
@@ -426,6 +427,7 @@ export async function createKitchenHoliday({
             status: "PREPARING",
             menuSummary: day.menuSummary ?? customerPackage.package.name,
             deliveryWindow: day.deliveryWindow,
+            requiresConfirmation: day.requiresConfirmation ?? false,
           },
         });
         await tx.packageDeliveryDay.update({

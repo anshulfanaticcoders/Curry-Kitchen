@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, CalendarDays, CalendarOff, Check, ChevronLeft, ChevronRight, CircleAlert, Clock3, Flag, Gift, PackageCheck, Pause, X, type LucideIcon } from "lucide-react";
+import { Ban, CalendarDays, CalendarOff, Check, CheckSquare, ChevronLeft, ChevronRight, CircleAlert, Clock3, Flag, Gift, PackageCheck, Pause, X, type LucideIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AdminCalendarDayEditor } from "@/components/dashboard/admin-calendar-day-editor";
 import { Card } from "@/components/dashboard/primitives";
@@ -14,8 +14,8 @@ const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const EVENT_STYLES: Record<CalendarEventType, { label: string; chip: string; fill: string; icon: LucideIcon }> = {
   delivery: { label: "Scheduled", chip: "bg-saffron/15 text-masala", fill: "border-saffron bg-saffron/20 text-masala", icon: CalendarDays },
   "delivery-completed": { label: "Delivered", chip: "bg-leaf/10 text-leaf", fill: "border-leaf bg-leaf text-white", icon: Check },
-  "delivery-missed": { label: "Missed", chip: "bg-red-100 text-red-800", fill: "border-red-300 bg-red-100 text-red-800", icon: CircleAlert },
-  "delivery-unallocated": { label: "Awaiting renewal", chip: "bg-sky-100 text-sky-800", fill: "border-sky-300 bg-sky-100 text-sky-800", icon: Clock3 },
+  "delivery-missed": { label: "Not delivered", chip: "bg-red-100 text-red-800", fill: "border-red-300 bg-red-100 text-red-800", icon: CircleAlert },
+  "delivery-unallocated": { label: "Delivered / renewal pending", chip: "bg-sky-100 text-sky-800", fill: "border-sky-300 bg-sky-100 text-sky-800", icon: Clock3 },
   "delivery-complimentary": { label: "Complimentary", chip: "bg-teal-100 text-teal-800", fill: "border-teal-300 bg-teal-100 text-teal-800", icon: Gift },
   "delivery-cancelled": { label: "Cancelled / voided", chip: "bg-zinc-100 text-zinc-600", fill: "border-zinc-300 bg-zinc-100 text-zinc-600", icon: Ban },
   pause: { label: "Paused", chip: "bg-amber-50 text-amber-800", fill: "border-amber-200 bg-amber-100 text-amber-800", icon: Pause },
@@ -42,6 +42,9 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
   const [selectedKey, setSelectedKey] = useState(todayKey);
+  const [multiple, setMultiple] = useState(false);
+  const [selectedDates, setSelectedDates] = useState<string[]>([todayKey]);
+  const editingDates = multiple ? selectedDates : [selectedKey];
 
   const eventsByDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
@@ -101,6 +104,7 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
                 const currentDate = new Date(`${currentKey}T00:00:00`);
                 setMonthCursor(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
                 setSelectedKey(currentKey);
+                setSelectedDates([currentKey]);
               }}
               className="min-h-11 rounded-lg border border-ink/10 px-4 text-sm font-extrabold text-ink/70 transition hover:border-saffron/50 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2"
             >
@@ -117,6 +121,14 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
             </button>
           </div>
         </div>
+
+        {adminData ? <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-b border-ink/10 pb-3">
+          <button type="button" aria-pressed={multiple} onClick={() => { setMultiple(!multiple); setSelectedDates([selectedKey]); }}
+            className={cn("inline-flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2", multiple ? "border-ink bg-ink text-white" : "border-ink/15 text-ink hover:bg-frost")}>
+            <CheckSquare size={17} aria-hidden="true" />Select dates
+          </button>
+          {multiple ? <span className="text-sm font-bold text-ink/75" aria-live="polite">{selectedDates.length} selected</span> : null}
+        </div> : null}
 
         {activePlan?.status === "Paused" ? (
           <p className="mt-3 rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-800">
@@ -138,7 +150,7 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
         ) : null}
 
         <div className="-mx-1 mt-5 overflow-x-auto p-1 sm:mt-6">
-        <div className="grid min-w-[332px] grid-cols-7 gap-1 sm:gap-1.5">
+        <div className="grid min-w-0 grid-cols-7 gap-1 sm:gap-1.5">
           {WEEKDAY_LABELS.map((label) => (
             <p key={label} className="pb-2 text-center text-[11px] font-black uppercase text-ink/65">
               {label}
@@ -149,7 +161,7 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
 
             const events = eventsByDay.get(cell.key) ?? [];
             const isToday = cell.key === todayKey;
-            const isSelected = cell.key === selectedKey;
+            const isSelected = multiple && adminData ? selectedDates.includes(cell.key) : cell.key === selectedKey;
             const isOffDay = !data.deliveryWeekdays.includes(cell.date.getDay());
             const primaryType = EVENT_PRIORITY.find((type) => events.some((event) => event.type === type));
             const style = primaryType ? EVENT_STYLES[primaryType] : undefined;
@@ -162,12 +174,15 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
               <button
                 key={cell.key}
                 type="button"
-                onClick={() => setSelectedKey(cell.key)}
+                onClick={() => {
+                  setSelectedKey(cell.key);
+                  if (multiple && adminData) setSelectedDates((current) => current.includes(cell.key) ? current.filter((date) => date !== cell.key) : [...current, cell.key].sort());
+                }}
                 aria-pressed={isSelected}
                 aria-current={isToday ? "date" : undefined}
                 aria-label={`${cell.key}: ${events.length ? events.map((event) => `${EVENT_STYLES[event.type].label}: ${event.label}`).join("; ") : isOffDay ? "Off day" : "Nothing scheduled"}`}
                 className={cn(
-                  "grid aspect-square min-h-11 min-w-11 content-center justify-items-center gap-0.5 rounded-lg border text-sm font-extrabold transition focus-visible:outline-2 focus-visible:outline-offset-2",
+                  "grid aspect-square min-h-11 w-full min-w-0 content-center justify-items-center gap-0.5 rounded-lg border text-sm font-extrabold transition focus-visible:outline-2 focus-visible:outline-offset-2",
                   fill,
                   isSelected ? "ring-2 ring-ink ring-offset-2" : "",
                   isToday && !isSelected ? "ring-2 ring-saffron/45 ring-offset-1" : "",
@@ -185,7 +200,7 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
         </div>
 
         <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-ink/8 pt-5">
-          {Object.entries(EVENT_STYLES).map(([type, item]) => (
+          {Object.entries(EVENT_STYLES).filter(([type]) => data.events.some((event) => event.type === type)).map(([type, item]) => (
             <span key={type} className="inline-flex items-center gap-2 text-xs font-bold text-ink/70">
               <span className={cn("grid size-5 place-items-center rounded border", item.fill)}><item.icon size={12} aria-hidden="true" /></span>
               {item.label}
@@ -198,13 +213,13 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
       <div className="grid min-w-0 content-start gap-4">
         <Card className="min-w-0 p-4 sm:p-6">
           <h2 className="font-display text-xl font-black">
-            {new Intl.DateTimeFormat("en-US", {
+            {multiple && adminData ? `${editingDates.length} dates selected` : new Intl.DateTimeFormat("en-US", {
               weekday: "long",
               month: "long",
               day: "numeric",
             }).format(selectedDate)}
           </h2>
-          <div className="mt-4 grid gap-2.5">
+          {multiple && adminData ? <p className="mt-3 text-sm leading-6 text-ink/75">{editingDates.map((date) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`))).join(", ") || "No dates selected"}</p> : <div className="mt-4 grid gap-2.5">
             {selectedEvents.length ? (
               selectedEvents.map((event, index) => {
                 const style = EVENT_STYLES[event.type];
@@ -226,10 +241,10 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
                 {selectedIsOffDay ? "Off day — no deliveries." : "Nothing scheduled on this day."}
               </div>
             )}
-          </div>
+          </div>}
           {adminData ? (
             <div className="mt-5">
-              <AdminCalendarDayEditor key={`${data.customerId}-${selectedKey}-${adminData.state.revision}`} date={selectedKey} data={adminData} />
+              <AdminCalendarDayEditor key={`${data.customerId}-${adminData.state.revision}`} date={selectedKey} dates={editingDates} data={adminData} />
             </div>
           ) : null}
         </Card>

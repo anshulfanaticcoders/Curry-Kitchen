@@ -59,6 +59,7 @@ function fixture() {
     if (key === "order") return one("order", row.orderId);
     if (key === "package") return one("package", row.packageId);
     if (key === "customerPackage") return one("customerPackage", row.customerPackageId);
+    if (key === "sourcePackage") return one("customerPackage", row.sourcePackageId);
     if (key === "businessHoliday") return one("businessHoliday", row.businessHolidayId);
     if (key === "deliveryDays") return many("packageDeliveryDay", "customerPackageId");
     if (key === "pauseRequests") return many("pauseRequest", "customerPackageId");
@@ -66,6 +67,7 @@ function fixture() {
     if (key === "credits") return many("holidayDeliveryCredit", "businessHolidayId");
     if (key === "customerPackages") return many("customerPackage", "orderId");
     if (key === "packages") return many("customerPackage", "customerId");
+    if (key === "orders") return many("order", "customerId");
     if (key === "payments") return many("payment", "orderId");
     if (key === "studentVerifications") return many("studentVerification", table === "order" ? "orderId" : "customerId");
     if (key === "addresses") return many("address", "customerId");
@@ -165,6 +167,7 @@ function fixture() {
   const dependencies = {
     "server-only": {}, zod: { z }, "@prisma/client": {}, "next/cache": { revalidatePath() {} },
     "@/lib/db": { db }, "@/lib/package-schedule": loadAtTime("../src/lib/package-schedule.ts"),
+    "@/lib/admin-list-query": loadAtTime("../src/lib/admin-list-query.ts"),
     "@/lib/business-rules": { getBusinessRules: async () => rules },
     "@/lib/auth": { getCurrentSession: async () => ({ user: { id: "u1", role: "ADMIN" } }) },
     "@/lib/action-result": { ok: (data, message) => ({ success: true, data, message }), fail: (error) => ({ success: false, error }) },
@@ -186,6 +189,7 @@ function fixture() {
   const checkout = loadAtTime("../src/lib/server/checkout.ts", dependencies);
   dependencies["@/lib/server/checkout"] = checkout;
   const admin = loadAtTime("../src/lib/actions/admin.ts", dependencies);
+  dependencies["@/lib/server/pending-renewal-deliveries"] = loadAtTime("../src/lib/server/pending-renewal-deliveries.ts", dependencies);
   const catalog = loadAtTime("../src/lib/server/catalog.ts", dependencies);
   const cron = loadAtTime("../src/app/api/cron/package-emails/route.ts", dependencies);
   const day = (id, dayDate, status = "PREPARING", customerPackageId = "p1") => {
@@ -501,6 +505,110 @@ test("packing progress includes sparse history plus newly elapsed rows", async (
   s.day("next", "2026-10-20");
   const result = await s.catalog.getAdminPackagingRecord("c1");
   assert.equal(result.packages[0].deliveryProgress, "3 of 5 delivery days used");
+});
+
+test("unpaid admin-authorized meals appear in packing and upcoming deliveries without activating the old package", async () => {
+  const s = fixture();
+  s.state.customerPackage[0].status = "EXPIRED";
+  s.state.manualDelivery.push({ id: "manual", customerId: "c1", sourcePackageId: "p1", treatment: "AWAITING_RENEWAL",
+    status: "PREPARING", deliveryDate: date("2026-10-20"), label: "Lunch", quantity: 2 });
+  const packing = await s.catalog.getAdminPackagingRecord("c1");
+  assert.deepEqual(packing.packages.map((entry) => [entry.id, entry.status, entry.quantity]), [["manual", "Renewal pending", 2]]);
+  assert.equal((await s.catalog.getUpcomingDeliveries())[0].id, "manual");
+  assert.equal(s.state.customerPackage[0].status, "EXPIRED");
+  assert.equal(s.state.payment[0].status, "PAID");
+});
+
+test("overlapping pending and paid schedules do not pack twice and flag admin review", async () => {
+  const s = fixture();
+  s.day("paid", "2026-10-20");
+  s.state.manualDelivery.push({ id: "manual", customerId: "c1", sourcePackageId: "p1", treatment: "AWAITING_RENEWAL",
+    status: "PREPARING", deliveryDate: date("2026-10-20"), label: "Lunch", quantity: 2 });
+  const packing = await s.catalog.getAdminPackagingRecord("c1");
+  assert.equal(packing.packages.length, 1);
+  assert.equal(packing.packages[0].id, "p1");
+  assert.match(packing.warning, /review/i);
+  assert.deepEqual((await s.catalog.getUpcomingDeliveries()).map((entry) => entry.id), ["paid"]);
+  assert.equal(s.state.manualDelivery[0].treatment, "AWAITING_RENEWAL", "A read must not allocate an unpaid meal");
+});
+
+test("pending scheduling honours current holidays and excludes delivered, cancelled and other customers", async () => {
+  const s = fixture();
+  s.state.customerPackage[0].status = "EXPIRED";
+  const manual = { customerId: "c1", sourcePackageId: "p1", treatment: "AWAITING_RENEWAL", status: "PREPARING", label: "Lunch", quantity: 2 };
+  s.state.manualDelivery.push(
+    { ...manual, id: "holiday", deliveryDate: date("2026-10-20") },
+    { ...manual, id: "cancelled", deliveryDate: date("2026-10-21"), status: "CANCELLED" },
+    { ...manual, id: "delivered", deliveryDate: date("2026-10-22"), status: "DELIVERED" },
+    { ...manual, id: "other", deliveryDate: date("2026-10-23"), customerId: "another" },
+    { ...manual, id: "allowed", deliveryDate: date("2026-10-26") },
+  );
+  s.state.businessHoliday.push({ id: "closure", status: "ACTIVE", startDate: date("2026-10-20"), endDate: date("2026-10-20") });
+  assert.deepEqual((await s.catalog.getUpcomingDeliveries()).map((entry) => entry.id), ["allowed"]);
+  assert.deepEqual((await s.catalog.getAdminPackagingRecord("c1")).packages.map((entry) => entry.id), ["allowed"]);
+});
+
+test("ordinary payment activation leaves pending deliveries for explicit admin allocation", async () => {
+  const s = fixture();
+  s.state.customerPackage[0].status = "PENDING_PAYMENT";
+  s.state.order[0].status = "PENDING_PAYMENT";
+  s.state.payment[0].status = "PENDING";
+  s.state.manualDelivery.push({ id: "earlier", customerId: "c1", treatment: "AWAITING_RENEWAL", status: "DELIVERED",
+    deliveryDate: date("2026-10-16"), label: "Lunch", quantity: 2 });
+  const earlier = structuredClone(s.state.manualDelivery);
+  await s.checkout.markOrderPaidAndActivate("o1");
+  assert.equal(s.state.customerPackage[0].status, "ACTIVE");
+  assert.equal(s.state.packageDeliveryDay.length, 5);
+  assert.equal(s.state.payment[0].status, "PAID");
+  assert.deepEqual(structuredClone(s.state.manualDelivery), earlier);
+});
+
+test("pausing preserves manually backdated dates awaiting confirmation", async () => {
+  const s = fixture();
+  s.day("manual-past", "2026-10-16").requiresConfirmation = true;
+  s.day("future", "2026-10-20");
+  await s.pauses.pausePackage({ customerPackageId: "p1" });
+  assert.equal(s.state.packageDeliveryDay.find((entry) => entry.id === "manual-past").status, "PREPARING");
+  assert.equal(s.state.customerPackage[0].usedDeliveryDays, 0);
+});
+
+test("customer overview lists pending-renewal delivery without inventing a paid allowance", async () => {
+  const s = fixture();
+  s.state.customer[0].joinedAt = date("2026-10-01");
+  s.state.order[0].createdAt = date("2026-10-01");
+  Object.assign(s.state.payment[0], { createdAt: date("2026-10-01"), method: "STRIPE", amount: 100 });
+  Object.assign(s.state.customerPackage[0], { status: "EXPIRED", usedDeliveryDays: 5, endDate: date("2026-10-16") });
+  s.state.manualDelivery.push({ id: "pending", customerId: "c1", sourcePackageId: "p1", label: "Lunch", quantity: 2,
+    status: "PREPARING", treatment: "AWAITING_RENEWAL", deliveryDate: date("2026-10-20") });
+  const result = await s.catalog.getAdminCustomerDetail("c1");
+  assert.ok(result);
+  assert.match(result.currentPackage.nextDelivery, /Oct 20, 2026 \/ Lunch \(renewal pending\)/);
+  assert.equal(result.currentPackage.remainingDeliveries, 0);
+  assert.equal(result.currentPackage.status, "Expired");
+  assert.equal(result.latestPayment.amount, 100);
+});
+
+test("customer overview never calls an unconfirmed past manual day the next delivery", async () => {
+  const s = fixture();
+  s.state.customer[0].joinedAt = date("2026-10-01");
+  s.state.order[0].createdAt = date("2026-10-01");
+  Object.assign(s.state.payment[0], { createdAt: date("2026-10-01"), method: "STRIPE", amount: 100 });
+  s.day("manual-past", "2026-10-16").requiresConfirmation = true;
+  s.day("upcoming", "2026-10-20");
+  const result = await s.catalog.getAdminCustomerDetail("c1");
+  assert.ok(result);
+  assert.match(result.currentPackage.nextDelivery, /Oct 20, 2026/);
+  assert.equal(result.currentPackage.remainingDeliveries, 5);
+});
+
+test("expiry cron does not claim a manually scheduled package completed before confirmation", async () => {
+  const s = fixture();
+  s.state.customerPackage[0].endDate = date("2026-10-16");
+  s.day("unconfirmed", "2026-10-16").requiresConfirmation = true;
+  await runCron(s);
+  assert.equal(s.state.customerPackage[0].status, "ACTIVE");
+  assert.equal(s.state.customerPackage[0].usedDeliveryDays, 0);
+  assert.equal(s.emails.length, 0);
 });
 
 const cronRequest = () => new Request("https://test.invalid/cron", { headers: { authorization: "Bearer fixture-secret" } });

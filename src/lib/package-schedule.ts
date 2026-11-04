@@ -91,9 +91,10 @@ export function dateToInput(value: Date) {
   return `${year}-${month}-${day}`;
 }
 
-export function isDeliveryDayElapsed(day: { deliveryDate: Date; status: string; deliveryWindow?: string }, now = new Date()) {
+export function isDeliveryDayElapsed(day: { deliveryDate: Date; status: string; deliveryWindow?: string; requiresConfirmation?: boolean }, now = new Date()) {
   if (["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT"].includes(day.status)) return false;
   if (day.status === "DELIVERED") return true;
+  if (day.requiresConfirmation) return false;
   const date = dateToInput(day.deliveryDate);
   const today = businessDateInput(now);
   if (date !== today) return date < today;

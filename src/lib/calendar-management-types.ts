@@ -1,6 +1,6 @@
 export type DeliveryTreatment = "AWAITING_RENEWAL" | "COMPLIMENTARY" | "PACKAGE" | "VOIDED";
 export type ManagedDeliveryDay = {
-  id: string; date: string; status: string; menuSummary: string | null; deliveryWindow: string;
+  id: string; date: string; status: string; menuSummary: string | null; deliveryWindow: string; requiresConfirmation?: boolean;
 };
 export type ManagedPackage = {
   id: string; name: string; status: string; quantity: number; totalDeliveryDays: number; usedDeliveryDays: number; unrepresentedUsedDays?: number;
@@ -8,9 +8,11 @@ export type ManagedPackage = {
   days: ManagedDeliveryDay[];
   pauses: { startDate: string; endDate: string; status: string }[];
   protectedDayIds: string[];
+  purchasedDeliveryDays?: number | null;
 };
 export type ManualDeliveryRecord = {
   id: string; date: string; label: string; quantity: number; treatment: DeliveryTreatment; packageDeliveryDayId: string | null;
+  status?: string; sourcePackageId?: string | null;
 };
 export type CalendarManagementState = {
   customerId: string; revision: number; packages: ManagedPackage[]; manualDeliveries: ManualDeliveryRecord[];
@@ -19,7 +21,7 @@ export type CalendarManagementState = {
 };
 export type CalendarChangeInput = {
   customerId: string;
-  action: "mark-delivered" | "mark-missed" | "reschedule" | "record-delivery" | "assign-delivery" | "void-delivery" | "undo";
+  action: "mark-delivered" | "mark-missed" | "reschedule" | "record-delivery" | "assign-delivery" | "void-delivery" | "undo" | "set-delivered" | "set-not-delivered" | "set-dates" | "apply-renewal";
   date: string;
   packageId?: string;
   deliveryDayId?: string;
@@ -31,9 +33,14 @@ export type CalendarChangeInput = {
   reason: string;
   acknowledgeConflict?: boolean;
   changeId?: string;
+  dates?: string[];
+  startDate?: string;
+  endDate?: string;
+  sourcePackageId?: string;
 };
 export type CalendarBalanceChange = {
   packageId: string; name: string; beforeCompleted: number; afterCompleted: number;
+  beforeTotal?: number; afterTotal?: number;
   beforeRemaining: number; afterRemaining: number; beforeEnd: string | null; afterEnd: string | null;
 };
 export type CalendarChangePreview = {

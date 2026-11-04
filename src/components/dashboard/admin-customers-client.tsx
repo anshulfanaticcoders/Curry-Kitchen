@@ -5,6 +5,8 @@ import { ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import type { Customer } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
+import { AdminListPagination, AdminListSearch } from "@/components/dashboard/admin-list-search";
+import type { AdminListQuery } from "@/lib/admin-list-query";
 
 function statusTone(status: string) {
   if (status === "Active") return "green" as const;
@@ -12,22 +14,22 @@ function statusTone(status: string) {
   return "amber" as const;
 }
 
-export function AdminCustomersClient({ customers }: { customers: Customer[] }) {
+export function AdminCustomersClient({ customers, query, hasNext }: { customers: Customer[]; query: AdminListQuery; hasNext: boolean }) {
   const active = customers.filter((customer) => customer.status === "Active").length;
   const totalSpend = customers.reduce((total, customer) => total + customer.spend, 0);
 
   return (
     <div>
       <PageHeader title="Customers" description="Everyone subscribed to a Curry Kitchen plan." />
+      <AdminListSearch key={query.q} path="/admin/customers" query={query} label="Search customers" placeholder="Name, email or phone" />
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Total customers" value={String(customers.length)} />
-        <StatCard label="Active plans" value={String(active)} tone="good" />
-        <StatCard label="Lifetime revenue" value={formatCurrency(totalSpend)} />
+        <StatCard label="Customers on this page" value={String(customers.length)} />
+        <StatCard label="Active plans on this page" value={String(active)} tone="good" />
+        <StatCard label="Customer spend on this page" value={formatCurrency(totalSpend)} />
       </div>
-
       <Card>
-        <CardHeader title="All customers" description="Open a customer to see their details and delivery calendar." />
-        <Table>
+        <CardHeader title={query.q ? "Matching customers" : "All customers"} description="Open a customer to see their details and delivery calendar." />
+        {customers.length ? <Table>
           <thead>
             <tr>
               <Th>Customer</Th>
@@ -40,8 +42,7 @@ export function AdminCustomersClient({ customers }: { customers: Customer[] }) {
             </tr>
           </thead>
           <tbody>
-            {customers.length ? (
-              customers.map((customer) => (
+            {customers.map((customer) => (
                 <tr key={customer.id} className="transition hover:bg-ivory/60">
                   <Td>
                     <div className="flex items-center gap-3">
@@ -72,13 +73,12 @@ export function AdminCustomersClient({ customers }: { customers: Customer[] }) {
                     </div>
                   </Td>
                 </tr>
-              ))
-            ) : (
-              <tr><Td colSpan={7}><EmptyState title="No customers yet" description="New account and checkout records will appear here." /></Td></tr>
-            )}
+              ))}
           </tbody>
-        </Table>
+        </Table> : <EmptyState title={query.q ? "No matching customers" : query.page > 1 ? "No more customers" : "No customers yet"}
+          description={query.q ? "Try another name, email or phone number." : query.page > 1 ? "Return to the previous page." : "New account and checkout records will appear here."} />}
       </Card>
+      <AdminListPagination path="/admin/customers" query={query} hasNext={hasNext} count={customers.length} />
     </div>
   );
 }

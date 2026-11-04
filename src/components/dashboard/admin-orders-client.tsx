@@ -1,17 +1,20 @@
 "use client";
 
-import { Filter, Loader2, X } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight, Filter, Loader2, UserRound, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Drawer, Tabs } from "@/components/dashboard/interactive";
+import { Drawer } from "@/components/dashboard/interactive";
+import { AdminListPagination, AdminListSearch } from "@/components/dashboard/admin-list-search";
 import { AdminOrderReceipt } from "@/components/dashboard/admin-order-receipt";
-import { Card, PageHeader, Table, Td, Th } from "@/components/dashboard/primitives";
+import { Card, EmptyState, PageHeader, Table, Td, Th } from "@/components/dashboard/primitives";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { cancelOrderAction } from "@/lib/actions/admin";
 import type { AdminOrder } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
+import { ADMIN_ORDER_FILTERS, adminListHref, type AdminListQuery } from "@/lib/admin-list-query";
 
 function statusTone(status: string) {
   if (status === "Accepted") return "green" as const;
@@ -50,6 +53,14 @@ function OrderDetails({ order, close }: { order: AdminOrder; close: () => void }
 
   return (
     <div className="grid gap-4">
+      {order.customerId ? (
+        <Link href={`/admin/customers/${encodeURIComponent(order.customerId)}`} onClick={close}
+          className="flex min-h-12 items-center gap-3 rounded-lg border border-ink/15 px-4 py-3 text-sm font-bold text-ink transition hover:border-saffron hover:bg-rose focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-saffron">
+          <UserRound size={19} className="shrink-0 text-masala" aria-hidden="true" />
+          <span className="min-w-0 flex-1 break-words">View customer details</span>
+          <ArrowUpRight size={18} className="shrink-0" aria-hidden="true" />
+        </Link>
+      ) : <p className="text-sm text-ink/70">Guest order. No linked customer profile.</p>}
       <div className="grid grid-cols-2 gap-4">
         {[
           ["Plan", order.plan],
@@ -123,7 +134,16 @@ function OrderDetails({ order, close }: { order: AdminOrder; close: () => void }
   );
 }
 
-function OrderTable({ orders }: { orders: AdminOrder[] }) {
+function OrderTable({ orders, searched }: { orders: AdminOrder[]; searched: boolean }) {
+  if (!orders.length) {
+    return (
+      <Card>
+        <EmptyState title={searched ? "No matching orders" : "No orders in this view"}
+          description={searched ? "Try another order number, name, email or phone." : "Choose another status or return to the previous page."} />
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <Table>
@@ -139,8 +159,7 @@ function OrderTable({ orders }: { orders: AdminOrder[] }) {
           </tr>
         </thead>
         <tbody>
-          {orders.length ? (
-            orders.map((order) => (
+          {orders.map((order) => (
               <tr key={order.id} className="transition hover:bg-ivory/60">
                 <Td className="font-extrabold">{order.id}</Td>
                 <Td className="text-ink/70">{order.customer}</Td>
@@ -168,23 +187,14 @@ function OrderTable({ orders }: { orders: AdminOrder[] }) {
                   </div>
                 </Td>
               </tr>
-            ))
-          ) : (
-            <tr>
-              <Td colSpan={7} className="py-8 text-center text-sm font-bold text-ink/45">
-                No orders in this view.
-              </Td>
-            </tr>
-          )}
+            ))}
         </tbody>
       </Table>
     </Card>
   );
 }
 
-const statuses = ["Accepted", "Pending payment", "Cancelled"] as const;
-
-export function AdminOrdersClient({ orders }: { orders: AdminOrder[] }) {
+export function AdminOrdersClient({ orders, query, hasNext }: { orders: AdminOrder[]; query: AdminListQuery; hasNext: boolean }) {
   return (
     <div>
       <PageHeader
@@ -197,16 +207,16 @@ export function AdminOrdersClient({ orders }: { orders: AdminOrder[] }) {
           </ButtonLink>
         }
       />
-      <Tabs
-        items={[
-          { id: "all", label: `All (${orders.length})`, content: <OrderTable orders={orders} /> },
-          ...statuses.map((status) => ({
-            id: status,
-            label: `${status} (${orders.filter((order) => order.status === status).length})`,
-            content: <OrderTable orders={orders.filter((order) => order.status === status)} />,
-          })),
-        ]}
-      />
+      <AdminListSearch key={query.q} path="/admin/orders" query={query} label="Search orders" placeholder="Order #, name, email or phone" />
+      <nav aria-label="Order status" className="mb-5 flex flex-wrap gap-2">
+        {ADMIN_ORDER_FILTERS.map((status) => <Link key={status} href={adminListHref("/admin/orders", { ...query, status, page: 1 })} scroll={false}
+          aria-current={query.status === status ? "page" : undefined}
+          className={`inline-flex min-h-11 items-center rounded-lg border px-4 text-sm font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-saffron ${query.status === status ? "border-saffron bg-saffron text-ink" : "border-ink/15 bg-white text-ink/75 hover:border-saffron"}`}>
+          {status === "all" ? "All orders" : status}
+        </Link>)}
+      </nav>
+      <OrderTable orders={orders} searched={Boolean(query.q)} />
+      <AdminListPagination path="/admin/orders" query={query} hasNext={hasNext} count={orders.length} />
     </div>
   );
 }

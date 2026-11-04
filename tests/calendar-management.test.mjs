@@ -26,6 +26,169 @@ const { calendarChangeSchema, calendarCompletedDays, calendarDayElapsed, isCount
 const NOW = new Date("2026-09-18T19:00:00Z");
 const WINDOW = "10:00 AM - 6:00 PM";
 
+function simple(action, overrides = {}) {
+  return { customerId: "customer-1", action, date: "2026-09-17", dates: ["2026-09-17"],
+    reason: "Admin calendar adjustment.", acknowledgeConflict: true, ...overrides };
+}
+
+test("simple flow records two dates before renewal, then consumes two of 21 days atomically", () => {
+  const old = packageFixture({ id: "old", status: "EXPIRED", startDate: "2026-09-01", endDate: "2026-09-16",
+    totalDeliveryDays: 1, usedDeliveryDays: 1, days: [day("old-day", "2026-09-16", "DELIVERED")] });
+  const original = stateFixture({ packages: [old] });
+  const recorded = plan(original, simple("set-delivered", { sourcePackageId: "old", dates: ["2026-09-17", "2026-09-18"] }));
+  assert.deepEqual(recorded.after.packages[0], old);
+  assert.equal(recorded.after.manualDeliveries.length, 2);
+  assert.ok(recorded.after.manualDeliveries.every((record) => record.status === "DELIVERED" && record.treatment === "AWAITING_RENEWAL"));
+  const deliveryDates = schedule.calculateDeliveryDates(21, schedule.inputToDate("2026-09-21"), [1, 2, 3, 4, 5]);
+  recorded.after.packages.push(packageFixture({ totalDeliveryDays: 21,
+    days: deliveryDates.map((value, i) => day(`new-${i}`, schedule.dateToInput(value))) }));
+  const applied = plan(recorded.after, simple("apply-renewal", { packageId: "package-1", dates: ["2026-09-17", "2026-09-18"] }));
+  const renewed = applied.after.packages.find((item) => item.id === "package-1");
+  assert.equal(renewed.usedDeliveryDays, 2);
+  assert.equal(renewed.totalDeliveryDays, 21);
+  assert.equal(applied.balances[0].afterRemaining, 19);
+  assert.equal(renewed.startDate, "2026-09-17");
+  assert.equal(renewed.endDate, schedule.dateToInput(deliveryDates[18]));
+  assert.deepEqual(applied.after.packages[0], old);
+  assert.equal(new Set(applied.after.manualDeliveries.map((record) => record.packageDeliveryDayId)).size, 2);
+  assert.throws(() => plan(applied.after, simple("apply-renewal", { packageId: "package-1" })), /no earlier delivered meal/);
+});
+
+test("a bounded unpaid delivery period schedules meals but does not pretend they are delivered", () => {
+  const state = stateFixture({ packages: [packageFixture({ id: "old", status: "EXPIRED", days: [] })],
+    holidays: [{ name: "Closed", startDate: "2026-09-22", endDate: "2026-09-22" }] });
+  const result = plan(state, simple("set-dates", { sourcePackageId: "old", startDate: "2026-09-17", endDate: "2026-09-23" }));
+  assert.deepEqual(result.after.manualDeliveries.map((record) => record.date), ["2026-09-17", "2026-09-18", "2026-09-21", "2026-09-23"]);
+  assert.ok(result.after.manualDeliveries.every((record) => record.status === "PREPARING" && record.sourcePackageId === "old"));
+  assert.deepEqual(result.after.packages, state.packages);
+  const completed = plan(result.after, simple("set-delivered", { sourcePackageId: "old" }));
+  const trimmed = plan(completed.after, simple("set-dates", { sourcePackageId: "old", startDate: "2026-09-18", endDate: "2026-09-21" }));
+  assert.equal(trimmed.after.manualDeliveries.find((record) => record.date === "2026-09-17").status, "DELIVERED");
+  assert.equal(trimmed.after.manualDeliveries.find((record) => record.date === "2026-09-23").status, "CANCELLED");
+});
+
+test("before-payment status correction neither consumes nor restores paid package credits", () => {
+  const state = stateFixture({ packages: [packageFixture({ id: "old", days: [] })] });
+  const delivered = plan(state, simple("set-delivered", { sourcePackageId: "old" }));
+  const missed = plan(delivered.after, simple("set-not-delivered", { sourcePackageId: "old" }));
+  assert.equal(missed.after.manualDeliveries[0].status, "DECLINED");
+  assert.deepEqual(missed.after.packages, state.packages);
+  const restored = plan(missed.after, simple("set-delivered", { sourcePackageId: "old" }));
+  assert.equal(restored.after.manualDeliveries.length, 1);
+  assert.equal(restored.after.manualDeliveries[0].status, "DELIVERED");
+});
+
+test("date editing backdates without auto-delivery, explicitly adjusts allowance and preserves purchase baseline", () => {
+  const state = stateFixture();
+  const result = plan(state, simple("set-dates", { packageId: "package-1", startDate: "2026-09-17", endDate: "2026-09-23" }));
+  const item = result.after.packages[0];
+  assert.equal(item.totalDeliveryDays, 5);
+  assert.equal(item.purchasedDeliveryDays, 3);
+  assert.equal(item.usedDeliveryDays, 0);
+  assert.equal(item.startDate, "2026-09-17");
+  assert.ok(result.warnings.some((warning) => /3 to 5/.test(warning)));
+  assert.equal(calendarCompletedDays(item, new Date("2026-09-19T03:00:00Z")), 0);
+  const done = plan(result.after, simple("set-delivered", { packageId: "package-1" }));
+  assert.equal(done.after.packages[0].usedDeliveryDays, 1);
+  assert.equal(done.after.packages[0].purchasedDeliveryDays, 3);
+});
+
+test("moving a paid delivery period preserves ordinary checkout completion behaviour", () => {
+  const state = stateFixture();
+  assert.equal(schedule.isDeliveryDayElapsed({ deliveryDate: schedule.inputToDate("2026-09-17"), status: "PREPARING" }, NOW), true);
+  const result = plan(state, simple("set-dates", { packageId: "package-1", startDate: "2026-09-24", endDate: "2026-09-28" }));
+  const item = result.after.packages[0];
+  assert.equal(item.totalDeliveryDays, 3);
+  assert.equal(item.startDate, "2026-09-24");
+  assert.equal(item.endDate, "2026-09-28");
+  assert.equal(item.days.filter((entry) => entry.status === "CANCELLED").length, 3);
+  assert.ok(item.days.filter(isCountableCalendarDay).every((entry) => entry.requiresConfirmation));
+});
+
+test("delivered then not-delivered then delivered consumes one credit, not three", () => {
+  const state = stateFixture({ packages: [packageFixture({ days: [day("past", "2026-09-17", "DELIVERED"), day("next", "2026-09-21"), day("last", "2026-09-22")], usedDeliveryDays: 1 })] });
+  const missed = plan(state, simple("set-not-delivered", { packageId: "package-1" }));
+  assert.equal(missed.after.packages[0].usedDeliveryDays, 0);
+  assert.equal(missed.after.packages[0].days.filter(isCountableCalendarDay).length, 3);
+  const restored = plan(missed.after, simple("set-delivered", { packageId: "package-1" }));
+  assert.equal(restored.after.packages[0].usedDeliveryDays, 1);
+  assert.equal(restored.after.packages[0].days.filter(isCountableCalendarDay).length, 3);
+  assert.equal(restored.after.packages[0].days.filter((entry) => entry.date === "2026-09-17" && entry.status === "DELIVERED").length, 1);
+  assert.throws(() => plan(restored.after, simple("set-delivered", { packageId: "package-1" })), /already have that status/);
+});
+
+test("multi-date missed deliveries create unique make-up rows and cannot double-credit", () => {
+  const state = stateFixture({ packages: [packageFixture({ totalDeliveryDays: 2, usedDeliveryDays: 2,
+    days: [day("a", "2026-09-17", "DELIVERED"), day("b", "2026-09-18", "DELIVERED")] })] });
+  const result = plan(state, simple("set-not-delivered", { packageId: "package-1", dates: ["2026-09-17", "2026-09-18"] }));
+  assert.equal(new Set(result.after.packages[0].days.map((entry) => entry.id)).size, 4);
+  assert.equal(result.after.packages[0].usedDeliveryDays, 0);
+  assert.equal(result.balances[0].afterRemaining, 2);
+  assert.throws(() => plan(result.after, simple("set-not-delivered", { packageId: "package-1", dates: ["2026-09-17", "2026-09-18"] })), /already have that status/);
+});
+
+test("renewal includes an existing date without a second deduction and merges future manual days", () => {
+  const state = stateFixture({ manualDeliveries: [manual({ label: "Monthly tiffin", sourcePackageId: "old" }),
+    manual({ id: "future", date: "2026-09-21", status: "PREPARING", label: "Monthly tiffin", sourcePackageId: "old" })] });
+  const result = plan(state, simple("apply-renewal", { packageId: "package-1" }));
+  assert.equal(result.after.packages[0].usedDeliveryDays, 1);
+  assert.equal(result.after.packages[0].days.filter(isCountableCalendarDay).length, 3);
+  assert.ok(result.after.manualDeliveries.every((record) => record.treatment === "PACKAGE"));
+  assert.equal(result.after.manualDeliveries[1].packageDeliveryDayId, "day-first");
+  const existing = stateFixture({ packages: [packageFixture({ days: [day("past", "2026-09-17"), day("next", "2026-09-21"), day("last", "2026-09-22")] })], manualDeliveries: [manual()] });
+  const confirmed = plan(existing, simple("apply-renewal", { packageId: "package-1" }));
+  assert.equal(confirmed.balances[0].beforeCompleted, confirmed.balances[0].afterCompleted);
+  assert.equal(confirmed.after.manualDeliveries[0].packageDeliveryDayId, "past");
+});
+
+test("a batch that cannot fit all earlier deliveries fails without partial allocation", () => {
+  const state = stateFixture({ packages: [packageFixture({ totalDeliveryDays: 1, days: [day("only", "2026-09-21")] })],
+    manualDeliveries: [manual(), manual({ id: "second", date: "2026-09-18" })] });
+  assert.throws(() => plan(state, simple("apply-renewal", { packageId: "package-1", dates: ["2026-09-17", "2026-09-18"] })), /no unused/);
+  assert.ok(state.manualDeliveries.every((record) => record.treatment === "AWAITING_RENEWAL"));
+});
+
+test("allocation cannot silently move a past manual day that still needs delivery confirmation", () => {
+  for (const [date, now] of [["2026-09-17", NOW], ["2026-09-18", new Date("2026-09-19T02:00:00Z")]]) {
+    const state = stateFixture({ packages: [packageFixture({ totalDeliveryDays: 1,
+      days: [{ ...day("unresolved", date), requiresConfirmation: true }] })],
+      manualDeliveries: [manual({ date: "2026-09-16" })] });
+    assert.throws(() => plan(state, simple("apply-renewal", { packageId: "package-1", dates: ["2026-09-16"] }), now), /no unused/);
+  }
+});
+
+test("not-delivered correction reconciles a pending record overlapping a paid delivery", () => {
+  const state = stateFixture({ packages: [packageFixture({ days: [day("past", "2026-09-17"), day("next", "2026-09-21"), day("last", "2026-09-22")] })],
+    manualDeliveries: [manual({ status: "DELIVERED" })] });
+  const result = plan(state, simple("set-not-delivered", { packageId: "package-1" }));
+  assert.equal(result.after.manualDeliveries[0].status, "DECLINED");
+  assert.equal(result.after.packages[0].usedDeliveryDays, 0);
+  assert.equal(result.after.packages[0].days.filter(isCountableCalendarDay).length, 3);
+});
+
+test("ambiguous manual records, quantity mismatches, unpaid and unverified packages cannot be auto-matched", () => {
+  for (const overrides of [{ paid: false }, { status: "PENDING_PAYMENT" }, { status: "PENDING_STUDENT_VERIFICATION" }]) {
+    assert.throws(() => plan(stateFixture({ packages: [packageFixture(overrides)], manualDeliveries: [manual()] }), simple("apply-renewal", { packageId: "package-1" })), /paid, verified/);
+  }
+  assert.throws(() => plan(stateFixture({ manualDeliveries: [manual({ quantity: 2 })] }), simple("apply-renewal", { packageId: "package-1" })), /matching package/);
+  assert.throws(() => plan(stateFixture({ manualDeliveries: [manual(), manual({ id: "duplicate" })] }), simple("apply-renewal", { packageId: "package-1" })), /multiple earlier deliveries/);
+});
+
+test("date range edits cannot erase delivered, dispatched or protected credit history", () => {
+  for (const entry of [day("fixed", "2026-09-17", "DELIVERED"), day("fixed", "2026-09-18", "OUT_FOR_DELIVERY"), day("fixed", "2026-09-21")]) {
+    const state = stateFixture({ packages: [packageFixture({ days: [entry], protectedDayIds: entry.status === "PREPARING" ? [entry.id] : [] })] });
+    assert.throws(() => plan(state, simple("set-dates", { packageId: "package-1", startDate: "2026-09-24", endDate: "2026-09-25" })), /Keep .* in the period/);
+  }
+});
+
+test("simple commands reject future completion, invalid ranges and conflicting package dates", () => {
+  for (const action of ["set-delivered", "set-not-delivered", "apply-renewal"]) assert.throws(() => plan(stateFixture(), simple(action, { packageId: "package-1", dates: ["2026-09-21"] })), /Future dates/);
+  for (const [startDate, endDate] of [["2026-09-23", "2026-09-21"], ["2026-09-19", "2026-09-20"], ["2026-01-01", "2027-12-31"]]) {
+    assert.throws(() => plan(stateFixture(), simple("set-dates", { packageId: "package-1", startDate, endDate })), /Choose|no available/);
+  }
+  assert.throws(() => plan(stateFixture(), simple("set-dates", { sourcePackageId: "package-1", startDate: "2026-09-21", endDate: "2026-09-23" })), /already belongs/);
+});
+
 function day(id, date, status = "PREPARING") {
   return { id, date, status, menuSummary: "Dal and rice", deliveryWindow: WINDOW };
 }

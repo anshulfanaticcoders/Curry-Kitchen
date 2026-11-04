@@ -7,7 +7,7 @@ const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
 }, "Choose a valid calendar date.");
 export const calendarChangeSchema = z.object({
   customerId: z.string().min(1).max(100),
-  action: z.enum(["mark-delivered", "mark-missed", "reschedule", "record-delivery", "assign-delivery", "void-delivery", "undo"]),
+  action: z.enum(["mark-delivered", "mark-missed", "reschedule", "record-delivery", "assign-delivery", "void-delivery", "undo", "set-delivered", "set-not-delivered", "set-dates", "apply-renewal"]),
   date: dateSchema,
   packageId: z.string().max(100).optional(), deliveryDayId: z.string().max(100).optional(), manualDeliveryId: z.string().max(100).optional(),
   targetDate: dateSchema.optional(), changeId: z.string().max(100).optional(),
@@ -15,6 +15,8 @@ export const calendarChangeSchema = z.object({
   label: z.string().trim().max(150).optional(), quantity: z.number().int().min(1).max(50).optional(),
   reason: z.string().trim().min(5, "Add a reason of at least 5 characters.").max(500),
   acknowledgeConflict: z.boolean().optional(),
+  dates: z.array(dateSchema).min(1).max(62).optional(),
+  startDate: dateSchema.optional(), endDate: dateSchema.optional(), sourcePackageId: z.string().max(100).optional(),
 });
 
 export function isCountableCalendarDay(day: { status: string }) {
@@ -42,6 +44,7 @@ export function calendarBalances(before: CalendarManagementState, after: Calenda
     const beforeCompleted = calendarCompletedDays(old, now);
     const afterCompleted = calendarCompletedDays(item, now);
     return [{ packageId: item.id, name: item.name, beforeCompleted, afterCompleted,
+      ...(old.totalDeliveryDays !== item.totalDeliveryDays ? { beforeTotal: old.totalDeliveryDays, afterTotal: item.totalDeliveryDays } : {}),
       beforeRemaining: Math.max(old.totalDeliveryDays - beforeCompleted, 0),
       afterRemaining: Math.max(item.totalDeliveryDays - afterCompleted, 0), beforeEnd: old.endDate, afterEnd: item.endDate }];
   });
@@ -96,7 +99,10 @@ function addMakeup(state: CalendarManagementState, item: ManagedPackage, origina
     .map((range) => ({ startDate: inputToDate(range.startDate), endDate: inputToDate(range.endDate) }));
   const [date] = calculateDeliveryDates(1, addDays(inputToDate(afterDate), 1), state.deliveryWeekdays, ranges);
   if (!date) throw new Error("No make-up delivery date is available. Check delivery settings.");
-  item.days.push({ id: "new:makeup", date: dateToInput(date), status: "PREPARING", menuSummary: original.menuSummary, deliveryWindow: state.deliveryWindow });
+  let id = "new:makeup";
+  for (let suffix = 2; item.days.some((day) => day.id === id); suffix++) id = `new:makeup-${suffix}`;
+  item.days.push({ id, date: dateToInput(date), status: "PREPARING", menuSummary: original.menuSummary, deliveryWindow: state.deliveryWindow,
+    ...(original.requiresConfirmation ? { requiresConfirmation: true } : {}) });
   if (item.status === "EXPIRED") item.status = "ACTIVE";
 }
 function markMissed(state: CalendarManagementState, item: ManagedPackage, day: ManagedDeliveryDay, now: Date) {
@@ -115,7 +121,7 @@ function assignRecord(state: CalendarManagementState, record: ManualDeliveryReco
     throw new Error("This package already has a delivery on that date. Mark the existing delivery instead of counting it twice.");
   }
   const candidate = item.days.filter((day) => day.status === "PREPARING"
-    && !calendarDayElapsed(day, now) && !item.protectedDayIds.includes(day.id)
+    && !calendarDayElapsed({ ...day, requiresConfirmation: false }, now) && !item.protectedDayIds.includes(day.id)
     && !state.manualDeliveries.some((entry) => entry.packageDeliveryDayId === day.id))
     .sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id))[0];
   if (!candidate || calendarCompletedDays(item, now) >= item.totalDeliveryDays) {
@@ -128,10 +134,204 @@ function assignRecord(state: CalendarManagementState, record: ManualDeliveryReco
   if (!item.startDate || record.date < item.startDate) item.startDate = record.date;
 }
 
+export function manualDeliveryStatus(record: ManualDeliveryRecord) {
+  return record.status ?? "DELIVERED";
+}
+
+function renewalSource(state: CalendarManagementState, id?: string) {
+  const source = state.packages.find((item) => item.id === id);
+  if (!source || !source.paid || !["ACTIVE", "EXPIRED", "PAUSED"].includes(source.status)) {
+    throw new Error("Choose a previous paid package for these meals.");
+  }
+  return source;
+}
+
+function dateRange(start?: string, end?: string) {
+  if (!start || !end || start > end) throw new Error("Choose a start date on or before the end date.");
+  const dates: string[] = [];
+  for (let cursor = inputToDate(start); dateToInput(cursor) <= end; cursor = addDays(cursor, 1)) {
+    if (dates.length >= 366) throw new Error("Choose a delivery period of no more than one year.");
+    dates.push(dateToInput(cursor));
+  }
+  return dates;
+}
+
+function pendingOn(state: CalendarManagementState, date: string, sourceId?: string) {
+  const records = state.manualDeliveries.filter((record) => record.date === date
+    && record.treatment === "AWAITING_RENEWAL"
+    && (!sourceId || !record.sourcePackageId || record.sourcePackageId === sourceId));
+  if (records.length > 1) throw new Error(`${date} has multiple earlier deliveries. Resolve the duplicate records before changing this day.`);
+  return records[0];
+}
+
+function addPending(state: CalendarManagementState, source: ManagedPackage, date: string, status: string) {
+  const record: ManualDeliveryRecord = { id: `new:manual-${date}`, date, label: source.name,
+    quantity: source.quantity, treatment: "AWAITING_RENEWAL", packageDeliveryDayId: null,
+    sourcePackageId: source.id, status };
+  state.manualDeliveries.push(record);
+  return record;
+}
+
+function setDeliveryDates(state: CalendarManagementState, input: CalendarChangeInput, now: Date, warnings: string[]) {
+  const range = dateRange(input.startDate, input.endDate);
+  const item = input.packageId ? packageFor(state, input.packageId) : undefined;
+  const source = !item ? renewalSource(state, input.sourcePackageId) : undefined;
+  const dates = range.filter((date) => !conflicts(state, date, item ?? source).length);
+  if (!dates.length) throw new Error("This period has no available delivery days.");
+  if (!item) {
+    if (!source) throw new Error("Choose a previous paid package.");
+    for (const record of state.manualDeliveries) {
+      if (record.treatment !== "AWAITING_RENEWAL" || record.sourcePackageId !== source.id) continue;
+      if (!dates.includes(record.date) && manualDeliveryStatus(record) === "PREPARING") record.status = "CANCELLED";
+    }
+    for (const date of dates) {
+      if (state.packages.some((plan) => plan.days.some((day) => day.date === date && isCountableCalendarDay(day)))) {
+        throw new Error(`${date} already belongs to a package. Choose a renewal-pending period without overlapping package deliveries.`);
+      }
+      const record = pendingOn(state, date, source.id);
+      if (!record) addPending(state, source, date, "PREPARING");
+      else if (manualDeliveryStatus(record) === "CANCELLED") record.status = "PREPARING";
+    }
+    return `Set renewal-pending deliveries from ${dates[0]} to ${dates.at(-1)}. No payment or paid package changed. Earlier completed deliveries stay recorded.`;
+  }
+  if (item.status === "PAUSED") throw new Error("Resume this package before changing its delivery dates.");
+  for (const day of item.days) {
+    if (!isCountableCalendarDay(day)) continue;
+    const fixed = calendarDayElapsed(day, now) || day.status === "OUT_FOR_DELIVERY" || item.protectedDayIds.includes(day.id);
+    if (fixed && !range.includes(day.date)) {
+      throw new Error(`Keep ${day.date} in the period: it is delivered, dispatched, or reserved for a holiday/pause credit.`);
+    }
+    if (!fixed && !dates.includes(day.date)) day.status = "CANCELLED";
+  }
+  for (const date of dates) {
+    if (item.days.some((day) => day.date === date && day.status !== "CANCELLED")) continue;
+    if (state.packages.some((other) => other.id !== item.id && other.days.some((day) => day.date === date && isCountableCalendarDay(day)))) {
+      throw new Error(`${date} already has a delivery in another package. Keep the packages separate.`);
+    }
+    if (pendingOn(state, date)) throw new Error(`Include the earlier delivery on ${date} in this package before changing its dates.`);
+    item.days.push({ id: `new:scheduled-${date}`, date, status: "PREPARING", menuSummary: item.name,
+      deliveryWindow: state.deliveryWindow, requiresConfirmation: true });
+  }
+  const legacyUsage = Math.max(item.unrepresentedUsedDays ?? 0, item.usedDeliveryDays - item.days.filter((day) => calendarDayElapsed(day, now)).length);
+  const total = legacyUsage + item.days.filter(isCountableCalendarDay).length;
+  if (total !== item.totalDeliveryDays) {
+    warnings.push(`This changes the delivery allowance from ${item.totalDeliveryDays} to ${total}. The payment amount will not change.`);
+    item.purchasedDeliveryDays ??= item.totalDeliveryDays;
+    item.totalDeliveryDays = total;
+  }
+  item.startDate = item.days.filter(isCountableCalendarDay).map((day) => day.date).sort()[0] ?? dates[0];
+  const lastDate = item.days.filter(isCountableCalendarDay).map((day) => day.date).sort().at(-1);
+  return `Set ${item.name} deliveries from ${item.startDate} to ${lastDate}. Existing completed deliveries and payment records are unchanged.`;
+}
+
+function includeRenewalRecord(state: CalendarManagementState, item: ManagedPackage, record: ManualDeliveryRecord, now: Date, warnings: string[]) {
+  if (record.quantity !== item.quantity) throw new Error(`The earlier delivery contains ${record.quantity} tiffins; this package covers ${item.quantity}. Choose a matching package.`);
+  if (record.label !== item.name) warnings.push(`Earlier meals were recorded as "${record.label}". Confirm they belong to "${item.name}".`);
+  if (state.packages.some((other) => other.id !== item.id && other.days.some((day) => day.date === record.date && isCountableCalendarDay(day)))) {
+    throw new Error(`${record.date} already belongs to another package. It cannot be counted twice.`);
+  }
+  const existing = item.days.filter((day) => day.date === record.date && isCountableCalendarDay(day));
+  if (existing.length > 1) throw new Error(`${record.date} has multiple package deliveries. Resolve them before including this meal.`);
+  if (existing[0]) {
+    if (state.manualDeliveries.some((other) => other.id !== record.id && other.packageDeliveryDayId === existing[0].id)) {
+      throw new Error(`${record.date} has already been counted toward this package.`);
+    }
+    record.packageDeliveryDayId = existing[0].id;
+    record.treatment = "PACKAGE";
+    if (manualDeliveryStatus(record) === "DELIVERED") existing[0].status = "DELIVERED";
+    return;
+  }
+  assignRecord(state, record, item, now);
+  for (const previous of item.days.filter((day) => day.date === record.date && day.status === "DECLINED")) previous.status = "CANCELLED";
+  const moved = item.days.find((day) => day.id === record.packageDeliveryDayId)!;
+  if (manualDeliveryStatus(record) !== "DELIVERED") {
+    moved.status = "PREPARING";
+    moved.requiresConfirmation = true;
+  }
+}
+
+function planSimpleChange(before: CalendarManagementState, input: CalendarChangeInput, now: Date) {
+  const after = structuredClone(before);
+  const warnings: string[] = [];
+  const today = businessDateInput(now);
+  if (input.action === "set-dates") return finishCalendarPlan(before, after, now, warnings, setDeliveryDates(after, input, now, warnings));
+  const dates = [...new Set(input.dates ?? [input.date])].sort();
+  if (dates.some((date) => date > today)) throw new Error("Future dates cannot be marked Delivered or Not delivered.");
+  const item = input.packageId ? packageFor(after, input.packageId) : undefined;
+  if (item?.status === "PAUSED") throw new Error("Resume this package before adjusting deliveries.");
+  const source = !item ? renewalSource(after, input.sourcePackageId) : undefined;
+  let changes = 0;
+  for (const date of dates) {
+    if (input.action === "set-delivered" || input.action === "apply-renewal") warnings.push(...conflicts(after, date, item ?? source));
+    const pending = pendingOn(after, date, source?.id);
+    if (input.action === "apply-renewal") {
+      if (!item || !pending || manualDeliveryStatus(pending) !== "DELIVERED") throw new Error(`${date} has no earlier delivered meal waiting to be included.`);
+      includeRenewalRecord(after, item, pending, now, warnings);
+      changes++;
+      continue;
+    }
+    if (!item && source) {
+      const status = input.action === "set-delivered" ? "DELIVERED" : "DECLINED";
+      if (pending) {
+        if (manualDeliveryStatus(pending) !== status) { pending.status = status; changes++; }
+      } else if (status === "DELIVERED") {
+        if (after.packages.some((plan) => plan.days.some((day) => day.date === date && isCountableCalendarDay(day)))) {
+          throw new Error(`${date} already belongs to a package. Select that package to mark this delivery.`);
+        }
+        addPending(after, source, date, status);
+        changes++;
+      }
+      continue;
+    }
+    if (!item) throw new Error("Choose a package.");
+    const matching = item.days.filter((day) => day.date === date && isCountableCalendarDay(day));
+    if (matching.length > 1) throw new Error(`${date} has multiple deliveries in this package. Resolve them before changing this day.`);
+    const day = matching[0];
+    if (input.action === "set-not-delivered") {
+      if (day) {
+        markMissed(after, item, day, now);
+        if (pending) pending.status = "DECLINED";
+        changes++;
+      }
+      else if (pending && manualDeliveryStatus(pending) !== "DECLINED") { pending.status = "DECLINED"; changes++; }
+    } else if (pending) {
+      pending.status = "DELIVERED";
+      includeRenewalRecord(after, item, pending, now, warnings);
+      changes++;
+    } else if (day) {
+      if (day.status !== "DELIVERED") { day.status = "DELIVERED"; changes++; }
+    } else {
+      const previous = item.days.find((entry) => entry.date === date && entry.status === "DECLINED");
+      const record = addPending(after, item, date, "DELIVERED");
+      includeRenewalRecord(after, item, record, now, warnings);
+      // Keep one visible calendar row for a corrected missed delivery.
+      if (previous) previous.status = "CANCELLED";
+      changes++;
+    }
+  }
+  if (!changes) throw new Error("These dates already have that status. No changes are needed.");
+  let merged = 0;
+  if (input.action === "apply-renewal" && item) {
+    const sources = new Set(after.manualDeliveries.filter((record) => dates.includes(record.date) && record.treatment === "PACKAGE").map((record) => record.sourcePackageId));
+    const future = after.manualDeliveries.filter((record) => record.treatment === "AWAITING_RENEWAL"
+      && manualDeliveryStatus(record) === "PREPARING" && record.date > today && record.sourcePackageId && sources.has(record.sourcePackageId));
+    for (const record of future) {
+      if (conflicts(after, record.date, item).length) throw new Error(`${record.date} is no longer available. Adjust the renewal-pending dates first.`);
+      includeRenewalRecord(after, item, record, now, warnings);
+      merged++;
+    }
+  }
+  const summary = input.action === "apply-renewal"
+    ? `Included ${changes} earlier ${changes === 1 ? "delivery" : "deliveries"} in ${item!.name}.${merged ? ` Also included ${merged} scheduled renewal-pending ${merged === 1 ? "date" : "dates"}.` : ""} No payment changed.`
+    : `Marked ${changes} ${changes === 1 ? "date" : "dates"} ${input.action === "set-delivered" ? "Delivered" : "Not delivered"}.${item ? " Package balance updated." : " Renewal pending; no paid package changed."}`;
+  return finishCalendarPlan(before, after, now, warnings, summary);
+}
+
 export function planCalendarChange(before: CalendarManagementState, rawInput: CalendarChangeInput, now = new Date()) {
   const input = calendarChangeSchema.parse(rawInput);
   if (input.customerId !== before.customerId) throw new Error("Customer does not match this calendar.");
   if (input.action === "undo") throw new Error("Undo requires the saved change history.");
+  if (["set-delivered", "set-not-delivered", "set-dates", "apply-renewal"].includes(input.action)) return planSimpleChange(before, input, now);
   const after = structuredClone(before);
   const warnings: string[] = [];
   const today = businessDateInput(now);
@@ -205,6 +405,10 @@ export function planCalendarChange(before: CalendarManagementState, rawInput: Ca
     summary = `Voided the manual delivery on ${record.date}. Any assigned package day is credited back; the correction remains in history.`;
   }
 
+  return finishCalendarPlan(before, after, now, warnings, summary);
+}
+
+function finishCalendarPlan(before: CalendarManagementState, after: CalendarManagementState, now: Date, warnings: string[], summary: string) {
   // Preserve historical usage that has no individual rows, while allowing a
   // real manual correction to reduce usage. Do not blindly discard legacy data.
   for (const item of after.packages) {

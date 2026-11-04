@@ -582,6 +582,7 @@ model CustomerPackage {
   totalDeliveryDays   Int
   usedDeliveryDays    Int                   @default(0)
   unrepresentedUsedDays Int                 @default(0)
+  purchasedDeliveryDays Int?
   startDate           DateTime?
   endDate             DateTime?
   reminderEmailSentAt DateTime?
@@ -596,6 +597,7 @@ model CustomerPackage {
   deliveryDays  PackageDeliveryDay[]
   pauseRequests PauseRequest[]
   holidayCredits HolidayDeliveryCredit[]
+  pendingRenewalDeliveries ManualDelivery[] @relation("RenewalMealSource")
 
   @@index([customerId])
   @@index([status])
@@ -609,6 +611,7 @@ model PackageDeliveryDay {
   status            OrderStatus @default(PREPARING)
   menuSummary       String?
   deliveryWindow    String      @default("10:00 AM - 6:00 PM")
+  requiresConfirmation Boolean @default(false)
 
   customerPackage CustomerPackage @relation(fields: [customerPackageId], references: [id], onDelete: Cascade)
   manualDelivery ManualDelivery?
@@ -633,13 +636,17 @@ model ManualDelivery {
   quantity             Int @default(1)
   treatment            ManualDeliveryTreatment @default(AWAITING_RENEWAL)
   packageDeliveryDayId  String? @unique
+  status               OrderStatus @default(DELIVERED)
+  sourcePackageId      String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   packageDeliveryDay PackageDeliveryDay? @relation(fields: [packageDeliveryDayId], references: [id], onDelete: Restrict)
+  sourcePackage CustomerPackage? @relation("RenewalMealSource", fields: [sourcePackageId], references: [id], onDelete: SetNull)
 
   @@index([customerId, deliveryDate])
+  @@index([sourcePackageId])
   @@map("manual_deliveries")
 }
 

@@ -26,11 +26,17 @@ function canonical(state: CalendarManagementState) {
   const copy = structuredClone(state);
   copy.packages.sort((a, b) => a.id.localeCompare(b.id));
   for (const item of copy.packages) {
+    item.purchasedDeliveryDays ??= null;
+    for (const day of item.days) day.requiresConfirmation ??= false;
     item.days.sort((a, b) => a.id.localeCompare(b.id));
     item.protectedDayIds.sort();
     item.pauses.sort((a, b) => stableCalendarJson(a).localeCompare(stableCalendarJson(b)));
   }
   copy.manualDeliveries.sort((a, b) => a.id.localeCompare(b.id));
+  for (const record of copy.manualDeliveries) {
+    record.status ??= "DELIVERED";
+    record.sourcePackageId ??= null;
+  }
   copy.holidays.sort((a, b) => stableCalendarJson(a).localeCompare(stableCalendarJson(b)));
   return copy;
 }
@@ -70,14 +76,16 @@ export async function loadCalendarManagementState(client: Client, customerId: st
     deliveryWeekdays: rules.deliveryWeekdays, deliveryWindow: rules.deliveryWindow,
     holidays: holidays.map((holiday) => ({ name: holiday.name, startDate: dateToInput(holiday.startDate), endDate: dateToInput(holiday.endDate) })),
     manualDeliveries: customer.manualDeliveries.map((record) => ({ id: record.id, date: dateToInput(record.deliveryDate),
-      label: record.label, quantity: record.quantity, treatment: record.treatment, packageDeliveryDayId: record.packageDeliveryDayId })),
+      label: record.label, quantity: record.quantity, treatment: record.treatment, packageDeliveryDayId: record.packageDeliveryDayId,
+      status: record.status ?? "DELIVERED", sourcePackageId: record.sourcePackageId ?? null })),
     packages: customer.packages.map((item) => ({ id: item.id, name: item.package.name, status: item.status,
       quantity: item.quantity, totalDeliveryDays: item.totalDeliveryDays, usedDeliveryDays: item.usedDeliveryDays,
+      purchasedDeliveryDays: item.purchasedDeliveryDays ?? null,
       unrepresentedUsedDays: item.unrepresentedUsedDays ?? 0,
       startDate: item.startDate ? dateToInput(item.startDate) : null, endDate: item.endDate ? dateToInput(item.endDate) : null,
       paid: item.order.payments.some((payment) => payment.status === "PAID"), customerPauseUsed: item.customerPauseUsed,
       days: item.deliveryDays.map((day) => ({ id: day.id, date: dateToInput(day.deliveryDate), status: day.status,
-        menuSummary: day.menuSummary, deliveryWindow: day.deliveryWindow })),
+        menuSummary: day.menuSummary, deliveryWindow: day.deliveryWindow, requiresConfirmation: day.requiresConfirmation ?? false })),
       pauses: item.pauseRequests.map((pause) => ({ startDate: dateToInput(pause.startDate), endDate: dateToInput(pause.endDate), status: pause.status })),
       protectedDayIds: [...new Set([
         ...item.holidayCredits.flatMap((credit) => [credit.originalDeliveryDayId, credit.replacementDeliveryDayId]),
@@ -182,7 +190,8 @@ async function persist(client: Client, before: CalendarManagementState, after: C
     for (const day of item.days) {
       const original = old.days.find((entry) => entry.id === day.id);
       if (stableCalendarJson(original) === stableCalendarJson(day)) continue;
-      const data = { deliveryDate: inputToDate(day.date), status: day.status as OrderStatus, menuSummary: day.menuSummary, deliveryWindow: day.deliveryWindow };
+      const data = { deliveryDate: inputToDate(day.date), status: day.status as OrderStatus, menuSummary: day.menuSummary, deliveryWindow: day.deliveryWindow,
+        requiresConfirmation: day.requiresConfirmation ?? false };
       if (original) await client.packageDeliveryDay.update({ where: { id: day.id }, data });
       else await client.packageDeliveryDay.create({ data: { ...data, id: day.id, customerPackageId: item.id } });
     }
@@ -190,6 +199,7 @@ async function persist(client: Client, before: CalendarManagementState, after: C
     if (removed.length) await client.packageDeliveryDay.deleteMany({ where: { id: { in: removed }, customerPackageId: item.id } });
     await client.customerPackage.update({ where: { id: item.id }, data: {
       status: item.status as CustomerPackageStatus, usedDeliveryDays: item.usedDeliveryDays, unrepresentedUsedDays: item.unrepresentedUsedDays ?? 0,
+      totalDeliveryDays: item.totalDeliveryDays, purchasedDeliveryDays: item.purchasedDeliveryDays ?? null,
       startDate: item.startDate ? inputToDate(item.startDate) : null,
       endDate: item.endDate ? inputToDate(item.endDate) : null, reminderEmailSentAt: null,
     } });
@@ -198,7 +208,8 @@ async function persist(client: Client, before: CalendarManagementState, after: C
     const old = before.manualDeliveries.find((entry) => entry.id === record.id);
     if (stableCalendarJson(old) === stableCalendarJson(record)) continue;
     const data = { deliveryDate: inputToDate(record.date), label: record.label, quantity: record.quantity,
-      treatment: record.treatment, packageDeliveryDayId: record.packageDeliveryDayId };
+      treatment: record.treatment, packageDeliveryDayId: record.packageDeliveryDayId,
+      status: (record.status ?? "DELIVERED") as OrderStatus, sourcePackageId: record.sourcePackageId ?? null };
     if (old) await client.manualDelivery.update({ where: { id: record.id }, data });
     else await client.manualDelivery.create({ data: { ...data, id: record.id, customerId: after.customerId } });
   }

@@ -26,10 +26,12 @@ export default async function PackingRecordPage({
       </p>
 
       <div className="mt-6 grid gap-4">
+        {record.warning ? <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-900">{record.warning}</p> : null}
         {record.packages.length ? (
           record.packages.map((customerPackage) => (
             <Card key={customerPackage.id} className="p-5">
               <h2 className="font-display text-2xl font-black">{customerPackage.name}</h2>
+              {customerPackage.status === "Renewal pending" ? <p className="mt-1 text-sm font-bold text-amber-900">Renewal pending / Admin authorized</p> : null}
               <p className="mt-2 text-sm font-bold text-ink/75">
                 {customerPackage.quantity} tiffin{customerPackage.quantity === 1 ? "" : "s"} / {customerPackage.nextDelivery}
               </p>
@@ -53,7 +55,7 @@ export default async function PackingRecordPage({
             </Card>
           ))
         ) : (
-          <Card className="p-5 text-sm font-bold text-ink/65">No upcoming paid deliveries to pack.</Card>
+          <Card className="p-5 text-sm font-bold text-ink/65">No upcoming deliveries to pack.</Card>
         )}
       </div>
     </div>

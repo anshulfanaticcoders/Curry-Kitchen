@@ -112,6 +112,7 @@ export async function GET(request: Request) {
         where: { id: candidate.id }, include: { customer: true, package: true, deliveryDays: true },
       });
       if (!current || current.status !== "ACTIVE" || !current.endDate || current.endDate >= startOfToday) return null;
+      if (current.deliveryDays.some((day) => day.requiresConfirmation && !["DELIVERED", "DECLINED", "CANCELLED", "PAUSED", "PENDING_PAYMENT"].includes(day.status))) return null;
       const elapsedDays = current.deliveryDays.filter((day) => isDeliveryDayElapsed(day, now)).length;
       const unrepresentedUsedDays = Math.max(current.unrepresentedUsedDays ?? 0, current.usedDeliveryDays - elapsedDays);
       const claimed = await tx.customerPackage.updateMany({

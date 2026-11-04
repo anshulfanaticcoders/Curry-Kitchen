@@ -2,7 +2,7 @@ import "server-only";
 
 import { getBusinessRules } from "@/lib/business-rules";
 import { db } from "@/lib/db";
-import { calculateDeliveryDates, isDeliveryDayElapsed, nextEligiblePackageStartDate } from "@/lib/package-schedule";
+import { businessDateInput, dateToInput, calculateDeliveryDates, isDeliveryDayElapsed, nextEligiblePackageStartDate } from "@/lib/package-schedule";
 import { lockPackageCalendar } from "@/lib/server/calendar-lock";
 import { getActiveHolidayDateRanges } from "@/lib/server/delivery-schedule-adjustments";
 
@@ -49,6 +49,7 @@ export async function pausePackage({
     const usedDeliveryDays = unrepresentedUsedDays + elapsedDays;
     const pendingIds = customerPackage.deliveryDays.filter(
       (day) => !["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT", "DELIVERED", "OUT_FOR_DELIVERY"].includes(day.status)
+        && dateToInput(day.deliveryDate) >= businessDateInput(now)
         && !isDeliveryDayElapsed(day, now),
     ).map((day) => day.id);
 
