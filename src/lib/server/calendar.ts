@@ -9,11 +9,11 @@ function toDateKey(date: Date) {
   return dateToInput(date);
 }
 
-function packageStatusLabel(status: string) {
+function packageStatusLabel(status: string, approved = false) {
   if (status === "ACTIVE") return "Active";
   if (status === "PAUSED") return "Paused";
   if (status === "EXPIRED") return "Ended";
-  if (status === "PENDING_STUDENT_VERIFICATION") return "Awaiting verification";
+  if (status === "PENDING_STUDENT_VERIFICATION") return approved ? "Needs schedule review" : "Awaiting verification";
   if (status === "PENDING_PAYMENT") return "Awaiting payment";
   return "Cancelled";
 }
@@ -42,6 +42,7 @@ export async function getCustomerCalendarData(
           where: { status: { not: "PENDING_PAYMENT" } },
           include: {
             package: { select: { name: true } },
+            order: { select: { studentVerifications: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } } } },
             deliveryDays: { orderBy: { deliveryDate: "asc" } },
             pauseRequests: { where: { status: { in: ["APPROVED", "ACTIVE", "ENDED"] } } },
             holidayCredits: { where: { businessHoliday: { status: "ACTIVE" } }, include: { businessHoliday: true } },
@@ -66,6 +67,8 @@ export async function getCustomerCalendarData(
     const delivered = !record.status || record.status === "DELIVERED";
     const missed = record.status === "DECLINED";
     events.push({
+      packageId: record.sourcePackageId ?? undefined,
+      manualDeliveryId: record.id,
       date: toDateKey(record.deliveryDate),
       type: missed ? "delivery-missed" : delivered ? record.treatment === "COMPLIMENTARY" ? "delivery-complimentary" : "delivery-unallocated" : "delivery",
       label: `${record.label} (${record.quantity} tiffin${record.quantity === 1 ? "" : "s"}) - ${missed ? "not delivered" : delivered ? "delivered" : "scheduled by admin"}; ${record.treatment === "COMPLIMENTARY" ? "complimentary" : "renewal pending"}`,
@@ -95,16 +98,20 @@ export async function getCustomerCalendarData(
       customerPackage.holidayCredits.map((credit) => [credit.originalDeliveryDayId, credit]),
     );
 
-    if (customerPackage.startDate) {
+    const hasSchedule = ["ACTIVE", "EXPIRED", "PAUSED"].includes(customerPackage.status)
+      && customerPackage.deliveryDays.length > 0;
+    if (customerPackage.startDate && hasSchedule) {
       events.push({
+        packageId: customerPackage.id,
         date: toDateKey(customerPackage.startDate),
         type: "package-start",
         label: `${planName} starts`,
       });
     }
 
-    if (customerPackage.endDate) {
+    if (customerPackage.endDate && hasSchedule) {
       events.push({
+        packageId: customerPackage.id,
         date: toDateKey(customerPackage.endDate),
         type: "package-end",
         label: `${planName} ends`,
@@ -124,6 +131,8 @@ export async function getCustomerCalendarData(
       const missed = day.status === "DECLINED";
 
       events.push({
+        packageId: customerPackage.id,
+        ...(completed ? { completion: day.status === "DELIVERED" ? "confirmed" as const : "elapsed" as const } : {}),
         date: toDateKey(day.deliveryDate),
         type: completed
           ? "delivery-completed"
@@ -164,6 +173,7 @@ export async function getCustomerCalendarData(
 
       while (cursor <= end && guard < 62) {
         events.push({
+          packageId: customerPackage.id,
           date: toDateKey(cursor),
           type: "pause",
           label: `${planName} paused${pause.reason ? ` — ${pause.reason}` : ""}`,
@@ -188,8 +198,9 @@ export async function getCustomerCalendarData(
       );
 
       return {
+        id: customerPackage.id,
         name: customerPackage.package.name,
-        status: packageStatusLabel(customerPackage.status),
+        status: packageStatusLabel(customerPackage.status, customerPackage.order?.studentVerifications?.[0]?.status === "APPROVED"),
         startDate: customerPackage.startDate ? formatFullDate(customerPackage.startDate) : null,
         endDate: customerPackage.endDate ? formatFullDate(customerPackage.endDate) : null,
         completedDays: usedDays,

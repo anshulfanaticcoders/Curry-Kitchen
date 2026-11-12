@@ -127,6 +127,30 @@ test("customer name, email and phone search includes records older than the firs
   assert.deepEqual(await s.catalog.getAdminCustomers(filters("no-such-person")), []);
 });
 
+test("customer status follows actual package states and never invents an active plan", async () => {
+  const s = fixture();
+  const customer = s.customers[0];
+  const read = async () => (await s.catalog.getAdminCustomers(filters("customer0@example.test")))[0];
+  assert.equal((await read()).status, "No active plan");
+  for (const [state, expected] of [["EXPIRED", "Ended"], ["PAUSED", "Paused"], ["PENDING_PAYMENT", "Awaiting payment"], ["PENDING_STUDENT_VERIFICATION", "Awaiting verification"], ["CANCELLED", "Cancelled"]]) {
+    customer.packages = [{ id: "p1", status: state, package: { name: "Weekly" } }];
+    assert.equal((await read()).status, expected);
+  }
+  customer.packages = [{ id: "old", status: "PENDING_STUDENT_VERIFICATION", package: { name: "Student" }, order: { studentVerifications: [{ status: "APPROVED" }] } }];
+  assert.equal((await read()).status, "Needs schedule review");
+  customer.packages.push(...["a", "b"].map((id) => ({ id, status: "ACTIVE", package: { name: "Small Package" } })));
+  assert.equal((await read()).status, "Active");
+  assert.equal((await read()).plan, "Small Package + 1 more");
+});
+
+test("customer spending includes only recorded successful USD payments", async () => {
+  const s = fixture();
+  s.customers[0].orders = [{ total: 999, payments: [{ status: "PAID", currency: "USD", amount: 312.48 }, { status: "FAILED", currency: "USD", amount: 999 }] },
+    { total: 700, payments: [{ status: "PENDING", currency: "USD", amount: 700 }, { status: "REFUNDED", currency: "USD", amount: 700 }] },
+    { total: 123, payments: [{ status: "PAID", currency: "EUR", amount: 123 }] }];
+  assert.equal((await s.catalog.getAdminCustomers(filters("customer0@example.test")))[0].spend, 312.48);
+});
+
 test("unauthenticated and customer sessions cannot query admin lists", async () => {
   for (const role of [null, "CUSTOMER"]) {
     const s = fixture(role);

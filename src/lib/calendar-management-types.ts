@@ -9,6 +9,9 @@ export type ManagedPackage = {
   pauses: { startDate: string; endDate: string; status: string }[];
   protectedDayIds: string[];
   purchasedDeliveryDays?: number | null;
+  orderId?: string; orderNumber?: string; orderStatus?: string;
+  verificationStatus?: "NOT_REQUIRED" | "PENDING" | "APPROVED" | "REJECTED";
+  foodPreferences?: string; allergies?: string; deliveryAddress?: string[];
 };
 export type ManualDeliveryRecord = {
   id: string; date: string; label: string; quantity: number; treatment: DeliveryTreatment; packageDeliveryDayId: string | null;
@@ -37,6 +40,7 @@ export type CalendarChangeInput = {
   startDate?: string;
   endDate?: string;
   sourcePackageId?: string;
+  manualDeliveryIds?: string[];
 };
 export type CalendarBalanceChange = {
   packageId: string; name: string; beforeCompleted: number; afterCompleted: number;

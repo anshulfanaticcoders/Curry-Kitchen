@@ -172,6 +172,76 @@ test("record unpaid deliveries, then allocate two against renewal without changi
   assert.ok(!JSON.stringify(s.state.notifications).includes("Private operator note"));
 });
 
+test("an approved historical purchase is visible and repaired without touching the newer purchase or payment", async () => {
+  const s = setup();
+  s.state.packages[0].order.orderNumber = "CK-NEW";
+  const original = structuredClone(s.state.packages[0]);
+  s.state.packages.push({ ...structuredClone(original), id: "old", orderId: "old-order", status: "PENDING_STUDENT_VERIFICATION",
+    package: { name: "Regular tiffin", category: { requiresVerification: true } },
+    order: { orderNumber: "CK-OLD", status: "ACCEPTED", payments: [{ status: "PAID", amount: 100 }],
+      studentVerifications: [{ status: "APPROVED" }], address: { name: "Test", line1: "1 Example Street", city: "San Diego", state: "CA", postalCode: "00000", country: "US" } },
+    startDate: schedule.inputToDate("2026-09-07"), endDate: null });
+  const before = structuredClone(s.state);
+  const data = await s.getAdminCalendarData("c1");
+  const calendar = await s.getCustomerCalendarData("c1");
+  assert.deepEqual(s.state, before, "Reading the calendar cannot repair live records");
+  assert.equal(data.state.packages.find((item) => item.id === "old").verificationStatus, "APPROVED");
+  assert.ok(data.state.packages.find((item) => item.id === "old").deliveryAddress.includes("1 Example Street"));
+  assert.equal(calendar.packages.find((item) => item.id === "old").status, "Needs schedule review");
+  assert.ok(!calendar.events.some((event) => event.packageId === "old"));
+  const input = simpleInput("set-dates", { packageId: "old", startDate: "2026-09-07", endDate: "2026-09-11" });
+  const preview = await s.apply(input);
+  assert.ok(preview.warnings.length);
+  assert.equal(s.state.packages[1].status, "ACTIVE");
+  assert.equal(s.state.packages[1].usedDeliveryDays, 0);
+  assert.deepEqual(s.state.packages[0], original);
+  assert.deepEqual(s.state.packages[1].order, before.packages[1].order);
+  assert.ok(s.state.days.filter((day) => day.customerPackageId === "old").every((day) => day.requiresConfirmation));
+  const changed = await s.getCustomerCalendarData("c1");
+  assert.ok(changed.events.filter((event) => event.packageId === "old").every((event) => event.type !== "delivery-completed"));
+  const history = await s.getAdminCalendarData("c1");
+  assert.equal(history.history[0].canUndo, true);
+  await s.apply(simpleInput("undo", { changeId: history.history[0].id }));
+  assert.equal(s.state.packages[1].status, "PENDING_STUDENT_VERIFICATION");
+  assert.deepEqual(s.state.days, before.days);
+});
+
+test("payment or approval changes invalidate an outstanding historical repair preview", async () => {
+  for (const change of ["payment", "verification"]) {
+    const s = setup();
+    const item = s.state.packages[0];
+    item.status = "PENDING_STUDENT_VERIFICATION";
+    item.package.category = { requiresVerification: true };
+    item.order.studentVerifications = [{ status: "APPROVED" }];
+    s.state.days = [];
+    const input = simpleInput("set-dates", { packageId: "p1", startDate: "2026-09-21", endDate: "2026-09-25" });
+    const preview = await s.previewCalendarChange(input);
+    if (change === "payment") item.order.payments[0].status = "REFUNDED";
+    else item.order.studentVerifications[0].status = "REJECTED";
+    const before = structuredClone(s.state);
+    await assert.rejects(s.applyCalendarChange(input, preview.fingerprint), /paid, verified|fresh preview/);
+    assert.deepEqual(s.state, before);
+  }
+});
+
+test("two purchases retain IDs on calendar events and only the selected record consumes credit", async () => {
+  const s = setup();
+  s.state.packages.push({ ...structuredClone(s.state.packages[0]), id: "p2" });
+  s.state.days.push(...s.state.days.map((day) => ({ ...day, id: `other-${day.id}`, customerPackageId: "p2" })));
+  await s.apply(simpleInput("set-delivered", { sourcePackageId: "p1", dates: ["2026-09-18"] }));
+  await s.apply(simpleInput("set-delivered", { sourcePackageId: "p2", dates: ["2026-09-18"] }));
+  const records = structuredClone(s.state.manual);
+  const data = await s.getCustomerCalendarData("c1");
+  const pending = data.events.filter((event) => event.type === "delivery-unallocated");
+  assert.equal(new Set(pending.map((event) => event.manualDeliveryId)).size, 2);
+  assert.deepEqual(pending.map((event) => event.packageId).sort(), ["p1", "p2"]);
+  const other = structuredClone(s.state.packages[1]);
+  await s.apply(simpleInput("apply-renewal", { packageId: "p1", manualDeliveryIds: [records[0].id] }));
+  assert.deepEqual(s.state.packages[1], other);
+  assert.deepEqual(s.state.manual[1], records[1]);
+  assert.equal(s.state.packages[0].usedDeliveryDays, 1);
+});
+
 test("customers and anonymous requests cannot read admin state, preview, or apply changes", async () => {
   const s = setup();
   for (const role of ["CUSTOMER", null]) {

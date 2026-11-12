@@ -458,6 +458,16 @@ export async function getAdminOrders(filters?: AdminListQuery): Promise<AdminOrd
   }
 }
 
+function adminCustomerStatus(packages: { status: string; order?: { studentVerifications?: { status: string }[] } }[]): Customer["status"] {
+  if (packages.some((item) => item.status === "ACTIVE")) return "Active";
+  if (packages.some((item) => item.status === "PAUSED")) return "Paused";
+  if (packages.some((item) => item.status === "PENDING_STUDENT_VERIFICATION" && item.order?.studentVerifications?.[0]?.status === "APPROVED")) return "Needs schedule review";
+  if (packages.some((item) => item.status === "PENDING_STUDENT_VERIFICATION")) return "Awaiting verification";
+  if (packages.some((item) => item.status === "PENDING_PAYMENT")) return "Awaiting payment";
+  if (packages.some((item) => item.status === "EXPIRED")) return "Ended";
+  return packages.length ? "Cancelled" : "No active plan";
+}
+
 export async function getAdminCustomers(filters?: AdminListQuery): Promise<Customer[]> {
   if (!hasDatabaseUrl()) {
     return [];
@@ -471,8 +481,8 @@ export async function getAdminCustomers(filters?: AdminListQuery): Promise<Custo
       where: q ? { OR: [{ name: { contains: q } }, { email: { contains: q } }, { phone: { contains: q } }] } : {},
       include: {
         addresses: { where: { isDefault: true }, take: 1 },
-        orders: true,
-        packages: { include: { package: true }, orderBy: { createdAt: "desc" } },
+        orders: { include: { payments: true } },
+        packages: { include: { package: true, order: { select: { studentVerifications: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } } } } }, orderBy: { createdAt: "desc" } },
       },
       orderBy: [{ joinedAt: "desc" }, { id: "desc" }],
       skip: filters ? (filters.page - 1) * ADMIN_CUSTOMER_PAGE_SIZE : 0,
@@ -483,20 +493,18 @@ export async function getAdminCustomers(filters?: AdminListQuery): Promise<Custo
       const activePackage =
         customer.packages.find((candidate) => candidate.status === "ACTIVE" || candidate.status === "PAUSED") ??
         customer.packages[0];
-      const spend = customer.orders.reduce((total, order) => total + toNumber(order.total), 0);
-      const status =
-        activePackage?.status === "PAUSED"
-          ? "Paused"
-          : activePackage?.package.cadence === "WEEKLY"
-            ? "Trial"
-            : "Active";
+      const spend = customer.orders.flatMap((order) => order.payments ?? [])
+        .filter((payment) => payment.status === "PAID" && payment.currency === "USD")
+        .reduce((total, payment) => total + toNumber(payment.amount), 0);
+      const status = adminCustomerStatus(customer.packages);
+      const activeCount = customer.packages.filter((item) => ["ACTIVE", "PAUSED"].includes(item.status)).length;
 
       return {
         id: customer.id,
         name: customer.name,
         email: customer.email,
         phone: customer.phone ?? "Not provided",
-        plan: activePackage?.package.name ?? "No active plan",
+        plan: activePackage ? `${activePackage.package.name}${activeCount > 1 ? ` + ${activeCount - 1} more` : ""}` : "No active plan",
         status,
         joined: formatDate(customer.joinedAt),
         orders: customer.orders.length,
@@ -540,7 +548,7 @@ export async function getAdminCustomerDetail(customerId: string) {
           orderBy: { createdAt: "desc" },
           include: {
             package: { select: { name: true, cadence: true } },
-            order: { select: { foodPreferences: true, allergies: true } },
+            order: { select: { foodPreferences: true, allergies: true, studentVerifications: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } } } },
             deliveryDays: { orderBy: { deliveryDate: "asc" } },
           },
         },
@@ -561,13 +569,10 @@ export async function getAdminCustomerDetail(customerId: string) {
     const latestPayment = customer.orders
       .flatMap((order) => order.payments)
       .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0];
-    const spend = customer.orders.reduce((total, order) => total + toNumber(order.total), 0);
-    const status: Customer["status"] =
-      activePackage?.status === "PAUSED"
-        ? "Paused"
-        : activePackage?.package.cadence === "WEEKLY"
-          ? "Trial"
-          : "Active";
+    const spend = customer.orders.flatMap((order) => order.payments)
+      .filter((payment) => payment.status === "PAID" && payment.currency === "USD")
+      .reduce((total, payment) => total + toNumber(payment.amount), 0);
+    const status = adminCustomerStatus(customer.packages);
     const now = new Date();
     const scheduledDeliveryDays = activePackage?.deliveryDays.filter((day) => !["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT"].includes(day.status)) ?? [];
     const nextDelivery = activePackage?.status === "ACTIVE" ? scheduledDeliveryDays.find(
@@ -591,7 +596,7 @@ export async function getAdminCustomerDetail(customerId: string) {
       name: customer.name,
       email: customer.email,
       phone: customer.phone ?? "",
-      joined: formatFullDate(customer.joinedAt),
+      joined: formatTimestampDate(customer.joinedAt),
       status,
       plan: activePackage?.package.name ?? "No active plan",
       activePackageId:
@@ -631,19 +636,21 @@ export async function getAdminCustomerDetail(customerId: string) {
         ? {
             number: latestOrder.orderNumber,
             status: mapOrderStatus(latestOrder.status),
-            date: formatFullDate(latestOrder.createdAt),
+            date: formatTimestampDate(latestOrder.createdAt),
             total: toNumber(latestOrder.total),
           }
         : null,
       receiptOrders: customer.orders.map((order) => ({
         number: order.orderNumber,
-        date: formatFullDate(order.createdAt),
+        date: formatTimestampDate(order.createdAt),
+        status: mapOrderStatus(order.status),
+        total: toNumber(order.total),
       })),
       latestPayment: latestPayment
         ? {
             method: titleCase(latestPayment.method),
             status: titleCase(latestPayment.status),
-            date: formatFullDate(latestPayment.createdAt),
+            date: formatTimestampDate(latestPayment.createdAt),
             amount: toNumber(latestPayment.amount),
           }
         : null,
@@ -659,12 +666,17 @@ export async function getAdminCustomerDetail(customerId: string) {
   }
 }
 
+function formatTimestampDate(value: Date) {
+  return new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "America/Los_Angeles" }).format(value);
+}
+
 function formatFullDate(value: Date) {
   return new Intl.DateTimeFormat("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "UTC",
   }).format(value);
 }
 
@@ -714,7 +726,9 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
     const pendingRenewals = await getPendingRenewalDeliveries(customer.id, now);
     const paidDates = customer.packages.flatMap((item) => item.deliveryDays.filter((day) =>
       !["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT", "DELIVERED"].includes(day.status)).map((day) => dateToInput(day.deliveryDate)));
-    const pendingToPack = pendingRenewals.filter((record) => !paidDates.includes(dateToInput(record.deliveryDate)));
+    const pendingToPack = pendingRenewals.filter((record) => !customer.packages.some((item) => item.id === record.sourcePackageId
+      && item.deliveryDays.some((day) => !["CANCELLED", "PAUSED", "DECLINED", "PENDING_PAYMENT"].includes(day.status)
+        && dateToInput(day.deliveryDate) === dateToInput(record.deliveryDate))));
     const nextPackingDate = [...customer.packages.map(nextDayFor).filter((day) => day !== undefined)
       .map((day) => dateToInput(day.deliveryDate)), ...pendingToPack.map((record) => dateToInput(record.deliveryDate))].sort()[0];
 
@@ -729,7 +743,7 @@ export async function getAdminPackagingRecord(customerId: string): Promise<Packa
             .join(", ")
         : "No delivery address on file",
       warning: pendingRenewals.some((record) => dateToInput(record.deliveryDate) === nextPackingDate && paidDates.includes(nextPackingDate))
-        ? "A renewal-pending delivery also exists for this date. Only the paid delivery is listed; review the customer's calendar before packing an additional meal." : undefined,
+        ? "Paid and renewal-pending meals share this date. Review their purchases and quantities before packing; include any renewal meals in the correct paid package." : undefined,
       packages: [...customer.packages.filter((item) => {
         const next = nextDayFor(item);
         return next && dateToInput(next.deliveryDate) === nextPackingDate;
@@ -868,7 +882,7 @@ export async function getUpcomingDeliveries(): Promise<Delivery[]> {
       date: formatDate(delivery.deliveryDate),
       meal: delivery.menuSummary ?? delivery.customerPackage.package.name,
       sortDate: delivery.deliveryDate,
-    })), ...pendingRenewals.filter((record) => !visible.some((day) => dateToInput(day.deliveryDate) === dateToInput(record.deliveryDate)))
+    })), ...pendingRenewals.filter((record) => !visible.some((day) => day.customerPackageId === record.sourcePackageId && dateToInput(day.deliveryDate) === dateToInput(record.deliveryDate)))
       .map((record) => ({ id: record.id, day: formatDay(record.deliveryDate), date: formatDate(record.deliveryDate),
         meal: `${record.label} (renewal pending)`, sortDate: record.deliveryDate }))]
       .sort((a, b) => a.sortDate.getTime() - b.sortDate.getTime()).slice(0, 5)
@@ -909,6 +923,7 @@ export async function getCustomerPackageSummaries(): Promise<CustomerPackageSumm
       include: {
         package: true,
         deliveryDays: true,
+        order: { select: { studentVerifications: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } } } },
         pauseRequests: {
           where: { status: "ACTIVE", endDate: { gte: now } },
           orderBy: { startDate: "asc" },
@@ -934,7 +949,8 @@ export async function getCustomerPackageSummaries(): Promise<CustomerPackageSumm
         customerPackage.totalDeliveryDays - usedDeliveryDays,
         0,
       );
-      const status = mapCustomerPackageStatus(customerPackage.status);
+      const status = customerPackage.status === "PENDING_STUDENT_VERIFICATION" && customerPackage.order?.studentVerifications?.[0]?.status === "APPROVED"
+        ? "Needs schedule review" as const : mapCustomerPackageStatus(customerPackage.status);
       const holidayImpacts = new Map<string, NonNullable<CustomerPackageSummary["holidayImpacts"]>[number]>();
 
       for (const credit of customerPackage.holidayCredits) {

@@ -35,15 +35,18 @@ function toDateKey(date: Date) {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarData; adminData?: AdminCalendarData }) {
+export function DashboardCalendar({ data, adminData, adminPackageId, renewalPending = false, initialDate, busy = false, onBusyChange }: {
+  data: CustomerCalendarData; adminData?: AdminCalendarData; adminPackageId?: string; renewalPending?: boolean;
+  initialDate?: string; busy?: boolean; onBusyChange?: (busy: boolean) => void;
+}) {
   const todayKey = adminData?.today ?? businessDateInput();
-  const today = new Date(`${todayKey}T00:00:00`);
+  const today = new Date(`${initialDate ?? todayKey}T00:00:00`);
   const [monthCursor, setMonthCursor] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
-  const [selectedKey, setSelectedKey] = useState(todayKey);
+  const [selectedKey, setSelectedKey] = useState(initialDate ?? todayKey);
   const [multiple, setMultiple] = useState(false);
-  const [selectedDates, setSelectedDates] = useState<string[]>([todayKey]);
+  const [selectedDates, setSelectedDates] = useState<string[]>([initialDate ?? todayKey]);
   const editingDates = multiple ? selectedDates : [selectedKey];
 
   const eventsByDay = useMemo(() => {
@@ -81,6 +84,15 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
   const selectedIsOffDay =
     !data.deliveryWeekdays.includes(selectedDate.getDay()) && selectedEvents.length === 0;
   const activePlan = data.packages.find((plan) => plan.status === "Active") ?? data.packages[0];
+  function moveMonth(offset: number) {
+    const next = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + offset, 1);
+    setMonthCursor(next);
+    if (adminData) {
+      const key = toDateKey(next);
+      setSelectedKey(key);
+      setSelectedDates([key]);
+    }
+  }
 
   return (
     <div className="grid items-start gap-4 md:gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
@@ -90,7 +102,8 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))}
+              disabled={busy}
+              onClick={() => moveMonth(-1)}
               aria-label="Previous month"
               title="Previous month"
               className="grid size-11 place-items-center rounded-lg border border-ink/10 text-ink/70 transition hover:border-saffron/50 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2"
@@ -99,8 +112,9 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
             </button>
             <button
               type="button"
+              disabled={busy}
               onClick={() => {
-                const currentKey = businessDateInput();
+                const currentKey = todayKey;
                 const currentDate = new Date(`${currentKey}T00:00:00`);
                 setMonthCursor(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
                 setSelectedKey(currentKey);
@@ -112,7 +126,8 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
             </button>
             <button
               type="button"
-              onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))}
+              disabled={busy}
+              onClick={() => moveMonth(1)}
               aria-label="Next month"
               title="Next month"
               className="grid size-11 place-items-center rounded-lg border border-ink/10 text-ink/70 transition hover:border-saffron/50 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2"
@@ -123,20 +138,20 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
         </div>
 
         {adminData ? <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-b border-ink/10 pb-3">
-          <button type="button" aria-pressed={multiple} onClick={() => { setMultiple(!multiple); setSelectedDates([selectedKey]); }}
+          <button type="button" disabled={busy} aria-pressed={multiple} onClick={() => { setMultiple(!multiple); setSelectedDates([selectedKey]); }}
             className={cn("inline-flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2", multiple ? "border-ink bg-ink text-white" : "border-ink/15 text-ink hover:bg-frost")}>
             <CheckSquare size={17} aria-hidden="true" />Select dates
           </button>
           {multiple ? <span className="text-sm font-bold text-ink/75" aria-live="polite">{selectedDates.length} selected</span> : null}
         </div> : null}
 
-        {activePlan?.status === "Paused" ? (
+        {renewalPending ? <p className="mt-3 rounded-lg bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-900">Renewal pending / {activePlan?.name}</p> : activePlan?.status === "Paused" ? (
           <p className="mt-3 rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-800">
             {activePlan.name} · Paused — {activePlan.remainingDays} delivery{" "}
             {activePlan.remainingDays === 1 ? "day" : "days"} saved
             {activePlan.resumeBy ? ` · Resume by ${activePlan.resumeBy}` : ""}
           </p>
-        ) : activePlan?.startDate ? (
+        ) : activePlan?.startDate && (!adminData || ["Active", "Ended"].includes(activePlan.status)) ? (
           <p className="mt-3 rounded-xl bg-frost px-4 py-2.5 text-sm font-bold text-ink/65">
             {activePlan.name} · Starts <span className="text-basil">{activePlan.startDate}</span>
             {activePlan.endDate ? (
@@ -174,6 +189,7 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
               <button
                 key={cell.key}
                 type="button"
+                disabled={busy}
                 onClick={() => {
                   setSelectedKey(cell.key);
                   if (multiple && adminData) setSelectedDates((current) => current.includes(cell.key) ? current.filter((date) => date !== cell.key) : [...current, cell.key].sort());
@@ -191,7 +207,7 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
                 <span className="leading-5">{cell.date.getDate()}</span>
                 <span className="flex h-3 items-center gap-0.5 text-[10px] leading-3" aria-hidden="true">
                   {Marker ? <Marker size={11} className="shrink-0" strokeWidth={2.5} /> : null}
-                  {events.length > 1 ? <span>+{events.length - 1}</span> : null}
+                  {events.filter((event) => event.type.startsWith("delivery")).length > 1 ? <span>+{events.filter((event) => event.type.startsWith("delivery")).length - 1}</span> : null}
                 </span>
               </button>
             );
@@ -232,7 +248,7 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
                   )}
                 >
                   <style.icon size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-                  <div className="min-w-0 break-words"><p className="font-extrabold">{style.label}</p><p className="mt-0.5">{event.label}</p></div>
+                  <div className="min-w-0 break-words"><p className="font-extrabold">{adminData && event.completion === "elapsed" ? "Delivery window elapsed" : style.label}</p><p className="mt-0.5">{adminData && event.completion === "elapsed" ? "Counted by the delivery schedule; not manually confirmed." : event.label}</p></div>
                 </div>
               );})
             ) : (
@@ -244,12 +260,13 @@ export function DashboardCalendar({ data, adminData }: { data: CustomerCalendarD
           </div>}
           {adminData ? (
             <div className="mt-5">
-              <AdminCalendarDayEditor key={`${data.customerId}-${adminData.state.revision}`} date={selectedKey} dates={editingDates} data={adminData} />
+              <AdminCalendarDayEditor key={`${data.customerId}-${adminData.state.revision}-${adminPackageId}-${renewalPending}`} date={selectedKey} dates={editingDates} data={adminData}
+                packageId={adminPackageId} renewalPending={renewalPending} onBusyChange={onBusyChange} />
             </div>
           ) : null}
         </Card>
 
-        {data.packages.length ? (
+        {!adminData && data.packages.length ? (
           <Card className="p-4 sm:p-6">
             <p className="text-[11px] font-black uppercase tracking-[0.14em] text-ink/40">Plans on this calendar</p>
             <div className="mt-3 grid gap-3">

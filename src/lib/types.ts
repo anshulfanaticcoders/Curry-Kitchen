@@ -203,7 +203,7 @@ export type CustomerPackageSummary = {
   packageId?: string;
   plan: string;
   quantity: number;
-  status: "Active" | "Paused" | "Pending payment" | "Needs student approval" | "Cancelled" | "Expired" | "No active plan";
+  status: "Active" | "Paused" | "Pending payment" | "Needs student approval" | "Needs schedule review" | "Cancelled" | "Expired" | "No active plan";
   totalDeliveryDays: number;
   usedDeliveryDays: number;
   remainingDeliveryDays: number;
@@ -292,6 +292,9 @@ export type CalendarEventType =
   | "package-end";
 
 export type CalendarEvent = {
+  packageId?: string;
+  manualDeliveryId?: string;
+  completion?: "confirmed" | "elapsed";
   date: string;
   type: CalendarEventType;
   label: string;
@@ -302,6 +305,7 @@ export type CustomerCalendarData = {
   customerName: string;
   deliveryWeekdays: number[];
   packages: Array<{
+    id?: string;
     name: string;
     status: string;
     startDate: string | null;
@@ -371,7 +375,7 @@ export type Customer = {
   email: string;
   phone: string;
   plan: string;
-  status: "Active" | "Trial" | "Paused";
+  status: "Active" | "Trial" | "Paused" | "Ended" | "Awaiting payment" | "Awaiting verification" | "Needs schedule review" | "Cancelled" | "No active plan";
   joined: string;
   orders: number;
   spend: number;

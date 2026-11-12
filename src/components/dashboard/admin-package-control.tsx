@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
+import { CalendarX2, Pause, Play } from "lucide-react";
 import { ConfirmActionButton } from "@/components/dashboard/confirm-action-button";
 import {
   adminPausePackageAction,
@@ -13,7 +14,7 @@ import type { Customer } from "@/lib/types";
 
 type PackageControlCustomer = Pick<Customer, "activePackageId" | "plan" | "status">;
 
-export function AdminPackageControl({ customer }: { customer: PackageControlCustomer }) {
+export function AdminPackageControl({ customer, allowReset = false }: { customer: PackageControlCustomer; allowReset?: boolean }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
 
@@ -26,6 +27,7 @@ export function AdminPackageControl({ customer }: { customer: PackageControlCust
   return (
     <div className="flex flex-wrap gap-3">
       <ConfirmActionButton
+      icon={paused ? <Play size={16} /> : <Pause size={16} />}
       label={paused ? "Resume package" : "Pause package"}
       title={paused ? `Resume ${customer.plan}?` : `Pause ${customer.plan}?`}
       description={
@@ -51,8 +53,9 @@ export function AdminPackageControl({ customer }: { customer: PackageControlCust
         )
       }
       />
-      {!paused ? (
+      {!paused && allowReset ? (
         <ConfirmActionButton
+          icon={<CalendarX2 size={16} />}
           label="Reset customer pause"
           title="Reset the customer's scheduled pause?"
           description="Restores the original delivery days, removes the make-up days from the end, and lets the customer schedule their one-time pause again. Only works before the pause starts."

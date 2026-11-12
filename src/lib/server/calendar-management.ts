@@ -51,7 +51,8 @@ export async function loadCalendarManagementState(client: Client, customerId: st
   const customer = await client.customer.findUnique({ where: { id: customerId }, include: {
     manualDeliveries: true,
     packages: { include: {
-      package: { select: { name: true } }, order: { include: { payments: true } },
+      package: { select: { name: true, category: { select: { requiresVerification: true } } } },
+      order: { include: { payments: true, address: true, studentVerifications: { orderBy: { createdAt: "desc" }, take: 1 } } },
       deliveryDays: true, pauseRequests: true,
       holidayCredits: { where: { businessHoliday: { status: "ACTIVE" } } },
     } },
@@ -79,6 +80,12 @@ export async function loadCalendarManagementState(client: Client, customerId: st
       label: record.label, quantity: record.quantity, treatment: record.treatment, packageDeliveryDayId: record.packageDeliveryDayId,
       status: record.status ?? "DELIVERED", sourcePackageId: record.sourcePackageId ?? null })),
     packages: customer.packages.map((item) => ({ id: item.id, name: item.package.name, status: item.status,
+      orderId: item.orderId, orderNumber: item.order.orderNumber, orderStatus: item.order.status,
+      verificationStatus: item.package.category?.requiresVerification
+        ? item.order.studentVerifications?.[0]?.status ?? "PENDING" : "NOT_REQUIRED",
+      foodPreferences: item.order.foodPreferences?.trim() ?? "", allergies: item.order.allergies?.trim() ?? "",
+      deliveryAddress: item.order.address ? [item.order.address.name, item.order.address.line1, item.order.address.line2,
+        `${item.order.address.city}, ${item.order.address.state} ${item.order.address.postalCode}`, item.order.address.country].filter((line): line is string => Boolean(line)) : [],
       quantity: item.quantity, totalDeliveryDays: item.totalDeliveryDays, usedDeliveryDays: item.usedDeliveryDays,
       purchasedDeliveryDays: item.purchasedDeliveryDays ?? null,
       unrepresentedUsedDays: item.unrepresentedUsedDays ?? 0,
@@ -233,7 +240,7 @@ export async function applyCalendarChange(input: CalendarChangeInput, fingerprin
     const customer = await tx.customer.findUniqueOrThrow({ where: { id: input.customerId }, select: { userId: true } });
     if (customer.userId) await tx.notification.create({ data: { userId: customer.userId, type: "SYSTEM",
       title: "Delivery calendar updated", body: [plan.summary, ...plan.balances.map((balance) =>
-        `${balance.name}: ${balance.afterRemaining} deliveries remaining${balance.afterEnd ? `; ends ${balance.afterEnd}` : ""}.`)].join(" ") } });
+        `${balance.name}${before.packages.find((item) => item.id === balance.packageId)?.orderNumber ? ` (${before.packages.find((item) => item.id === balance.packageId)!.orderNumber})` : ""}: ${balance.afterRemaining} deliveries remaining${balance.afterEnd ? `; ends ${balance.afterEnd}` : ""}.`)].join(" ") } });
     return { customerId: input.customerId };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 15000 });
 }

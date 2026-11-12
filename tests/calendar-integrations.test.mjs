@@ -532,6 +532,33 @@ test("overlapping pending and paid schedules do not pack twice and flag admin re
   assert.equal(s.state.manualDelivery[0].treatment, "AWAITING_RENEWAL", "A read must not allocate an unpaid meal");
 });
 
+test("packing does not hide a second purchase's renewal meal behind another paid delivery", async () => {
+  const s = fixture();
+  s.day("paid", "2026-10-20");
+  s.state.customerPackage.push({ ...structuredClone(s.state.customerPackage[0]), id: "other", status: "EXPIRED" });
+  s.state.manualDelivery.push({ id: "manual", customerId: "c1", sourcePackageId: "other", treatment: "AWAITING_RENEWAL",
+    status: "PREPARING", deliveryDate: date("2026-10-20"), label: "Lunch", quantity: 2 });
+  const before = structuredClone(s.state);
+  const packing = await s.catalog.getAdminPackagingRecord("c1");
+  assert.deepEqual(packing.packages.map((entry) => entry.id).sort(), ["manual", "p1"]);
+  assert.match(packing.warning, /Review.*purchases/i);
+  assert.deepEqual((await s.catalog.getUpcomingDeliveries()).map((entry) => entry.id).sort(), ["manual", "paid"]);
+  assert.deepEqual(structuredClone(s.state), before);
+});
+
+test("customer package summary uses the approval from its own order", async () => {
+  const s = fixture();
+  s.state.package[0].category.requiresVerification = true;
+  s.state.customerPackage[0].status = "PENDING_STUDENT_VERIFICATION";
+  s.state.order.push({ ...structuredClone(s.state.order[0]), id: "o2", orderNumber: "CK-2" });
+  s.state.customerPackage.push({ ...structuredClone(s.state.customerPackage[0]), id: "p2", orderId: "o2" });
+  s.state.studentVerification.push({ id: "approved", orderId: "o1", customerId: "c1", status: "APPROVED", createdAt: new Clock() },
+    { id: "pending", orderId: "o2", customerId: "c1", status: "PENDING", createdAt: new Clock() });
+  const results = await s.catalog.getCustomerPackageSummaries();
+  assert.equal(results.find((item) => item.id === "p1").status, "Needs schedule review");
+  assert.equal(results.find((item) => item.id === "p2").status, "Needs student approval");
+});
+
 test("pending scheduling honours current holidays and excludes delivered, cancelled and other customers", async () => {
   const s = fixture();
   s.state.customerPackage[0].status = "EXPIRED";

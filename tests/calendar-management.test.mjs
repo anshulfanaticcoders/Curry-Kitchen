@@ -157,11 +157,11 @@ test("allocation cannot silently move a past manual day that still needs deliver
   }
 });
 
-test("not-delivered correction reconciles a pending record overlapping a paid delivery", () => {
+test("not-delivered correction preserves an unrelated pending record on the same date", () => {
   const state = stateFixture({ packages: [packageFixture({ days: [day("past", "2026-09-17"), day("next", "2026-09-21"), day("last", "2026-09-22")] })],
     manualDeliveries: [manual({ status: "DELIVERED" })] });
   const result = plan(state, simple("set-not-delivered", { packageId: "package-1" }));
-  assert.equal(result.after.manualDeliveries[0].status, "DECLINED");
+  assert.deepEqual(result.after.manualDeliveries, state.manualDeliveries);
   assert.equal(result.after.packages[0].usedDeliveryDays, 0);
   assert.equal(result.after.packages[0].days.filter(isCountableCalendarDay).length, 3);
 });
@@ -187,6 +187,97 @@ test("simple commands reject future completion, invalid ranges and conflicting p
     assert.throws(() => plan(stateFixture(), simple("set-dates", { packageId: "package-1", startDate, endDate })), /Choose|no available/);
   }
   assert.throws(() => plan(stateFixture(), simple("set-dates", { sourcePackageId: "package-1", startDate: "2026-09-21", endDate: "2026-09-23" })), /already belongs/);
+});
+
+test("two paid purchases can share delivery dates without modifying one another", () => {
+  const other = packageFixture({ id: "other", days: [day("other-day", "2026-09-17", "DELIVERED")] });
+  const state = stateFixture({ packages: [packageFixture(), other] });
+  const result = plan(state, simple("set-dates", { packageId: "package-1", startDate: "2026-09-17", endDate: "2026-09-23" }));
+  assert.deepEqual(result.after.packages[1], other);
+  assert.equal(result.after.packages[0].days.filter((entry) => entry.date === "2026-09-17" && isCountableCalendarDay(entry)).length, 1);
+  const delivered = plan(result.after, simple("set-delivered", { packageId: "package-1" }));
+  assert.equal(delivered.after.packages[0].usedDeliveryDays, 1);
+  assert.deepEqual(delivered.after.packages[1], other);
+});
+
+test("renewal-pending periods and corrections are scoped to the previous purchase", () => {
+  const old = packageFixture({ id: "old", status: "EXPIRED", days: [] });
+  const other = packageFixture({ id: "other", days: [day("other-day", "2026-09-17")] });
+  const unrelated = manual({ sourcePackageId: "other", status: "DELIVERED" });
+  const state = stateFixture({ packages: [old, other], manualDeliveries: [unrelated] });
+  const scheduled = plan(state, simple("set-dates", { sourcePackageId: "old", startDate: "2026-09-17", endDate: "2026-09-18" }));
+  const result = plan(scheduled.after, simple("set-delivered", { sourcePackageId: "old" }));
+  assert.deepEqual(result.after.packages, state.packages);
+  assert.deepEqual(result.after.manualDeliveries[0], unrelated);
+  assert.equal(result.after.manualDeliveries.filter((record) => record.date === "2026-09-17").length, 2);
+  assert.equal(result.after.manualDeliveries[1].sourcePackageId, "old");
+  const missed = plan(result.after, simple("set-not-delivered", { sourcePackageId: "old" }));
+  assert.deepEqual(missed.after.manualDeliveries[0], unrelated);
+});
+
+test("two same-date pending meals allocate by record ID to separate purchases exactly once", () => {
+  const second = packageFixture({ id: "second", days: [day("s1", "2026-09-21"), day("s2", "2026-09-22"), day("s3", "2026-09-23")] });
+  const state = stateFixture({ packages: [packageFixture(), second], manualDeliveries: [manual({ sourcePackageId: "old-a" }), manual({ id: "manual-2", sourcePackageId: "old-b" })] });
+  const first = plan(state, simple("apply-renewal", { packageId: "package-1", manualDeliveryIds: ["manual-1"] }));
+  assert.deepEqual(first.after.packages[1], second);
+  assert.deepEqual(first.after.manualDeliveries[1], state.manualDeliveries[1]);
+  const both = plan(first.after, simple("apply-renewal", { packageId: "second", manualDeliveryIds: ["manual-2"] }));
+  assert.deepEqual(both.after.packages.map((item) => item.usedDeliveryDays), [1, 1]);
+  assert.equal(new Set(both.after.manualDeliveries.map((record) => record.packageDeliveryDayId)).size, 2);
+  assert.throws(() => plan(both.after, simple("apply-renewal", { packageId: "second", manualDeliveryIds: ["manual-1"] })), /already included/);
+});
+
+test("ID allocation rejects duplicate selections, unknown records, and two meals against one package-day", () => {
+  const state = stateFixture({ manualDeliveries: [manual(), manual({ id: "manual-2" })] });
+  for (const ids of [["manual-1", "manual-1"], ["missing"], ["manual-1", "manual-2"]]) {
+    assert.throws(() => plan(state, simple("apply-renewal", { packageId: "package-1", manualDeliveryIds: ids })), /only once|already included|already been counted/);
+  }
+  assert.throws(() => plan(state, simple("set-delivered", { packageId: "package-1", manualDeliveryIds: ["manual-1"] })), /only used/);
+  assert.throws(() => plan(state, simple("set-dates", { packageId: "package-1", sourcePackageId: "package-1", startDate: "2026-09-17", endDate: "2026-09-18" })), /not both/);
+});
+
+test("including earlier meals merges future dates only from the explicitly selected source", () => {
+  const state = stateFixture({ manualDeliveries: [manual({ sourcePackageId: "old-a" }),
+    manual({ id: "b", sourcePackageId: "old-b" }),
+    manual({ id: "future-a", sourcePackageId: "old-a", date: "2026-09-21", status: "PREPARING" }),
+    manual({ id: "future-b", sourcePackageId: "old-b", date: "2026-09-21", status: "PREPARING" })] });
+  const result = plan(state, simple("apply-renewal", { packageId: "package-1", manualDeliveryIds: ["manual-1"] }));
+  assert.equal(result.after.manualDeliveries[2].treatment, "PACKAGE");
+  assert.deepEqual(result.after.manualDeliveries[1], state.manualDeliveries[1]);
+  assert.deepEqual(result.after.manualDeliveries[3], state.manualDeliveries[3]);
+});
+
+test("past corrections to a paused package do not resume it or schedule new deliveries", () => {
+  const paused = packageFixture({ status: "PAUSED", usedDeliveryDays: 1, days: [day("past", "2026-09-17", "DELIVERED")] });
+  const result = plan(stateFixture({ packages: [paused] }), simple("set-not-delivered", { packageId: "package-1" }));
+  assert.equal(result.after.packages[0].status, "PAUSED");
+  assert.equal(result.after.packages[0].usedDeliveryDays, 0);
+  assert.equal(result.after.packages[0].days.length, 1);
+});
+
+test("a paid and approved stranded purchase is repaired only by an explicit date edit", () => {
+  const stranded = packageFixture({ status: "PENDING_STUDENT_VERIFICATION", verificationStatus: "APPROVED", orderStatus: "ACCEPTED", days: [], endDate: null });
+  const other = packageFixture({ id: "other" });
+  const state = stateFixture({ packages: [stranded, other] });
+  assert.throws(() => plan(state, simple("set-delivered", { packageId: "package-1" })), /paid, verified/);
+  const result = plan(state, simple("set-dates", { packageId: "package-1", startDate: "2026-09-14", endDate: "2026-09-16" }));
+  assert.equal(result.after.packages[0].status, "ACTIVE");
+  assert.equal(result.after.packages[0].usedDeliveryDays, 0);
+  assert.equal(calendarCompletedDays(result.after.packages[0], new Date("2026-10-01T20:00:00Z")), 0);
+  assert.ok(result.after.packages[0].days.every((entry) => entry.requiresConfirmation));
+  assert.deepEqual(result.after.packages[1], other);
+  assert.ok(result.warnings.some((warning) => /restores.*approved/.test(warning)));
+});
+
+for (const [label, fields] of [
+  ["unpaid", { paid: false }], ["unapproved", { verificationStatus: "PENDING" }], ["rejected", { verificationStatus: "REJECTED" }],
+  ["cancelled order", { orderStatus: "CANCELLED" }], ["declined order", { orderStatus: "DECLINED" }], ["payment pending", { orderStatus: "PENDING_PAYMENT" }],
+  ["existing history", { usedDeliveryDays: 1 }], ["unrepresented history", { unrepresentedUsedDays: 1 }],
+  ["existing delivery", { days: [day("existing", "2026-09-17")] }], ["holiday credit", { protectedDayIds: ["credit"] }],
+  ["scheduled pause", { pauses: [{ startDate: "2026-09-21", endDate: "2026-09-22", status: "APPROVED" }] }],
+]) test(`automatic-style schedule repair is refused for ${label}`, () => {
+  const item = packageFixture({ status: "PENDING_STUDENT_VERIFICATION", verificationStatus: "APPROVED", orderStatus: "ACCEPTED", days: [], endDate: null, ...fields });
+  assert.throws(() => plan(stateFixture({ packages: [item] }), simple("set-dates", { packageId: "package-1", startDate: "2026-09-14", endDate: "2026-09-16" })), /paid, verified/);
 });
 
 function day(id, date, status = "PREPARING") {
