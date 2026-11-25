@@ -99,7 +99,7 @@ export async function getCustomerCalendarData(
     );
 
     const hasSchedule = ["ACTIVE", "EXPIRED", "PAUSED"].includes(customerPackage.status)
-      && customerPackage.deliveryDays.length > 0;
+      && (customerPackage.deliveryDays.length > 0 || (customerPackage.unrepresentedUsedDays ?? 0) > 0);
     if (customerPackage.startDate && hasSchedule) {
       events.push({
         packageId: customerPackage.id,

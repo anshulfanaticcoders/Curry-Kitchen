@@ -90,6 +90,88 @@ const record = (date = "2026-09-18", treatment = "AWAITING_RENEWAL") => ({ custo
 
 const simpleInput = (action, fields = {}) => ({ customerId: "c1", action, date: "2026-09-18", reason: "Admin adjusted calendar.", acknowledgeConflict: true, ...fields });
 
+test("admin records deliveries before any purchase, corrects a day, and later counts only the selected meal against payment", async () => {
+  const s = setup();
+  const futurePurchase = s.state.packages.pop();
+  const futureDays = s.state.days.splice(0);
+  const offPlan = { treatment: "AWAITING_RENEWAL", dates: ["2026-09-17", "2026-09-18"] };
+  await s.apply(simpleInput("set-not-delivered", offPlan));
+  await s.apply(simpleInput("set-delivered", offPlan));
+  await s.apply(simpleInput("set-not-delivered", { ...offPlan, dates: ["2026-09-18"] }));
+  assert.equal(s.state.packages.length, 0);
+  assert.equal(s.state.days.length, 0);
+  assert.equal(s.state.manual.length, 2);
+  const calendar = await s.getCustomerCalendarData("c1");
+  assert.ok(calendar.events.some((e) => e.type === "delivery-unallocated" && e.date === "2026-09-17"));
+  assert.ok(calendar.events.some((e) => e.type === "delivery-missed" && e.date === "2026-09-18"));
+  s.state.packages.push(futurePurchase);
+  s.state.days.push(...futureDays);
+  const meal = s.state.manual.find((record) => record.status === "DELIVERED");
+  const order = structuredClone(futurePurchase.order);
+  await s.apply(simpleInput("apply-renewal", { packageId: "p1", manualDeliveryIds: [meal.id] }));
+  assert.equal(futurePurchase.usedDeliveryDays, 1);
+  assert.deepEqual(futurePurchase.order, order);
+  await assert.rejects(s.apply(simpleInput("set-delivered", { ...offPlan, dates: ["2026-09-17"] })), /already belongs/);
+});
+
+test("an off-package entry can reference an unpaid order without activating or changing it", async () => {
+  const s = setup();
+  Object.assign(s.state.packages[0], { status: "PENDING_PAYMENT", order: { status: "PENDING_PAYMENT", payments: [] } });
+  s.state.days = [];
+  const before = structuredClone(s.state.packages);
+  await s.apply(simpleInput("set-delivered", { sourcePackageId: "p1", treatment: "AWAITING_RENEWAL" }));
+  assert.deepEqual(s.state.packages, before);
+  assert.equal(s.state.manual[0].sourcePackageId, "p1");
+  assert.equal(s.state.manual[0].treatment, "AWAITING_RENEWAL");
+  await assert.rejects(s.apply(simpleInput("set-delivered", { sourcePackageId: "not-this-customers-purchase", treatment: "AWAITING_RENEWAL" })), /this customer's packages/);
+  await assert.rejects(s.apply(simpleInput("set-delivered", { packageId: "p1" })), /paid, verified/);
+});
+
+test("changing a fully used legacy period does not award another package of meals", async () => {
+  const s = setup();
+  s.state.packages[0].status = "EXPIRED";
+  s.state.packages[0].usedDeliveryDays = 5;
+  s.state.days = [];
+  await s.apply(simpleInput("set-dates", { packageId: "p1", startDate: "2026-09-13", endDate: "2026-09-19" }));
+  const calendar = await s.getCustomerCalendarData("c1");
+  assert.equal(calendar.packages[0].completedDays, 5);
+  assert.equal(calendar.packages[0].remainingDays, 0);
+  assert.deepEqual(calendar.events.map(({ date, type }) => [date, type]), [["2026-09-13", "package-start"], ["2026-09-19", "package-end"]]);
+  assert.equal(s.state.days.length, 0);
+  assert.equal(s.state.packages[0].status, "EXPIRED");
+});
+
+test("manual dates persist for an exhausted purchase after a rejected extra delivery; its renewal and payment stay untouched", async () => {
+  const s = setup();
+  s.setTime("2026-11-25T19:00:00Z");
+  const first = s.state.packages[0];
+  first.usedDeliveryDays = 5;
+  first.status = "EXPIRED";
+  const renewal = { ...structuredClone(first), id: "renewal", status: "ACTIVE", usedDeliveryDays: 0 };
+  s.state.packages.push(structuredClone(renewal));
+  s.state.days[0].status = "DELIVERED";
+  const before = structuredClone(s.state);
+  await assert.rejects(s.apply(simpleInput("set-delivered", { packageId: "p1", date: "2026-11-09" })), /no unused/);
+  assert.deepEqual(s.state, before);
+  const input = simpleInput("set-dates", { packageId: "p1", startDate: "2026-09-22", endDate: "2026-09-27" });
+  const review = await s.previewCalendarChange(input);
+  assert.deepEqual(s.state, before);
+  await s.applyCalendarChange(input, review.fingerprint);
+  const data = await s.getAdminCalendarData("c1");
+  const updated = data.state.packages.find((p) => p.id === "p1");
+  assert.equal(updated.startDate, input.startDate);
+  assert.equal(updated.endDate, input.endDate);
+  assert.equal(updated.usedDeliveryDays, 5);
+  assert.deepEqual(s.state.days, before.days);
+  assert.deepEqual(s.state.packages[1], renewal);
+  assert.deepEqual(first.order, before.packages[0].order);
+  const calendar = await s.getCustomerCalendarData("c1");
+  assert.ok(calendar.events.some((e) => e.type === "package-end" && e.packageId === "p1" && e.date === input.endDate));
+  assert.equal(data.history[0].canUndo, true);
+  await s.apply(simpleInput("undo", { changeId: data.history[0].id }));
+  assert.equal(schedule.dateToInput(first.endDate), "2026-09-25");
+});
+
 test("batch delivery and renewal persist unique IDs, one audit, one notification and unchanged payments", async () => {
   const s = setup();
   const payment = structuredClone(s.state.packages[0].order.payments);

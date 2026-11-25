@@ -174,11 +174,48 @@ test("ambiguous manual records, quantity mismatches, unpaid and unverified packa
   assert.throws(() => plan(stateFixture({ manualDeliveries: [manual(), manual({ id: "duplicate" })] }), simple("apply-renewal", { packageId: "package-1" })), /multiple earlier deliveries/);
 });
 
-test("date range edits cannot erase delivered, dispatched or protected credit history", () => {
-  for (const entry of [day("fixed", "2026-09-17", "DELIVERED"), day("fixed", "2026-09-18", "OUT_FOR_DELIVERY"), day("fixed", "2026-09-21")]) {
+test("admin period corrections retain dispatched and protected credit days and disclose them as exceptions", () => {
+  for (const entry of [day("fixed", "2026-09-18", "OUT_FOR_DELIVERY"), day("fixed", "2026-09-21")]) {
     const state = stateFixture({ packages: [packageFixture({ days: [entry], protectedDayIds: entry.status === "PREPARING" ? [entry.id] : [] })] });
-    assert.throws(() => plan(state, simple("set-dates", { packageId: "package-1", startDate: "2026-09-24", endDate: "2026-09-25" })), /Keep .* in the period/);
+    const result = plan(state, simple("set-dates", { packageId: "package-1", startDate: "2026-09-24", endDate: "2026-09-25" }));
+    const edited = result.after.packages[0];
+    assert.equal(edited.startDate, "2026-09-24");
+    assert.equal(edited.endDate, "2026-09-25");
+    assert.deepEqual(edited.days.find((day) => day.id === entry.id), entry);
+    assert.ok(result.warnings.some((warning) => warning.includes(entry.date)));
   }
+});
+
+test("editing dates on a paused paid package saves the boundaries without resuming or consuming it", () => {
+  const item = packageFixture({ status: "PAUSED" });
+  const result = plan(stateFixture({ packages: [item] }), simple("set-dates", { packageId: item.id, startDate: "2026-09-19", endDate: "2026-09-20" }));
+  const updated = result.after.packages[0];
+  assert.equal(updated.startDate, "2026-09-19");
+  assert.equal(updated.endDate, "2026-09-20");
+  assert.equal(updated.status, "PAUSED");
+  assert.deepEqual(updated.days, item.days);
+  assert.equal(updated.totalDeliveryDays, item.totalDeliveryDays);
+  assert.equal(updated.usedDeliveryDays, item.usedDeliveryDays);
+});
+
+test("a spent package can move without losing confirmed meals or keeping phantom elapsed credits", () => {
+  const fixed = day("receipt", "2026-09-17", "DELIVERED");
+  const item = packageFixture({ status: "EXPIRED", startDate: "2026-09-16", endDate: "2026-09-17",
+    totalDeliveryDays: 3, usedDeliveryDays: 3, unrepresentedUsedDays: 1, days: [fixed, day("elapsed", "2026-09-16")] });
+  const state = stateFixture({ packages: [item] });
+  const result = plan(state, simple("set-dates", { packageId: item.id, startDate: "2026-09-11", endDate: "2026-09-13" }));
+  const updated = result.after.packages[0];
+  assert.equal(updated.startDate, "2026-09-11");
+  assert.equal(updated.endDate, "2026-09-13");
+  assert.deepEqual(updated.days.find((d) => d.id === fixed.id), fixed);
+  assert.equal(updated.days.find((d) => d.id === "elapsed").status, "CANCELLED");
+  assert.equal(updated.usedDeliveryDays, 2);
+  assert.equal(updated.unrepresentedUsedDays, 1);
+  assert.equal(updated.totalDeliveryDays, 3);
+  assert.ok(result.warnings.some((w) => /Confirmed deliveries outside/.test(w)));
+  assert.ok(result.warnings.some((w) => /counted automatically/.test(w)));
+  const done = plan(result.after, simple("set-delivered", { packageId: item.id, dates: ["2026-09-11"] }));
+  assert.equal(done.after.packages[0].endDate, "2026-09-13", "Confirming a day does not snap the boundary to Friday or to the old Thursday");
 });
 
 test("simple commands reject future completion, invalid ranges and conflicting package dates", () => {

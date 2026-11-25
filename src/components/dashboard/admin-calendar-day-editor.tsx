@@ -41,9 +41,12 @@ export function AdminCalendarDayEditor({ date, dates = [date], data, packageId, 
   const [savedReview, setReview] = useState<{ input: CalendarChangeInput; preview: CalendarChangePreview; selectionKey: string } | null>(null);
   const review = savedReview?.selectionKey === selectionKey ? savedReview : null;
   const [acknowledged, setAcknowledged] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ action: CalendarChangeInput["action"]; message: string; key: string } | null>(null);
+  const actionError = (action: CalendarChangeInput["action"]) => error?.action === action && error.key === selectionKey
+    ? <p role="alert" className="break-words text-sm font-bold leading-6 text-chili">{error.message}</p> : null;
   const pastDates = dates.length > 0 && dates.every((value) => value <= data.today);
-  const available = Boolean(selectedPackage && calendarPackageEditable(selectedPackage));
+  const available = renewalPending || Boolean(selectedPackage && calendarPackageEditable(selectedPackage));
+  const purchaseLabel = selectedPackage ? calendarPurchaseLabel(data.state.packages, selectedPackage.id) : "No linked purchase";
 
   function clearReview() { setReview(null); setError(null); setAcknowledged(false); }
 
@@ -52,7 +55,7 @@ export function AdminCalendarDayEditor({ date, dates = [date], data, packageId, 
     loadPreview({
       customerId: data.state.customerId, action, date,
       ...(action === "set-dates" ? {} : { dates: selectedDates }),
-      ...(renewalPending ? { sourcePackageId: selectedPackage?.id } : { packageId: selectedPackage?.id }),
+      ...(renewalPending ? { sourcePackageId: selectedPackage?.id, treatment: "AWAITING_RENEWAL" as const } : { packageId: selectedPackage?.id }),
       ...(action === "apply-renewal" ? { manualDeliveryIds: earlierIds } : {}),
       ...(action === "set-dates" ? { startDate: period.start, endDate: period.end } : {}),
       reason: action === "set-dates" ? "Admin updated delivery dates." : action === "apply-renewal" ? "Admin included earlier deliveries in renewal."
@@ -72,8 +75,8 @@ export function AdminCalendarDayEditor({ date, dates = [date], data, packageId, 
         if (result.ok) {
           setReview({ input, preview: result.data, selectionKey });
           requestAnimationFrame(() => reviewRef.current?.focus());
-        } else setError(result.error);
-      } catch { setError("Could not review this change. Nothing was saved. Please try again."); }
+        } else setError({ action: input.action, message: result.error, key: selectionKey });
+      } catch { setError({ action: input.action, message: "Could not review this change. Nothing was saved. Please try again.", key: selectionKey }); }
       finally { inFlight.current = false; onBusyChange?.(false); }
     });
   }
@@ -88,8 +91,8 @@ export function AdminCalendarDayEditor({ date, dates = [date], data, packageId, 
         const result = await applyCalendarChangeAction(review.input, review.preview.fingerprint);
         setReview(null);
         if (result.ok) { toast.success("Delivery calendar updated."); router.refresh(); }
-        else setError(result.error);
-      } catch { setReview(null); setError("Could not confirm the save. Refresh the calendar before trying again."); }
+        else setError({ action: review.input.action, message: result.error, key: selectionKey });
+      } catch { setReview(null); setError({ action: review.input.action, message: "Could not confirm the save. Refresh the calendar before trying again.", key: selectionKey }); }
       finally { inFlight.current = false; onBusyChange?.(false); }
     });
   }
@@ -97,10 +100,21 @@ export function AdminCalendarDayEditor({ date, dates = [date], data, packageId, 
   return (
     <section className="min-w-0 border-t border-ink/10 pt-5" aria-label="Manage deliveries" aria-busy={pending}>
       <fieldset disabled={pending} className="grid min-w-0 gap-4">
-        <p className="break-words text-sm font-semibold text-ink/80">{selectedPackage ? calendarPurchaseLabel(data.state.packages, selectedPackage.id) : "No purchase selected"}{renewalPending ? " / Renewal pending" : ""}</p>
+        <p className="break-words text-sm font-semibold text-ink/80">{purchaseLabel}{renewalPending ? " / Without renewal" : ""}</p>
         {!available ? <p role="status" className="text-sm leading-6 text-amber-900">{restoreSchedule
-          ? "Payment received and ID approved. The delivery schedule needs review; past meals are not confirmed."
+          ? "Payment received and ID approved. Review and confirm the package dates below first, then mark the meals actually delivered."
           : `${selectedPackage ? calendarPackageStatus(selectedPackage) : "Select a purchase"}. Calendar changes are unavailable until this purchase is paid, verified and ready to schedule.`}</p> : null}
+        {selectedPackage ? <div className="border-y border-ink/10 py-4">
+          <h3 className="flex items-center gap-2 text-sm font-bold"><CalendarRange size={18} aria-hidden="true" />{renewalPending ? "Renewal-pending dates" : "Edit package dates"}</h3>
+          <div className="mt-3 grid gap-3">
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+              <Field label="Start date"><Input type="date" required value={period.start} className={controlClass} onChange={(event) => { setPeriod({ ...period, start: event.target.value }); clearReview(); }} /></Field>
+              <Field label="End date"><Input type="date" required min={period.start} value={period.end} className={controlClass} onChange={(event) => { setPeriod({ ...period, end: event.target.value }); clearReview(); }} /></Field>
+            </div>
+            <button type="button" disabled={(!available && !restoreSchedule) || !period.start || !period.end || period.start > period.end} className={buttonClass} onClick={() => prepare("set-dates")}>Review dates</button>
+            {actionError("set-dates")}
+          </div>
+        </div> : null}
         <div className="grid grid-cols-2 gap-2">
           <button type="button" disabled={!available || !pastDates} className={`${buttonClass} border-ink bg-ink text-white hover:bg-ink/85`} onClick={() => prepare("set-delivered")}>
             <Check size={18} className="shrink-0" aria-hidden="true" />Delivered
@@ -110,19 +124,8 @@ export function AdminCalendarDayEditor({ date, dates = [date], data, packageId, 
           </button>
         </div>
         {!pastDates ? <p className="text-sm text-ink/75">{dates.length ? "Future deliveries are scheduled, not completed." : "No dates selected."}</p> : null}
-        {selectedPackage?.status === "PAUSED" ? <p className="text-sm text-amber-900">Paused. Recorded past deliveries can be corrected; resume before rescheduling.</p> : null}
-        <details className="border-t border-ink/10 pt-4" open={restoreSchedule || undefined}>
-          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm font-bold [&::-webkit-details-marker]:hidden">
-            <CalendarRange size={18} aria-hidden="true" />Edit dates<ChevronDown size={16} className="ml-auto" aria-hidden="true" />
-          </summary>
-          <div className="mt-3 grid gap-3">
-            <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-              <Field label="Start date"><Input type="date" required value={period.start} className={controlClass} onChange={(event) => { setPeriod({ ...period, start: event.target.value }); clearReview(); }} /></Field>
-              <Field label="End date"><Input type="date" required min={period.start} value={period.end} className={controlClass} onChange={(event) => { setPeriod({ ...period, end: event.target.value }); clearReview(); }} /></Field>
-            </div>
-            <button type="button" disabled={(!available && !restoreSchedule) || !period.start || !period.end || period.start > period.end || selectedPackage?.status === "PAUSED" && !renewalPending} className={buttonClass} onClick={() => prepare("set-dates")}>Review dates</button>
-          </div>
-        </details>
+        {!renewalPending && selectedPackage?.status === "PAUSED" ? <p className="text-sm text-amber-900">Changing dates does not resume this package.</p> : null}
+        {actionError("set-delivered")}{actionError("set-not-delivered")}
         {!renewalPending && available && earlier.length > 0 ? (
           <details className="border-t border-ink/10 pt-4" aria-label="Earlier deliveries">
             <summary className="min-h-11 cursor-pointer text-sm font-bold">{earlier.length} earlier {earlier.length === 1 ? "delivery" : "deliveries"} awaiting renewal</summary>
@@ -134,16 +137,16 @@ export function AdminCalendarDayEditor({ date, dates = [date], data, packageId, 
               </label>)}
             </div>
             <button type="button" className={`${buttonClass} w-full`} disabled={!earlierIds.length || selectedPackage?.status === "PAUSED"} onClick={() => prepare("apply-renewal", earlier.filter((record) => earlierIds.includes(record.id)).map((record) => record.date))}>Include in this purchase</button>
+            {actionError("apply-renewal")}
           </details>
         ) : null}
       </fieldset>
 
       {pending ? <p role="status" className="mt-4 flex items-center gap-2 text-sm font-bold"><Loader2 size={16} className="animate-spin" aria-hidden="true" />Please wait</p> : null}
-      {error ? <p role="alert" className="mt-4 break-words text-sm font-bold leading-6 text-chili">{error}</p> : null}
       {review ? (
         <div ref={reviewRef} tabIndex={-1} className="mt-5 border-t border-ink/15 pt-5 focus:outline-none" aria-label="Confirm calendar change" role="region">
           <h3 className="font-extrabold">Confirm change</h3>
-          <p className="mt-1 break-words text-sm font-bold">{review.input.action === "undo" ? "Customer calendar / undo last change" : `${selectedPackage?.name} / ${calendarPurchaseLabel(data.state.packages, selectedPackage?.id)}`}</p>
+          <p className="mt-1 break-words text-sm font-bold">{review.input.action === "undo" ? "Customer calendar / undo last change" : `${renewalPending ? "Without renewal" : selectedPackage?.name} / ${purchaseLabel}`}</p>
           <p className="mt-2 break-words text-sm leading-6">{review.preview.summary}</p>
           {review.input.action !== "set-dates" ? <p className="mt-2 text-sm text-ink/75">{(review.input.dates ?? [review.input.date]).map(formatDate).join(", ")}</p> : null}
           {review.preview.balances.map((balance) => <dl key={balance.packageId} className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 border-t border-ink/10 pt-3 text-sm tabular-nums">
@@ -158,13 +161,14 @@ export function AdminCalendarDayEditor({ date, dates = [date], data, packageId, 
             <label className="flex min-h-11 cursor-pointer items-center gap-3 font-bold"><input type="checkbox" checked={acknowledged} disabled={pending} className="size-5 shrink-0 accent-ink" onChange={(event) => setAcknowledged(event.target.checked)} />Confirm these adjustments</label>
           </div> : null}
           <div className="mt-4 flex flex-wrap gap-2">
-            <button type="button" disabled={pending || (review.preview.warnings.length > 0 && !acknowledged)} onClick={save} className={`${buttonClass} flex-1 border-ink bg-ink text-white hover:bg-ink/85`}><Check size={17} aria-hidden="true" />Confirm</button>
+            <button type="button" disabled={pending || (review.preview.warnings.length > 0 && !acknowledged)} onClick={save} className={`${buttonClass} flex-1 border-ink bg-ink text-white hover:bg-ink/85`}><Check size={17} aria-hidden="true" />{review.input.action === "set-dates" ? "Save dates" : "Confirm"}</button>
             <button type="button" disabled={pending} onClick={clearReview} className={buttonClass}>Cancel</button>
           </div>
         </div>
       ) : null}
       <details className="mt-5 border-t border-ink/10 pt-3">
         <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm font-bold [&::-webkit-details-marker]:hidden"><History size={17} aria-hidden="true" />Customer activity<ChevronDown size={16} className="ml-auto" aria-hidden="true" /></summary>
+        {actionError("undo")}
         {data.history.length ? <ol className="divide-y divide-ink/10">{data.history.map((change) => <li key={change.id} className="py-3 text-sm leading-6">
           <p>{change.summary}</p><p className="text-xs text-ink/70">{change.actor} / {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Los_Angeles" }).format(new Date(change.createdAt))} Pacific</p>
           {change.canUndo ? <button type="button" disabled={pending} className={`${buttonClass} mt-2`} onClick={() => loadPreview({ customerId: data.state.customerId, action: "undo", date, changeId: change.id, reason: "Admin undid the previous calendar change." })}><Undo2 size={16} aria-hidden="true" />Undo</button> : null}

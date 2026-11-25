@@ -1,10 +1,10 @@
 "use client";
 
-import { AlertTriangle, ChevronDown, Clock3, Package, ShieldAlert } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Clock3, Package, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import { AdminOrderReceipt } from "@/components/dashboard/admin-order-receipt";
 import { AdminPackageControl } from "@/components/dashboard/admin-package-control";
-import { DashboardCalendar } from "@/components/dashboard/dashboard-calendar";
+import { AdminDeliveryCalendar } from "@/components/dashboard/admin-delivery-calendar";
 import { calendarPackageEditable, calendarPackageStatus, calendarPurchaseLabel, formatCalendarDate, purchaseCalendar } from "@/lib/admin-calendar-view";
 import type { AdminCalendarData } from "@/lib/calendar-management-types";
 import type { CustomerCalendarData } from "@/lib/types";
@@ -14,10 +14,17 @@ export function AdminCustomerCalendar({ calendar, data }: { calendar: CustomerCa
   const packages = [...data.state.packages].sort((a, b) => (b.startDate ?? "").localeCompare(a.startDate ?? "") || b.id.localeCompare(a.id));
   const [selectedId, setSelectedId] = useState(() => packages.find((item) => calendarPackageStatus(item) === "Active")?.id ?? packages[0]?.id);
   const [renewalPending, setRenewalPending] = useState(false);
+  const [unlinked, setUnlinked] = useState(false);
   const [busy, setBusy] = useState(false);
   const selected = packages.find((item) => item.id === selectedId) ?? packages[0];
   const reviewCount = packages.filter((item) => calendarPackageStatus(item) === "Needs schedule review").length;
-  if (!selected) return <p className="border-y border-ink/15 py-8 text-sm text-ink/75">No packages have been purchased yet.</p>;
+  if (!selected || unlinked) return <section className="min-w-0" aria-label="Meals without a purchase">
+    {selected ? <button type="button" disabled={busy} onClick={() => setUnlinked(false)} className="mb-3 inline-flex min-h-11 items-center gap-2 text-sm font-bold"><ArrowLeft size={16} />Back to purchases</button> : null}
+    <h2 className="mb-3 font-display text-xl font-extrabold">Meals without a purchase</h2>
+    <AdminDeliveryCalendar key="unlinked" data={{ ...calendar, packages: [], events: calendar.events.filter((event) =>
+      !event.packageId && (event.manualDeliveryId || event.type === "holiday")) }}
+      adminData={data} renewalPending busy={busy} onBusyChange={setBusy} />
+  </section>;
   const status = calendarPackageStatus(selected);
   const scoped = purchaseCalendar(calendar, selected, renewalPending);
   const initialDate = !renewalPending && selected.startDate && (status === "Needs schedule review" || data.today < selected.startDate || (selected.endDate && data.today > selected.endDate))
@@ -28,6 +35,8 @@ export function AdminCustomerCalendar({ calendar, data }: { calendar: CustomerCa
   return <section className="min-w-0" aria-labelledby="purchases-heading">
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <h2 id="purchases-heading" className="font-display text-xl font-extrabold">Packages & deliveries <span className="ml-2 text-base font-medium text-ink/65">{packages.length} purchases</span></h2>
+      {data.state.manualDeliveries.some((record) => !record.sourcePackageId && record.treatment === "AWAITING_RENEWAL") ?
+        <button type="button" disabled={busy} onClick={() => setUnlinked(true)} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold"><Clock3 size={16} />Meals without a purchase</button> : null}
       {reviewCount ? <p role="status" className="flex items-center gap-2 text-sm font-bold text-amber-900"><AlertTriangle size={17} />{reviewCount} {reviewCount === 1 ? "schedule needs" : "schedules need"} review</p> : null}
     </div>
     <div className="mb-6 divide-y divide-ink/10 overflow-hidden rounded-lg border border-ink/15 bg-white" role="group" aria-label="Choose purchase">
@@ -62,11 +71,14 @@ export function AdminCustomerCalendar({ calendar, data }: { calendar: CustomerCa
       {selected.allergies ? <p className="break-words font-semibold text-red-800"><ShieldAlert size={17} className="mr-2 inline" />Allergies: {selected.allergies}</p> : null}
       {selected.foodPreferences ? <p className="break-words text-ink/85"><strong>Dietary notes: </strong>{selected.foodPreferences}</p> : null}
     </div> : null}
-    {calendarPackageEditable(selected) ? <details className="mb-4 border-b border-ink/10 pb-2" open={renewalPending || undefined}>
-      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm font-semibold [&::-webkit-details-marker]:hidden"><Clock3 size={17} />Before renewal{pendingCount ? ` (${pendingCount} ${pendingCount === 1 ? "meal" : "meals"})` : ""}<ChevronDown size={15} className="ml-auto" /></summary>
-      <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-semibold"><input type="checkbox" className="size-5 accent-ink" checked={renewalPending} disabled={busy} onChange={(event) => setRenewalPending(event.target.checked)} />Record meals before renewal payment</label>
-    </details> : null}
-    <DashboardCalendar key={`${selected.id}-${renewalPending}`} data={scoped} adminData={data} adminPackageId={selected.id}
+    <div className="mb-4 inline-flex max-w-full rounded-lg border border-ink/15 bg-white p-1" role="group" aria-label="Delivery account">
+      {([false, true] as const).map((outside) => <button key={String(outside)} type="button" disabled={busy} aria-pressed={outside === renewalPending}
+        onClick={() => setRenewalPending(outside)}
+        className={cn("inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm font-bold", outside === renewalPending ? "bg-ink text-white" : "text-ink/75 hover:bg-frost")}>
+        {outside ? <Clock3 size={16} /> : <Package size={16} />}{outside ? `Without renewal${pendingCount ? ` (${pendingCount})` : ""}` : "Package"}
+      </button>)}
+    </div>
+    <AdminDeliveryCalendar key={`${selected.id}-${renewalPending}`} data={scoped} adminData={data} adminPackageId={selected.id}
       renewalPending={renewalPending} initialDate={initialDate} busy={busy} onBusyChange={setBusy} />
   </section>;
 }
